@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // Admin, Doctor, Assistant, Receptionist
+  permissions String[]
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Patient {
+  id                String        @id @default(cuid())
+  name              String
+  phone             String
+  email             String?
+  dateOfBirth       DateTime?
+  medicalHistory    String?
+  allergies         String?
+  status            String        @default("Active") // Active, Inactive
+  lastVisit         DateTime?
+  nextAppointment   DateTime?
+  appointments      Appointment[]
+  invoices          Invoice[]
+  toothConditions   ToothCondition[]
+  treatmentPlans    TreatmentPlan[]
+  prescriptions     Prescription[]
+  labOrders         LabOrder[]
+  documents         PatientDocument[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctorId    String
+  treatment   String
+  date        DateTime
+  time        String
+  status      String   @default("Scheduled") // Scheduled, Completed, Cancelled
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  price       Float
+  duration    Int      // Duration in minutes
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  patientId   String
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  totalAmount Float
+  status      String        @default("Pending") // Pending, Paid
+  date        DateTime      @default(now())
+  items       InvoiceItem[]
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  serviceName String
+  price       Float
+  quantity    Int
+  total       Float
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  amount      Float
+  method      String   // Cash, Credit Card, etc.
+  date        DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Float
+  date        DateTime @default(now())
+  category    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model InventoryItem {
+  id            String   @id @default(cuid())
+  name          String
+  category      String
+  quantity      Int
+  minStockLevel Int
+  unit          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ToothCondition {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  toothNumber Int
+  condition   String   // Caries, Extracted, Filled, Crown
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TreatmentPlan {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  title     String
+  status    String   @default("Active") // Active, Completed, Deferred
+  notes     String?
+  items     TreatmentPlanItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TreatmentPlanItem {
+  id        String   @id @default(cuid())
+  planId    String
+  plan      TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  service   String
+  toothList String?  // e.g. "11, 12, 13"
+  price     Float
+  status    String   @default("Planned") // Planned, Completed
+}
+
+model Prescription {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  notes     String?
+  items     PrescriptionItem[]
+}
+
+model PrescriptionItem {
+  id             String   @id @default(cuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicationName String
+  dosage         String
+  frequency      String
+  duration       String
+}
+
+model LabOrder {
+  id                 String   @id @default(cuid())
+  patientId          String
+  patient            Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  labName            String
+  itemDescription    String
+  sendDate           DateTime @default(now())
+  expectedReturnDate DateTime?
+  status             String   @default("Pending") // Pending, Received, Delivered
+  cost               Float?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model PatientDocument {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name      String
+  type      String   // X-Ray, Consent Form, Lab Report
+  fileUrl   String
+  uploadDate DateTime @default(now())
+}
