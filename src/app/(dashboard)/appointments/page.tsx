@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   PlusCircle, Search, CalendarDays, Clock, Filter,
   CheckCircle2, XCircle, AlertCircle, MoreHorizontal, LayoutList, Calendar as CalendarIcon
@@ -14,7 +15,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 
-const appointments = [
+const initialAppointments = [
   { id: "APT-1001", patient: "Emily Johnson", doctor: "Dr. Sarah Smith", treatment: "Teeth Cleaning", date: "2024-03-28", time: "09:00 AM", status: "Completed", avatar: "EJ", color: "from-blue-500 to-cyan-500" },
   { id: "APT-1002", patient: "Marcus Williams", doctor: "Dr. Sarah Smith", treatment: "Root Canal", date: "2024-03-28", time: "10:30 AM", status: "In Progress", avatar: "MW", color: "from-purple-500 to-pink-500" },
   { id: "APT-1003", patient: "Sarah Chen", doctor: "Dr. James Adams", treatment: "Orthodontic Consultation", date: "2024-03-28", time: "11:15 AM", status: "Scheduled", avatar: "SC", color: "from-amber-500 to-orange-500" },
@@ -30,12 +31,17 @@ const statusConfig: Record<string, { icon: any; className: string }> = {
   Cancelled: { icon: XCircle, className: "bg-red-50 text-red-600 border-red-100" },
 };
 
+import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDialog";
+
 export default function AppointmentsPage() {
+  const [appointmentsList, setAppointmentsList] = useState(initialAppointments);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [view, setView] = useState<"list" | "calendar">("calendar");
+  const [editingApt, setEditingApt] = useState<any>(null);
+  const [reschedulingApt, setReschedulingApt] = useState<any>(null);
 
-  const filtered = appointments.filter((a) => {
+  const filtered = appointmentsList.filter((a) => {
     const matchesSearch =
       a.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.treatment.toLowerCase().includes(searchTerm.toLowerCase());
@@ -50,9 +56,7 @@ export default function AppointmentsPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Appointments</h1>
           <p className="text-sm text-gray-500 mt-1">Manage and track all clinic appointments</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <PlusCircle className="mr-2 h-4 w-4" /> New Appointment
-        </Button>
+        <NewAppointmentDialog />
       </div>
 
       {/* Stats Row */}
@@ -160,13 +164,19 @@ export default function AppointmentsPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg inline-flex items-center justify-center hover:bg-gray-100">
+                      <DropdownMenuTrigger className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg hover:bg-gray-100 flex items-center justify-center cursor-pointer border-0 bg-transparent">
                           <MoreHorizontal className="h-4 w-4" />
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                        <DropdownMenuItem className="text-sm rounded-lg">Edit</DropdownMenuItem>
-                        <DropdownMenuItem className="text-sm rounded-lg">Reschedule</DropdownMenuItem>
-                        <DropdownMenuItem className="text-sm text-red-600 rounded-lg">Cancel</DropdownMenuItem>
+                      <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-100 border p-1">
+                        <DropdownMenuItem onClick={() => setEditingApt(apt)} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-blue-50 focus:text-blue-700 cursor-pointer">
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setReschedulingApt({ ...apt, newDate: apt.date, newTime: apt.time })} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-gray-100 cursor-pointer">Reschedule</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setAppointmentsList(prev => prev.map(a => a.id === apt.id ? { ...a, status: "Cancelled" } : a));
+                        }} className="text-sm text-red-600 rounded-lg font-medium focus:bg-red-50 focus:text-red-700 cursor-pointer">
+                          Cancel
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -179,11 +189,126 @@ export default function AppointmentsPage() {
       ) : (
         <CalendarView items={filtered} />
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingApt} onOpenChange={(open) => !open && setEditingApt(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
+           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
+             <DialogTitle className="text-lg font-bold text-gray-800">Edit Appointment</DialogTitle>
+           </DialogHeader>
+           
+           <div className="p-6 space-y-6">
+              <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center gap-4">
+                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${editingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
+                   {editingApt?.avatar}
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-gray-900">{editingApt?.patient}</h3>
+                    <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{editingApt?.treatment}</p>
+                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">Update Status</label>
+                <div className="grid grid-cols-2 gap-3">
+                   {["Scheduled", "In Progress", "Completed", "Cancelled"].map(s => {
+                      const Icon = statusConfig[s]?.icon || Clock;
+                      return (
+                      <button 
+                        key={s} 
+                        type="button"
+                        onClick={() => {
+                           setAppointmentsList(prev => prev.map(a => a.id === editingApt.id ? { ...a, status: s } : a));
+                           setEditingApt(null);
+                        }}
+                        className={`p-3 border rounded-xl flex items-center gap-2 font-semibold text-sm transition-all shadow-sm ${
+                           editingApt?.status === s 
+                             ? 'ring-2 ring-blue-500 border-transparent bg-blue-50 shadow-blue-500/20 text-blue-700' 
+                             : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                         <Icon className={`w-4 h-4 ${editingApt?.status === s ? 'text-blue-600' : 'text-gray-400'}`} />
+                         {s}
+                      </button>
+                   )})}
+                </div>
+              </div>
+           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Reschedule Dialog */}
+      <Dialog open={!!reschedulingApt} onOpenChange={(open) => !open && setReschedulingApt(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
+           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
+             <DialogTitle className="text-lg font-bold text-gray-800">Reschedule Appointment</DialogTitle>
+           </DialogHeader>
+           
+           <div className="p-6 space-y-6">
+              <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-xl flex items-center gap-4">
+                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${reschedulingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
+                   {reschedulingApt?.avatar}
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-gray-900">{reschedulingApt?.patient}</h3>
+                    <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{reschedulingApt?.treatment}</p>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Date</label>
+                   <Input 
+                      type="date" 
+                      value={reschedulingApt?.newDate || ''} 
+                      onChange={(e) => setReschedulingApt({ ...reschedulingApt, newDate: e.target.value })}
+                      className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
+                   />
+                </div>
+                <div className="space-y-1.5">
+                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Time</label>
+                   <Input 
+                      type="time" 
+                      value={reschedulingApt?.newTime ? (() => {
+                         const time = reschedulingApt.newTime;
+                         if (!time.includes(' ')) return time;
+                         const [timePart, ampm] = time.split(' ');
+                         let [h, m] = timePart.split(':');
+                         if (ampm === 'PM' && h !== '12') h = (parseInt(h) + 12).toString();
+                         else if (ampm === 'AM' && h === '12') h = '00';
+                         return `${h.padStart(2, '0')}:${m}`;
+                      })() : ''}
+                      onChange={(e) => {
+                         const val = e.target.value;
+                         if (!val) return;
+                         let [h, m] = val.split(':');
+                         let ampm = 'AM';
+                         let hi = parseInt(h);
+                         if (hi >= 12) { ampm = 'PM'; if (hi > 12) hi -= 12; }
+                         else if (hi === 0) { hi = 12; }
+                         
+                         setReschedulingApt({ ...reschedulingApt, newTime: `${hi.toString().padStart(2, '0')}:${m} ${ampm}` })
+                      }}
+                      className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
+                   />
+                </div>
+              </div>
+           </div>
+           <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => setReschedulingApt(null)} className="rounded-xl font-medium border-gray-200">Cancel</Button>
+              <Button onClick={() => {
+                 setAppointmentsList(prev => prev.map(a => a.id === reschedulingApt.id ? { ...a, date: reschedulingApt.newDate, time: reschedulingApt.newTime } : a));
+                 setReschedulingApt(null);
+              }} className="rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+                 Save Changes
+              </Button>
+           </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function CalendarView({ items }: { items: typeof appointments }) {
+function CalendarView({ items }: { items: typeof initialAppointments }) {
   const daysInMonth = 31;
   const startDay = 5; // Assuming March 2024 starts on Friday (5)
   const weeks = [];
@@ -193,7 +318,7 @@ function CalendarView({ items }: { items: typeof appointments }) {
   for (let day = 1; day <= daysInMonth; day++) {
     const dayOfWeek = (startDay + day - 1) % 7;
     const dateStr = `2024-03-${day.toString().padStart(2, '0')}`;
-    const dayApps = items.filter(a => a.date === dateStr);
+    const dayApps = items.filter((a: any) => a.date === dateStr);
 
     currentWeek[dayOfWeek] = { date: day, apps: dayApps };
     if (dayOfWeek === 6 || day === daysInMonth) {

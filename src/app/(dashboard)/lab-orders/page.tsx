@@ -22,6 +22,8 @@ const labOrders = [
   { id: "LAB-1339", patient: "David Kim", patientId: "P-1021", item: "Implant Crown (Tooth #45)", labName: "Advanced Esthetics", dateSent: "Mar 20, 2024", dateDue: "Apr 02, 2024", status: "Pending", cost: "$400" },
 ];
 
+import { NewLabOrderDialog } from "@/components/lab-orders/NewLabOrderDialog";
+
 export default function LabOrdersPage() {
   const [search, setSearch] = useState("");
 
@@ -38,9 +40,7 @@ export default function LabOrdersPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lab Orders</h1>
           <p className="text-gray-500 mt-1">Track external laboratory cases, crowns, and prosthetics.</p>
         </div>
-        <Button className="bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md w-fit">
-          <Plus className="w-4 h-4 mr-2" /> New Order
-        </Button>
+        <NewLabOrderDialog />
       </div>
 
       <div className="grid gap-6 md:grid-cols-4">

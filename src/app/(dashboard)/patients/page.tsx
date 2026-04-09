@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Search, ExternalLink, Users as UsersIcon } from "lucide-react";
 
+import { AddPatientDialog } from "@/components/patients/AddPatientDialog";
+
 const patientsData = [
   { id: "P-1001", name: "Emily Johnson", phone: "+1 234-567-8900", lastVisit: "Mar 15, 2024", nextAppt: "Mar 28, 2024", status: "Active", avatar: "EJ", color: "from-blue-500 to-cyan-500", visits: 12 },
   { id: "P-1002", name: "Marcus Williams", phone: "+1 234-567-8901", lastVisit: "Feb 20, 2024", nextAppt: "Mar 28, 2024", status: "Active", avatar: "MW", color: "from-purple-500 to-pink-500", visits: 8 },
@@ -37,9 +39,7 @@ export default function PatientsPage() {
             <span className="font-medium text-gray-700">{patientsData.length}</span> registered patients
           </p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Patient
-        </Button>
+        <AddPatientDialog />
       </div>
 
       <div className="relative w-full sm:w-80">

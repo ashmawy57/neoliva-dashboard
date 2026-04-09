@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Phone, Mail, Calendar as CalendarIcon, MapPin, Activity,
-  FileText, Heart, Stethoscope, ArrowLeft, Image as ImageIcon, Pill, LayoutDashboard, ClipboardList, Smile, Lightbulb, MessageSquare, Plus
+  FileText, Heart, Stethoscope, ArrowLeft, Image as ImageIcon, Pill, LayoutDashboard, ClipboardList, Smile, Lightbulb, MessageSquare, Plus, Printer
 } from "lucide-react";
 import Link from "next/link";
 import { ToothChart } from "@/components/patients/ToothChart";
@@ -388,8 +388,97 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                                </div>
                                <p className="text-sm text-gray-500">{inv.treatment} · {inv.date}</p>
                              </div>
-                             <div className="mt-3 sm:mt-0 flex items-center gap-4">
-                               <p className="font-bold text-xl text-gray-900">{inv.amount}</p>
+                             <div className="mt-3 sm:mt-0 flex flex-wrap items-center gap-3">
+                               <p className="font-bold text-xl text-gray-900 mr-2">{inv.amount}</p>
+                               <Button 
+                                 size="sm" 
+                                 variant="outline" 
+                                 className="rounded-lg shadow-sm border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                 onClick={() => {
+                                  const printWindow = window.open('', '_blank');
+                                  if (!printWindow) return;
+                                  
+                                  const htmlContent = `
+                                    <html>
+                                      <head>
+                                        <title>Invoice ${inv.id}</title>
+                                        <style>
+                                          body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 40px; }
+                                          .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0, 0, 0, 0.05); font-size: 16px; line-height: 24px; border-radius: 8px; }
+                                          table { width: 100%; line-height: inherit; text-align: left; border-collapse: collapse; }
+                                          table td { padding: 5px; vertical-align: top; }
+                                          table tr td:nth-child(2) { text-align: right; }
+                                          table tr.top table td { padding-bottom: 20px; }
+                                          table tr.top table td.title { font-size: 38px; line-height: 45px; color: #2563eb; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; }
+                                          table tr.information table td { padding-bottom: 40px; }
+                                          table tr.heading td { background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: bold; padding: 12px; }
+                                          table tr.details td { padding-bottom: 20px; }
+                                          table tr.item td { border-bottom: 1px solid #f1f5f9; padding: 12px; }
+                                          table tr.item.last td { border-bottom: none; }
+                                          table tr.total td:nth-child(2) { border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 20px; padding-top: 15px;}
+                                          .status { margin-top: 20px; padding: 10px 15px; background: ${inv.status === 'Overdue' ? '#fef2f2' : '#fff7ed'}; color: ${inv.status === 'Overdue' ? '#ef4444' : '#f97316'}; display: inline-block; border-radius: 6px; font-weight: bold; font-size: 14px; border: 1px solid ${inv.status === 'Overdue' ? '#fecaca' : '#fed7aa'}; }
+                                          @media print { .invoice-box { box-shadow: none; border: 0; padding: 0; } }
+                                        </style>
+                                      </head>
+                                      <body>
+                                        <div class="invoice-box">
+                                          <table cellpadding="0" cellspacing="0">
+                                            <tr class="top">
+                                              <td colspan="2">
+                                                <table><tr>
+                                                  <td class="title">SmileCare</td>
+                                                  <td style="color: #64748b;">
+                                                    <strong>INVOICE #:</strong> ${inv.id}<br /> 
+                                                    <strong>Date:</strong> ${inv.date}<br /> 
+                                                    <strong>Due Date:</strong> Upon Receipt
+                                                  </td>
+                                                </tr></table>
+                                              </td>
+                                            </tr>
+                                            <tr class="information">
+                                              <td colspan="2">
+                                                <table><tr>
+                                                  <td style="color: #64748b;"><strong>CLINIC INFO</strong><br />SmileCare Dental Clinic<br /> 123 Main Street<br /> New York, NY 10001<br />+1 800-SMILE-99</td>
+                                                  <td style="color: #64748b;"><strong>BILL TO</strong><br />Emily Johnson<br /> emily.j@example.com<br /> +1 234-567-8900<br />123 Oak Ave, NY</td>
+                                                </tr></table>
+                                              </td>
+                                            </tr>
+                                            <tr class="heading">
+                                              <td>Treatment / Description</td>
+                                              <td>Amount</td>
+                                            </tr>
+                                            <tr class="item last">
+                                              <td><strong>${inv.treatment}</strong><br /><span style="font-size: 13px; color: #94a3b8;">Provided by Dr. Sarah Smith</span></td>
+                                              <td style="font-weight: 500;">${inv.amount}</td>
+                                            </tr>
+                                            <tr class="total">
+                                              <td></td>
+                                              <td>Total: <span style="color: #2563eb;">${inv.amount}</span></td>
+                                            </tr>
+                                          </table>
+                                          <div class="status">Payment Status: ${inv.status}</div>
+                                          
+                                          <div style="margin-top: 50px; text-align: center; color: #94a3b8; font-size: 13px; border-top: 1px dashed #e2e8f0; padding-top: 20px;">
+                                            Thank you for trusting SmileCare with your dental health.<br/>
+                                            For any questions regarding this invoice, please contact billing@smilecare.com.
+                                          </div>
+                                        </div>
+                                        <script>
+                                          window.onload = function() { 
+                                            setTimeout(function() { 
+                                              window.print();
+                                            }, 500); 
+                                          }
+                                        </script>
+                                      </body>
+                                    </html>
+                                  `;
+                                  printWindow.document.write(htmlContent);
+                                  printWindow.document.close();
+                                 }}
+                               >
+                                 <Printer className="w-4 h-4" /> Print
+                               </Button>
                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm text-white font-medium px-4">Pay Now</Button>
                              </div>
                            </div>
