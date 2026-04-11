@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Wallet, TrendingDown, ArrowUpRight, Search } from "lucide-react";
 import { useState } from "react";
+import { NewExpenseDialog } from "@/components/expenses/NewExpenseDialog";
 
 const expenses = [
   { id: "EXP-8192", date: "Mar 20, 2024", category: "Supplies", description: "Dental composites & syringes", amount: "$840.00", status: "Paid" },
@@ -37,9 +38,7 @@ export default function ExpensesPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Expenses</h1>
           <p className="text-gray-500 mt-1">Manage and track your clinic's operating costs.</p>
         </div>
-        <Button className="bg-red-600 hover:bg-red-700 rounded-xl shadow-md w-fit">
-          <Plus className="w-4 h-4 mr-2" /> Add Expense
-        </Button>
+        <NewExpenseDialog />
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

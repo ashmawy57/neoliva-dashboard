@@ -22,6 +22,36 @@ export function Periodontogram() {
   const [activeParam, setActiveParam] = useState("Mucogingival junction");
   const [showLingual, setShowLingual] = useState(true);
   const [showBuccal, setShowBuccal] = useState(true);
+  const [openPopover, setOpenPopover] = useState<number | null>(null);
+  const [isRotated, setIsRotated] = useState(false);
+  
+  const [data, setData] = useState<Record<number, Record<string, { buccal: number[], lingual: number[], single?: number }>>>({});
+
+  const setParamValue = (tooth: number, param: string, side: "buccal" | "lingual", pos: number, value: number) => {
+    setData(prev => {
+       const next = {...prev};
+       if(!next[tooth]) next[tooth] = {};
+       if(!next[tooth][param]) next[tooth][param] = { buccal: [0,0,0], lingual: [0,0,0] };
+       next[tooth][param][side][pos] = value;
+       return next;
+    });
+  };
+
+  const setSingleValue = (tooth: number, param: string, value: number) => {
+    setData(prev => {
+        const next = {...prev};
+        if(!next[tooth]) next[tooth] = {};
+        next[tooth][param] = { buccal: [0,0,0], lingual: [0,0,0], single: value };
+        return next;
+    });
+  };
+
+  const getParmValStr = (tooth: number, param: string, side: "buccal" | "lingual") => {
+     const pd = data[tooth]?.[param];
+     if (!pd) return "00-00-00";
+     if (pd.single !== undefined) return `  ${pd.single.toString().padStart(2, '0')}  `;
+     return `${pd[side][0].toString().padStart(2, '0')}-${pd[side][1].toString().padStart(2, '0')}-${pd[side][2].toString().padStart(2, '0')}`;
+  };
   
   // SVGs for teeth
   const MolarSvg = ({ className }: { className?: string }) => (
@@ -54,7 +84,7 @@ export function Periodontogram() {
               <span className="text-[10px] leading-none mt-1">{tooth - 1}</span>
            </div>
            
-           <Button className="bg-[#ffb74d] hover:bg-[#ffa726] text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
+           <Button onClick={() => setOpenPopover(null)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
              Submit and close
            </Button>
 
@@ -81,13 +111,16 @@ export function Periodontogram() {
                 <div className="flex-1">Distal</div>
               </div>
               <div className="flex-1 flex overflow-y-auto w-full p-1 scrollbar-hide">
-                 {[1,2,3].map(col => (
+                 {[0, 1, 2].map(col => (
                    <div key={col} className="flex-1 flex flex-col gap-1 px-0.5">
-                     {values.map(v => (
-                       <div key={v} className="rounded-full border border-white/20 text-xs py-1 hover:bg-white/20 cursor-pointer">
-                         {v}
-                       </div>
-                     ))}
+                     {values.map(v => {
+                       const isSelected = data[tooth]?.[param]?.buccal?.[col] === v;
+                       return (
+                         <div key={v} onClick={() => setParamValue(tooth, param, 'buccal', col, v)} className={`rounded-full border text-xs py-1 hover:bg-white/20 cursor-pointer ${isSelected ? 'bg-white text-[#800000] border-white font-bold shadow-sm' : 'border-white/20'}`}>
+                           {v}
+                         </div>
+                       )
+                     })}
                    </div>
                  ))}
               </div>
@@ -102,13 +135,16 @@ export function Periodontogram() {
                 <div className="flex-1">Distal</div>
               </div>
               <div className="flex-1 flex overflow-y-auto w-full p-1 scrollbar-hide">
-                 {[1,2,3].map(col => (
+                 {[0, 1, 2].map(col => (
                    <div key={col} className="flex-1 flex flex-col gap-1 px-0.5">
-                     {values.map(v => (
-                       <div key={v} className="rounded-full border border-white/20 text-xs py-1 hover:bg-white/20 cursor-pointer">
-                         {v}
-                       </div>
-                     ))}
+                     {values.map(v => {
+                       const isSelected = data[tooth]?.[param]?.lingual?.[col] === v;
+                       return (
+                         <div key={v} onClick={() => setParamValue(tooth, param, 'lingual', col, v)} className={`rounded-full border text-xs py-1 hover:bg-white/20 cursor-pointer ${isSelected ? 'bg-white text-[#0000cd] border-white font-bold shadow-sm' : 'border-white/20'}`}>
+                           {v}
+                         </div>
+                       )
+                     })}
                    </div>
                  ))}
               </div>
@@ -118,7 +154,7 @@ export function Periodontogram() {
         <div className="bg-[#e0e0e0] p-3 text-center border-t border-gray-300 relative">
            <div className="inline-block relative">
               <div className="text-gray-400 text-sm opacity-50 absolute -top-5 left-0 right-0">Mar 03 2025</div>
-              <div className="text-gray-700 text-lg font-bold border-y-2 border-[#4facfe] py-0.5 px-4 w-48 mx-auto flex justify-between">
+              <div className="text-gray-700 text-lg font-bold border-y-2 border-blue-500 py-0.5 px-4 w-48 mx-auto flex justify-between">
                 <span>Apr</span> <span>04</span> <span>2026</span>
               </div>
               <div className="text-gray-400 text-sm opacity-50 absolute -bottom-5 left-0 right-0">May 05 2027</div>
@@ -135,7 +171,7 @@ export function Periodontogram() {
            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold p-1">
               <span className="text-[12px]">{tooth - 1}</span>
            </div>
-           <Button className="bg-[#ffb74d] hover:bg-[#ffa726] text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
+           <Button onClick={() => setOpenPopover(null)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
              Submit and close
            </Button>
            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold p-1">
@@ -151,15 +187,18 @@ export function Periodontogram() {
         </div>
 
         <div className="flex flex-col items-center gap-2 pb-6 px-4">
-           {[0, 1, 2, 3, 4].map(v => (
-             <div key={v} className={`w-16 h-8 flex items-center justify-center rounded-full border-2 cursor-pointer font-bold ${v === 0 ? 'bg-blue-500 text-white border-blue-600' : 'bg-transparent border-gray-400 text-gray-600 hover:border-gray-600'}`}>
-               {v}
-             </div>
-           ))}
+           {[0, 1, 2, 3, 4].map(v => {
+             const isSelected = data[tooth]?.[param]?.single === v;
+             return (
+               <div key={v} onClick={() => setSingleValue(tooth, param, v)} className={`w-16 h-8 flex items-center justify-center rounded-full border-2 cursor-pointer font-bold ${isSelected ? 'bg-blue-500 text-white border-blue-600' : 'bg-transparent border-gray-400 text-gray-600 hover:border-gray-600'}`}>
+                 {v}
+               </div>
+             )
+           })}
         </div>
 
         <div className="bg-[#e0e0e0] p-4 text-center border-t border-gray-300 h-28 relative flex items-center justify-center">
-           <div className="text-gray-700 text-lg font-bold border-y-2 border-[#4facfe] py-1 px-4 w-48 flex justify-between absolute">
+           <div className="text-gray-700 text-lg font-bold border-y-2 border-blue-500 py-1 px-4 w-48 flex justify-between absolute">
              <span>Apr</span> <span>04</span> <span>2026</span>
            </div>
         </div>
@@ -171,7 +210,7 @@ export function Periodontogram() {
     const ToothComponent = isMolar(tooth) ? MolarSvg : IncisorSvg;
     
     return (
-      <Popover key={tooth}>
+      <Popover key={tooth} open={openPopover === tooth} onOpenChange={(open) => setOpenPopover(open ? tooth : null)}>
         <PopoverTrigger className="flex flex-col items-center cursor-pointer group focus:outline-none w-full border border-transparent hover:bg-white/30 rounded-lg p-0.5 transition-colors">
           {/* Numbers for Top teeth sit above the root */}
           {isTop && <span className="text-[12px] font-bold text-[#8D6E63] w-full text-center pb-1">{tooth}</span>}
@@ -185,9 +224,13 @@ export function Periodontogram() {
              <div className={`absolute left-0 right-0 h-[4px] bg-[#0000cd] rounded-full w-1 mx-auto z-10 ${isTop ? "bottom-[14px]" : "top-[14px]"}`} />
           </div>
 
-          <div className="flex flex-col gap-0.5 items-center justify-center py-2 h-16 text-center w-full">
-             <div className="text-[#800000] text-[9px] font-mono leading-tight tracking-tighter">00-00-00</div>
-             <div className="text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter">00-00-00</div>
+          <div className="flex flex-col gap-0.5 items-center justify-center py-2 h-16 text-center w-full transition-opacity">
+             <div className={`text-[#800000] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200 ${showBuccal ? 'opacity-100' : 'opacity-0'}`}>
+                 {getParmValStr(tooth, activeParam, 'buccal')}
+             </div>
+             <div className={`text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200 ${showLingual ? 'opacity-100' : 'opacity-0'}`}>
+                 {getParmValStr(tooth, activeParam, 'lingual')}
+             </div>
              <div className="h-4 flex items-center justify-center w-full">
                <div className="w-[80%] h-[2px] border-b-[1.5px] border-dashed border-[#0000cd]" />
              </div>
@@ -207,17 +250,27 @@ export function Periodontogram() {
   return (
     <div className="w-full bg-[#f5f5f5] rounded-3xl overflow-hidden border border-gray-200 animate-fade-in-up">
       {/* Top Header */}
-      <div className="bg-[#4aa5ff] text-white font-bold text-center py-2 text-lg">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-center py-2 text-lg">
         Periodontics
       </div>
 
       <div className="p-3 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3 mb-3">
           <div className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">4 April 2026</div>
-          <Button className="bg-[#ffb74d] hover:bg-[#ffa726] text-white font-bold rounded-full h-9 px-6 text-sm">
+          <Button onClick={() => {
+              const loadedData: any = {};
+              [11, 21, 16, 26, 31, 41, 36, 46].forEach(t => {
+                 loadedData[t] = {
+                   "Probing depth": { buccal: [2,3,2], lingual: [1,2,1] },
+                   "Bleeding": { buccal: [0,1,0], lingual: [0,0,0] },
+                   "Mobility": { single: 1 }
+                 };
+              });
+              setData(loadedData);
+          }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold rounded-full h-9 px-6 text-sm">
             Load
           </Button>
-          <Button className="bg-[#f44336] hover:bg-[#e53935] text-white p-2 rounded-full h-9 w-9">
+          <Button onClick={() => setData({})} className="bg-[#f44336] hover:bg-[#e53935] text-white p-2 rounded-full h-9 w-9">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -229,7 +282,7 @@ export function Periodontogram() {
               key={p}
               variant="outline"
               onClick={() => setActiveParam(p)}
-              className={`rounded-full border-2 text-xs font-semibold h-9 ${p === activeParam ? "bg-[#4aa5ff] text-white border-[#4aa5ff]" : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"}`}
+              className={`rounded-full border-2 text-xs font-semibold h-9 ${p === activeParam ? "bg-blue-600 text-white border-blue-600" : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"}`}
             >
               {p}
             </Button>
@@ -241,8 +294,8 @@ export function Periodontogram() {
       <div className="flex h-auto w-full">
         {/* Sidebar Tools */}
         <div className="w-20 bg-[#dbe2ea] border-r border-gray-300 flex flex-col items-center gap-6 py-6 shrink-0 z-20">
-           <Button className="bg-[#4aa5ff] hover:bg-[#3b82f6] text-white p-2 rounded-2xl h-12 w-12 shadow-sm flex flex-col items-center justify-center">
-             <RotateCw className="w-5 h-5 mb-0.5" />
+           <Button onClick={() => setIsRotated(!isRotated)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-2 rounded-2xl h-12 w-12 shadow-sm flex flex-col items-center justify-center">
+             <RotateCw className={`w-5 h-5 mb-0.5 transition-transform duration-300 ${isRotated ? 'rotate-90' : ''}`} />
              <span className="text-[9px] font-bold">90°</span>
            </Button>
 
@@ -262,8 +315,8 @@ export function Periodontogram() {
         </div>
 
         {/* Scrollable grid area */}
-        <div className="flex-1 overflow-x-auto bg-[#ffab40]/90">
-           <div className="min-w-[800px] p-6 pt-8 pb-10 flex flex-col items-center justify-center gap-6 relative">
+        <div className="flex-1 overflow-x-auto bg-blue-50/50">
+           <div className={`min-w-[800px] p-6 pt-8 pb-10 flex flex-col items-center justify-center gap-6 relative transition-transform duration-500 ${isRotated ? 'rotate-0 origin-center' : ''}`}>
               {/* Top View */}
               <div className="flex w-full justify-center relative">
                  <div className="w-full absolute top-[62px] border-t-[1.5px] border-[#0000cd] z-0" /> {/* main line */}

@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pill, Printer, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-const prescriptions = [
+const initialPrescriptions = [
   {
     id: "RX-8849",
     date: "Mar 15, 2024",
@@ -28,6 +32,35 @@ const prescriptions = [
 ];
 
 export function Prescriptions() {
+  const [prescriptions, setPrescriptions] = useState(initialPrescriptions);
+  const [open, setOpen] = useState(false);
+  const [newRx, setNewRx] = useState({
+    name: "", dosage: "", frequency: "", duration: "", notes: ""
+  });
+
+  const handleAddRx = () => {
+    if (!newRx.name) return;
+    
+    const rxObj = {
+      id: `RX-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      doctor: "Current Doctor",
+      medications: [
+        { 
+          name: newRx.name, 
+          dosage: newRx.dosage || "1 tablet", 
+          frequency: newRx.frequency || "Once daily", 
+          duration: newRx.duration || "7 days" 
+        }
+      ],
+      notes: newRx.notes
+    };
+    
+    setPrescriptions([rxObj, ...prescriptions]);
+    setOpen(false);
+    setNewRx({ name: "", dosage: "", frequency: "", duration: "", notes: "" });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between mb-4">
@@ -35,9 +68,75 @@ export function Prescriptions() {
           <h3 className="text-lg font-bold text-gray-900">E-Prescriptions</h3>
           <p className="text-sm text-gray-500">View and generate medical prescriptions.</p>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md">
-          <Plus className="w-4 h-4 mr-2" /> New Rx
-        </Button>
+        
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger render={<Button className="bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md text-white shadow-sm" />}>
+            <Plus className="w-4 h-4 mr-2" /> New Rx
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Prescription</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-sm font-semibold">Medication Name</Label>
+                <Input 
+                  id="name" 
+                  placeholder="e.g. Amoxicillin 500mg" 
+                  value={newRx.name} 
+                  onChange={(e) => setNewRx({...newRx, name: e.target.value})}
+                  className="rounded-xl bg-gray-50/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dosage" className="text-sm font-semibold">Dosage</Label>
+                  <Input 
+                    id="dosage" 
+                    placeholder="e.g. 1 tablet" 
+                    value={newRx.dosage} 
+                    onChange={(e) => setNewRx({...newRx, dosage: e.target.value})}
+                    className="rounded-xl bg-gray-50/50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="duration" className="text-sm font-semibold">Duration</Label>
+                  <Input 
+                    id="duration" 
+                    placeholder="e.g. 7 days" 
+                    value={newRx.duration} 
+                    onChange={(e) => setNewRx({...newRx, duration: e.target.value})}
+                    className="rounded-xl bg-gray-50/50"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="frequency" className="text-sm font-semibold">Frequency</Label>
+                <Input 
+                  id="frequency" 
+                  placeholder="e.g. Every 8 hours" 
+                  value={newRx.frequency} 
+                  onChange={(e) => setNewRx({...newRx, frequency: e.target.value})}
+                  className="rounded-xl bg-gray-50/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes" className="text-sm font-semibold">Doctor's Instructions</Label>
+                <Input 
+                  id="notes" 
+                  placeholder="Take with food..." 
+                  value={newRx.notes} 
+                  onChange={(e) => setNewRx({...newRx, notes: e.target.value})}
+                  className="rounded-xl bg-gray-50/50"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
+              <Button onClick={handleAddRx} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm">Generate Rx</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-6">

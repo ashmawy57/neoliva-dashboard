@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Clock, DollarSign, Sparkles, Stethoscope, MoreHorizontal } from "lucide-react";
+import { NewServiceDialog } from "@/components/services/NewServiceDialog";
 
 const services = [
   { id: 1, name: "Teeth Cleaning", price: 120, duration: 45, description: "Standard prophylaxis cleaning with polishing", icon: "🪥", category: "Preventive", popular: true },
@@ -30,9 +31,7 @@ export default function ServicesPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Services & Pricing</h1>
           <p className="text-sm text-gray-500 mt-1">Manage clinic treatments and pricing structure</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Service
-        </Button>
+        <NewServiceDialog />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">

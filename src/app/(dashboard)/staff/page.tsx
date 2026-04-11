@@ -7,6 +7,7 @@ import { PlusCircle, Search, UserPen, Shield, Mail, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NewStaffDialog } from "@/components/staff/NewStaffDialog";
 
 const staff = [
   { id: "S-01", name: "Dr. Sarah Smith", role: "Admin", title: "Lead Dentist & Clinic Owner", phone: "+1 234-567-8901", email: "sarah@smilecare.com", avatar: "SS", color: "from-blue-500 to-indigo-600", status: "Online" },
@@ -31,9 +32,7 @@ export default function StaffPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Staff & Roles</h1>
           <p className="text-sm text-gray-500 mt-1">Manage team members and access control (RBAC)</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Member
-        </Button>
+        <NewStaffDialog />
       </div>
 
       {/* Role cards */}

@@ -77,9 +77,6 @@ export default function DashboardPage() {
             Here&apos;s what&apos;s happening at your clinic today.
           </p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <Plus className="mr-2 h-4 w-4" /> New Appointment
-        </Button>
       </div>
 
       {/* KPI Cards */}

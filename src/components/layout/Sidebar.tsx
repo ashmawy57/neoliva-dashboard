@@ -149,7 +149,7 @@ export function Sidebar() {
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[oklch(0.14_0.025_255)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-white/90 truncate">Dr. Sarah Smith</p>
+              <p className="text-[13px] font-semibold text-white/90 truncate">Dr. Roufida Attia</p>
               <p className="text-[11px] text-white/40 truncate">Administrator</p>
             </div>
             <LogOut className="w-4 h-4 text-white/25 group-hover:text-white/60 transition-colors flex-shrink-0" />

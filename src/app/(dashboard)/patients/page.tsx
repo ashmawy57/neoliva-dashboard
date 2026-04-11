@@ -10,15 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Search, ExternalLink, Users as UsersIcon } from "lucide-react";
 
 import { AddPatientDialog } from "@/components/patients/AddPatientDialog";
-
-const patientsData = [
-  { id: "P-1001", name: "Emily Johnson", phone: "+1 234-567-8900", lastVisit: "Mar 15, 2024", nextAppt: "Mar 28, 2024", status: "Active", avatar: "EJ", color: "from-blue-500 to-cyan-500", visits: 12 },
-  { id: "P-1002", name: "Marcus Williams", phone: "+1 234-567-8901", lastVisit: "Feb 20, 2024", nextAppt: "Mar 28, 2024", status: "Active", avatar: "MW", color: "from-purple-500 to-pink-500", visits: 8 },
-  { id: "P-1003", name: "Sarah Chen", phone: "+1 234-567-8902", lastVisit: "Mar 10, 2024", nextAppt: "Apr 05, 2024", status: "Active", avatar: "SC", color: "from-amber-500 to-orange-500", visits: 15 },
-  { id: "P-1004", name: "James Rodriguez", phone: "+1 234-567-8903", lastVisit: "Jan 05, 2024", nextAppt: "—", status: "Inactive", avatar: "JR", color: "from-gray-400 to-gray-500", visits: 3 },
-  { id: "P-1005", name: "Aisha Patel", phone: "+1 234-567-8904", lastVisit: "Mar 22, 2024", nextAppt: "Mar 30, 2024", status: "Active", avatar: "AP", color: "from-emerald-500 to-teal-500", visits: 20 },
-  { id: "P-1006", name: "David Kim", phone: "+1 234-567-8905", lastVisit: "Mar 25, 2024", nextAppt: "Apr 02, 2024", status: "Active", avatar: "DK", color: "from-indigo-500 to-violet-500", visits: 6 },
-];
+import { patientsData } from "@/lib/patients-data";
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("");

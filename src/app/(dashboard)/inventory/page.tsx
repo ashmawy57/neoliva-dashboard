@@ -7,6 +7,7 @@ import { AlertTriangle, PlusCircle, Search, Package, TrendingDown } from "lucide
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { NewInventoryItemDialog } from "@/components/inventory/NewInventoryItemDialog";
 
 const inventory = [
   { id: "INV-01", name: "Lidocaine 2%", category: "Anesthetics", quantity: 5, minLevel: 10, unit: "Vials" },
@@ -33,9 +34,7 @@ export default function InventoryPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Inventory</h1>
           <p className="text-sm text-gray-500 mt-1">Supply management and stock tracking</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Item
-        </Button>
+        <NewInventoryItemDialog />
       </div>
 
       {/* Alert Banner */}
