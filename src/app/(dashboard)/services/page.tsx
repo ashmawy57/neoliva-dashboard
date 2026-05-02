@@ -1,19 +1,12 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Clock, DollarSign, Sparkles, Stethoscope, MoreHorizontal } from "lucide-react";
+import { PlusCircle, Clock, DollarSign, Sparkles, Stethoscope, MoreHorizontal, Loader2 } from "lucide-react";
 import { NewServiceDialog } from "@/components/services/NewServiceDialog";
-
-const services = [
-  { id: 1, name: "Teeth Cleaning", price: 120, duration: 45, description: "Standard prophylaxis cleaning with polishing", icon: "🪥", category: "Preventive", popular: true },
-  { id: 2, name: "Root Canal Therapy", price: 850, duration: 90, description: "Endodontic therapy — single canal treatment", icon: "🦷", category: "Restorative", popular: false },
-  { id: 3, name: "Teeth Whitening", price: 350, duration: 60, description: "Professional in-office laser whitening", icon: "✨", category: "Cosmetic", popular: true },
-  { id: 4, name: "Dental Implant", price: 2500, duration: 120, description: "Titanium post with porcelain crown placement", icon: "🔩", category: "Surgical", popular: false },
-  { id: 5, name: "Composite Filling", price: 180, duration: 45, description: "Tooth-colored composite restoration", icon: "💎", category: "Restorative", popular: false },
-  { id: 6, name: "Orthodontic Consultation", price: 75, duration: 30, description: "Initial assessment and treatment planning", icon: "📋", category: "Orthodontics", popular: true },
-];
+import { getServices } from "@/app/actions/services";
 
 const categoryColors: Record<string, string> = {
   Preventive: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -24,6 +17,23 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function ServicesPage() {
+  const [servicesList, setServicesList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchServices() {
+      try {
+        const data = await getServices();
+        setServicesList(data);
+      } catch (error) {
+        console.error("Failed to fetch services:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchServices();
+  }, []);
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -34,8 +44,17 @@ export default function ServicesPage() {
         <NewServiceDialog />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-        {services.map((service) => (
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+        </div>
+      ) : servicesList.length === 0 ? (
+        <div className="text-center py-20 text-gray-500">
+          No services found.
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+          {servicesList.map((service) => (
           <Card key={service.id} className="border-0 shadow-sm card-hover overflow-hidden group relative">
             {service.popular && (
               <div className="absolute top-3 right-3 z-10">
@@ -69,7 +88,8 @@ export default function ServicesPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

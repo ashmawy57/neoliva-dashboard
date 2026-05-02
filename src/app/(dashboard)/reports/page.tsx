@@ -6,7 +6,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, Users, Activity } from "lucide-react";
+import { TrendingUp, Users, Activity as ActivityIcon } from "lucide-react";
 
 const revenueData = [
   { month: "Aug", revenue: 18000 },
@@ -73,7 +73,7 @@ export default function ReportsPage() {
         <Card className="border-0 shadow-sm card-hover">
           <CardContent className="flex items-center gap-4 p-5">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
-              <Activity className="w-6 h-6 text-white" />
+              <ActivityIcon className="w-6 h-6 text-white" />
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Avg. Daily Visits</p>

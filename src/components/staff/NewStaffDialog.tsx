@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, UserPlus, Mail, Phone, Briefcase, Shield } from "lucide-react";
+import { PlusCircle, UserPlus, Mail, Phone, Briefcase, Shield, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -14,9 +14,55 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { createStaff } from "@/app/actions/staff";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function NewStaffDialog() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    role: "",
+    title: "",
+    email: "",
+    phone: "",
+    invite: true
+  });
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await createStaff(formData);
+      toast.success("Staff member created successfully");
+      setOpen(false);
+      
+      // Reset form
+      setFormData({
+        name: "",
+        role: "",
+        title: "",
+        email: "",
+        phone: "",
+        invite: true
+      });
+      
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create staff member");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -35,7 +81,7 @@ export function NewStaffDialog() {
         </DialogHeader>
 
         <form 
-          onSubmit={(e) => { e.preventDefault(); setOpen(false); }} 
+          onSubmit={handleSubmit} 
           className="flex-1 flex flex-col overflow-hidden max-h-[80vh]"
         >
           <div className="flex-1 overflow-y-auto w-full p-6 space-y-5">
@@ -45,9 +91,12 @@ export function NewStaffDialog() {
               <Label htmlFor="name" className="text-sm font-semibold text-gray-700">Full Name</Label>
               <Input 
                 id="name"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
                 placeholder="e.g. Dr. Sarah Smith" 
                 className="bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm h-11" 
                 required
+                disabled={loading}
               />
             </div>
 
@@ -57,7 +106,12 @@ export function NewStaffDialog() {
                 <Label className="text-sm font-semibold text-gray-700">Role</Label>
                 <div className="relative">
                   <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 pointer-events-none" />
-                  <Select required>
+                  <Select 
+                    required 
+                    value={formData.role} 
+                    onValueChange={(val) => handleChange('role', val)}
+                    disabled={loading}
+                  >
                     <SelectTrigger className="pl-10 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm h-11 w-full">
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
@@ -77,9 +131,12 @@ export function NewStaffDialog() {
                   <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 pointer-events-none" />
                   <Input 
                     id="title"
+                    value={formData.title}
+                    onChange={(e) => handleChange('title', e.target.value)}
                     placeholder="e.g. Lead Dentist" 
                     className="pl-10 bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm h-11" 
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -94,9 +151,12 @@ export function NewStaffDialog() {
                   <Input 
                     id="email"
                     type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
                     placeholder="sarah@smilecare.com" 
                     className="pl-10 bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm h-11" 
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -108,9 +168,12 @@ export function NewStaffDialog() {
                   <Input 
                     id="phone"
                     type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleChange('phone', e.target.value)}
                     placeholder="+1 234-567-8900" 
                     className="pl-10 bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm h-11" 
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -122,7 +185,13 @@ export function NewStaffDialog() {
                 <Label className="text-sm font-semibold text-gray-900">Send Invitation Email</Label>
                 <p className="text-xs text-gray-500">Member will receive instructions to set up their account</p>
               </div>
-              <Switch id="invite" className="data-[state=checked]:bg-blue-600" defaultChecked />
+              <Switch 
+                id="invite" 
+                checked={formData.invite}
+                onCheckedChange={(val) => handleChange('invite', val)}
+                disabled={loading}
+                className="data-[state=checked]:bg-blue-600" 
+              />
             </div>
 
           </div>
@@ -132,15 +201,17 @@ export function NewStaffDialog() {
               type="button" 
               variant="outline" 
               onClick={() => setOpen(false)}
+              disabled={loading}
               className="px-6 rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50 h-11 shadow-sm font-medium"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
+              disabled={loading}
               className="px-8 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 h-11 font-semibold"
             >
-              Save Member
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Save Member'}
             </Button>
           </DialogFooter>
         </form>

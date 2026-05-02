@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RefreshCw, Stethoscope, Image as ImageIcon, PenTool, X, Info, Save, Trash2, FileText, Camera, AlertTriangle } from "lucide-react";
+import { updateToothCondition } from "@/app/actions/patients";
 
 type ToothCondition = "healthy" | "caries" | "filled" | "extracted" | "crown";
 type ToothType = "permanent" | "primary";
@@ -202,23 +203,21 @@ const SurfacesPopover = ({ tooth, surfaces, onSurfaceChange }: { tooth: number; 
   )
 }
 
-export function ToothChart() {
-  const [teeth, setTeeth] = useState<Record<number, ToothCondition>>({
-    16: "caries",
-    24: "filled",
-    36: "extracted",
-    47: "crown",
+export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
+  const [isPending, startTransition] = useTransition();
+  const [teeth, setTeeth] = useState<Record<number, ToothCondition>>(() => {
+    const conditions = patient?.toothConditions ?? [];
+    const mapping: Record<number, ToothCondition> = {};
+    conditions.forEach((c: any) => {
+      mapping[c.tooth_number] = c.condition as ToothCondition;
+    });
+    return mapping;
   });
 
   const [toothTypes, setToothTypes] = useState<Record<number, ToothType>>({});
   const [toothSurfaces, setToothSurfaces] = useState<Record<number, ToothSurfaces>>({});
-  const [findings, setFindings] = useState<ClinicalFinding[]>([
-    { id: "f1", tooth: 16, date: "Mar 28, 2024", note: "Deep cavity detected on buccal surface. Sensitivity to cold reported.", type: "finding" },
-    { id: "f2", tooth: 47, date: "Mar 15, 2024", note: "Crown intact, no issues. Periapical status normal.", type: "parameter" },
-  ]);
-  const [photos, setPhotos] = useState<ToothPhoto[]>([
-    { id: "p1", tooth: 16, name: "tooth_16_xray.jpg", date: "Mar 28, 2024", size: "2.4 MB" },
-  ]);
+  const [findings, setFindings] = useState<ClinicalFinding[]>([]);
+  const [photos, setPhotos] = useState<ToothPhoto[]>([]);
 
   // Dialogs state
   const [findingsDialog, setFindingsDialog] = useState<number | null>(null);
@@ -228,8 +227,23 @@ export function ToothChart() {
   const [newFinding, setNewFinding] = useState("");
   const [findingType, setFindingType] = useState<"finding" | "parameter">("finding");
 
+  // Sync state when patient prop changes
+  useEffect(() => {
+    if (!patient) return;
+    const conditions = patient.toothConditions ?? [];
+    const mapping: Record<number, ToothCondition> = {};
+    conditions.forEach((c: any) => {
+      mapping[c.tooth_number] = c.condition as ToothCondition;
+    });
+    setTeeth(mapping);
+  }, [patient]);
+
   const handleConditionChange = (tooth: number, cond: ToothCondition) => {
     setTeeth((prev) => ({ ...prev, [tooth]: cond }));
+    startTransition(async () => {
+      await updateToothCondition(patient.id, tooth, cond, "");
+      onRefresh?.();
+    });
   };
 
   const handleSurfaceChange = (tooth: number, surface: SurfaceKey, color: SurfaceColor) => {

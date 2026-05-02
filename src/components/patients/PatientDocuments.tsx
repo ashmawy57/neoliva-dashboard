@@ -1,92 +1,79 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useTransition } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileImage, FileText, UploadCloud, Download, Eye, FileSignature } from "lucide-react";
+import { FileImage, FileText, UploadCloud, Download, Eye, FileSignature, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { addPatientDocument } from "@/app/actions/patients";
+import { createClient } from "@/lib/supabase/client";
 
-const initialDocuments = [
-  {
-    id: "DOC-001",
-    name: "Panoramic X-Ray",
-    type: "X-Ray",
-    date: "Feb 20, 2024",
-    size: "4.2 MB",
-    icon: FileImage,
-    color: "text-blue-500",
-    bg: "bg-blue-50",
-  },
-  {
-    id: "DOC-002",
-    name: "Root Canal Consent",
-    type: "Consent Form",
-    date: "Mar 15, 2024",
-    size: "120 KB",
-    icon: FileSignature,
-    color: "text-amber-500",
-    bg: "bg-amber-50",
-  },
-  {
-    id: "DOC-003",
-    name: "Blood Test Results",
-    type: "Lab Report",
-    date: "Jan 10, 2024",
-    size: "800 KB",
-    icon: FileText,
-    color: "text-purple-500",
-    bg: "bg-purple-50",
-  },
-];
-
-export function PatientDocuments() {
-  const [docs, setDocs] = useState(initialDocuments);
+export function PatientDocuments({ 
+  patientId, 
+  initialData = [], 
+  onRefresh 
+}: { 
+  patientId: string, 
+  initialData?: any[],
+  onRefresh?: () => void
+}) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
   const [newDoc, setNewDoc] = useState({ name: "", type: "" });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleUpload = () => {
-    if (!newDoc.name) return;
-    
-    let icon = FileText;
-    let color = "text-indigo-500";
-    let bg = "bg-indigo-50";
+  const supabase = createClient();
 
-    const typeStr = newDoc.type.toLowerCase();
-    if (typeStr.includes("x-ray") || typeStr.includes("image") || typeStr.includes("scan")) {
-      icon = FileImage;
-      color = "text-blue-500"; bg = "bg-blue-50";
-    } else if (typeStr.includes("consent") || typeStr.includes("form")) {
-      icon = FileSignature;
-      color = "text-amber-500"; bg = "bg-amber-50";
-    } else if (typeStr.includes("report") || typeStr.includes("test")) {
-      icon = FileText;
-      color = "text-purple-500"; bg = "bg-purple-50";
+  const handleUpload = async () => {
+    if (!newDoc.name || !selectedFile || !patientId) return;
+    
+    setIsUploading(true);
+    try {
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${patientId}/${Math.random()}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('patient-documents')
+        .upload(fileName, selectedFile);
+
+      if (uploadError) {
+        console.error("Error uploading to storage", uploadError);
+        alert("Failed to upload file");
+        setIsUploading(false);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('patient-documents')
+        .getPublicUrl(fileName);
+
+      startTransition(async () => {
+        const result = await addPatientDocument(patientId, {
+          name: newDoc.name,
+          type: newDoc.type || "Document",
+          file_url: publicUrlData.publicUrl
+        });
+
+        if (result?.success) {
+          setOpen(false);
+          setNewDoc({ name: "", type: "" });
+          setSelectedFile(null);
+          onRefresh?.();
+        } else {
+          console.error("Failed to save document metadata");
+          alert("Failed to save metadata");
+        }
+        setIsUploading(false);
+      });
+    } catch (err) {
+      console.error(err);
+      setIsUploading(false);
+      alert("An unexpected error occurred");
     }
-
-    const sizeStr = selectedFile 
-      ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` 
-      : `${(Math.random() * 5).toFixed(1)} MB`;
-
-    const docObj = {
-      id: `DOC-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-      name: newDoc.name,
-      type: newDoc.type || "Document",
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      size: sizeStr,
-      icon: icon,
-      color: color,
-      bg: bg,
-    };
-    
-    setDocs([docObj, ...docs]);
-    setOpen(false);
-    setNewDoc({ name: "", type: "" });
-    setSelectedFile(null);
   };
 
   return (
@@ -98,9 +85,13 @@ export function PatientDocuments() {
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md text-white shadow-sm" />}>
-            <UploadCloud className="w-4 h-4 mr-2" /> Upload File
-          </DialogTrigger>
+          <DialogTrigger 
+            render={
+              <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md text-white shadow-sm">
+                <UploadCloud className="w-4 h-4 mr-2" /> Upload File
+              </Button>
+            } 
+          />
           <DialogContent className="sm:max-w-[425px] rounded-2xl">
             <DialogHeader>
               <DialogTitle>Upload New Document</DialogTitle>
@@ -160,39 +151,73 @@ export function PatientDocuments() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleUpload} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">Upload</Button>
+              <Button onClick={handleUpload} disabled={isUploading || isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">
+                {(isUploading || isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Upload
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {docs.map((doc) => (
-          <Card key={doc.id} className="border-0 shadow-sm group hover:shadow-md transition-shadow relative overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${doc.bg} ${doc.color}`}>
-                  <doc.icon className="w-6 h-6" />
-                </div>
-                <Badge variant="outline" className="text-[10px] rounded-full text-gray-500 border-gray-200">
-                  {doc.type}
-                </Badge>
-              </div>
+        {initialData.length === 0 ? (
+          <div className="col-span-full text-center py-10 bg-gray-50/50 rounded-2xl border border-gray-100">
+            <FileImage className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">No documents uploaded yet.</p>
+          </div>
+        ) : (
+          initialData.map((doc: any) => {
+            let Icon = FileText;
+            let color = "text-indigo-500";
+            let bg = "bg-indigo-50";
 
-              <h4 className="text-base font-bold text-gray-900 leading-tight mb-1">{doc.name}</h4>
-              <p className="text-xs text-gray-500 mb-6">{doc.date} · {doc.size}</p>
+            const typeStr = doc.type.toLowerCase();
+            if (typeStr.includes("x-ray") || typeStr.includes("image") || typeStr.includes("scan")) {
+              Icon = FileImage;
+              color = "text-blue-500"; bg = "bg-blue-50";
+            } else if (typeStr.includes("consent") || typeStr.includes("form")) {
+              Icon = FileSignature;
+              color = "text-amber-500"; bg = "bg-amber-50";
+            } else if (typeStr.includes("report") || typeStr.includes("test")) {
+              Icon = FileText;
+              color = "text-purple-500"; bg = "bg-purple-50";
+            }
 
-              <div className="flex gap-2">
-                <Button variant="secondary" className="w-full text-xs font-semibold rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-                  <Eye className="w-3.5 h-3.5 mr-2" /> View
-                </Button>
-                <Button variant="outline" size="icon" className="rounded-lg text-gray-400 hover:text-gray-900 shrink-0">
-                  <Download className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            return (
+              <Card key={doc.id} className="border-0 shadow-sm group hover:shadow-md transition-shadow relative overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg} ${color}`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] rounded-full text-gray-500 border-gray-200">
+                      {doc.type}
+                    </Badge>
+                  </div>
+
+                  <h4 className="text-base font-bold text-gray-900 leading-tight mb-1">{doc.name}</h4>
+                  <p className="text-xs text-gray-500 mb-6">
+                    {new Date(doc.upload_date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                  </p>
+
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="secondary" 
+                      className="w-full text-xs font-semibold rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                      onClick={() => window.open(doc.file_url, "_blank")}
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-2" /> View
+                    </Button>
+                    <Button variant="outline" size="icon" className="rounded-lg text-gray-400 hover:text-gray-900 shrink-0" onClick={() => window.open(doc.file_url, "_blank")}>
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
 
       {/* Drag and drop zone mock */}

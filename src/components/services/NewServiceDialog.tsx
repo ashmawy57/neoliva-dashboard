@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Stethoscope, DollarSign, Clock, LayoutGrid } from "lucide-react";
+import { PlusCircle, Stethoscope, DollarSign, Clock, LayoutGrid, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,9 +15,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { createService } from "@/app/actions/services";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function NewServiceDialog() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = await createService(formData);
+
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Service added successfully");
+        setOpen(false);
+        router.refresh();
+      }
+    } catch (error) {
+      toast.error("Failed to add service");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -36,7 +64,7 @@ export function NewServiceDialog() {
         </DialogHeader>
 
         <form 
-          onSubmit={(e) => { e.preventDefault(); setOpen(false); }} 
+          onSubmit={handleSubmit} 
           className="flex-1 flex flex-col overflow-hidden max-h-[80vh]"
         >
           <div className="flex-1 overflow-y-auto w-full p-6 space-y-5">
@@ -46,6 +74,7 @@ export function NewServiceDialog() {
               <Label htmlFor="name" className="text-sm font-semibold text-gray-700">Service Name</Label>
               <Input 
                 id="name"
+                name="name"
                 placeholder="e.g. Teeth Whitening" 
                 className="bg-white border-gray-200 focus-visible:ring-indigo-500 rounded-xl shadow-sm h-11" 
                 required
@@ -58,16 +87,16 @@ export function NewServiceDialog() {
                 <Label className="text-sm font-semibold text-gray-700">Category</Label>
                 <div className="relative">
                   <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 pointer-events-none" />
-                  <Select required>
+                  <Select name="category" required>
                     <SelectTrigger className="pl-10 bg-white border-gray-200 focus:ring-indigo-500 rounded-xl shadow-sm h-11 w-full">
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="preventive">Preventive</SelectItem>
-                      <SelectItem value="restorative">Restorative</SelectItem>
-                      <SelectItem value="cosmetic">Cosmetic</SelectItem>
-                      <SelectItem value="surgical">Surgical</SelectItem>
-                      <SelectItem value="orthodontics">Orthodontics</SelectItem>
+                      <SelectItem value="Preventive">Preventive</SelectItem>
+                      <SelectItem value="Restorative">Restorative</SelectItem>
+                      <SelectItem value="Cosmetic">Cosmetic</SelectItem>
+                      <SelectItem value="Surgical">Surgical</SelectItem>
+                      <SelectItem value="Orthodontics">Orthodontics</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -77,6 +106,7 @@ export function NewServiceDialog() {
                 <Label htmlFor="icon" className="text-sm font-semibold text-gray-700">Emoji Icon</Label>
                 <Input 
                   id="icon"
+                  name="icon"
                   placeholder="e.g. ✨" 
                   className="bg-white border-gray-200 focus-visible:ring-indigo-500 rounded-xl shadow-sm h-11 text-center text-lg" 
                   maxLength={2}
@@ -92,6 +122,7 @@ export function NewServiceDialog() {
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input 
                     id="price"
+                    name="price"
                     type="number"
                     placeholder="0.00" 
                     min="0"
@@ -108,6 +139,7 @@ export function NewServiceDialog() {
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input 
                     id="duration"
+                    name="duration"
                     type="number"
                     placeholder="30" 
                     min="5"
@@ -124,6 +156,7 @@ export function NewServiceDialog() {
               <Label htmlFor="description" className="text-sm font-semibold text-gray-700">Description</Label>
               <Textarea 
                 id="description"
+                name="description"
                 placeholder="Brief description of the service..." 
                 className="bg-white border-gray-200 focus-visible:ring-indigo-500 rounded-xl shadow-sm min-h-[80px] resize-none" 
               />
@@ -135,7 +168,7 @@ export function NewServiceDialog() {
                 <Label className="text-sm font-semibold text-gray-900">Mark as Popular</Label>
                 <p className="text-xs text-gray-500">Highlight this service with a special badge</p>
               </div>
-              <Switch id="popular" className="data-[state=checked]:bg-indigo-600" />
+              <Switch id="popular" name="popular" className="data-[state=checked]:bg-indigo-600" />
             </div>
 
           </div>
@@ -145,15 +178,24 @@ export function NewServiceDialog() {
               type="button" 
               variant="outline" 
               onClick={() => setOpen(false)}
+              disabled={loading}
               className="px-6 rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50 h-11 shadow-sm font-medium"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
+              disabled={loading}
               className="px-8 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 h-11 font-semibold"
             >
-              Save Service
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Service"
+              )}
             </Button>
           </DialogFooter>
         </form>

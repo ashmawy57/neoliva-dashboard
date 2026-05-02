@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Clock, PlayCircle, Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, DollarSign, AlertCircle } from "lucide-react";
+import { CheckCircle2, Clock, PlayCircle, Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, DollarSign, AlertCircle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { getTreatmentPlans, createTreatmentPlan, deleteTreatmentPlan, updatePlanStatus, addTreatmentPhase, updatePhaseStatus, deleteTreatmentPhase } from "@/app/actions/treatment-plans";
 
 // ============ TYPES ============
 type PhaseStatus = "Completed" | "In Progress" | "Planned" | "Cancelled";
@@ -96,9 +97,37 @@ const initialPlans: Plan[] = [
   },
 ];
 
-export function TreatmentPlans() {
-  const [plans, setPlans] = useState<Plan[]>(initialPlans);
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(initialPlans[0]?.id || null);
+export function TreatmentPlans({ 
+  patientId,
+  onRefresh
+}: { 
+  patientId: string,
+  onRefresh?: () => void
+}) {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function loadPlans() {
+    setLoading(true);
+    try {
+      const data = await getTreatmentPlans(patientId);
+      setPlans(data as Plan[]);
+      if (data.length > 0 && !expandedPlan) {
+        setExpandedPlan(data[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to load plans", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (patientId) {
+      loadPlans();
+    }
+  }, [patientId]);
 
   // Dialog states
   const [newPlanDialog, setNewPlanDialog] = useState(false);
@@ -128,88 +157,111 @@ export function TreatmentPlans() {
   };
 
   // ============ HANDLERS ============
-  const handleAddPlan = () => {
+  const handleAddPlan = async () => {
     if (!newPlan.title) return;
-    const phases: Phase[] = newPlanPhases.map((p, i) => ({
-      id: `ph-${Date.now()}-${i}`,
-      step: i + 1,
-      name: p.name,
-      status: "Planned" as PhaseStatus,
-      date: p.date || "TBD",
-      price: p.price || "$0",
-      notes: "",
-    }));
-    const plan: Plan = {
-      id: `TP-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+    const planData = {
       title: newPlan.title,
       status: "Active",
-      progress: calcProgress(phases),
-      cost: phases.length > 0 ? calcCost(phases) : "$0",
-      created: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       notes: newPlan.notes,
-      phases,
+      phases: newPlanPhases.map(p => ({
+        name: p.name,
+        date: p.date,
+        price: p.price,
+        status: "Planned"
+      }))
     };
-    setPlans(prev => [plan, ...prev]);
+    
+    const res = await createTreatmentPlan(patientId, planData);
+    if (res.success) {
+      await loadPlans();
+      setExpandedPlan(res.data.id);
+      onRefresh?.();
+    }
+    
     setNewPlanDialog(false);
     setNewPlan({ title: "", notes: "" });
     setNewPlanPhases([]);
     setInlinePhase({ name: "", date: "", price: "" });
-    setExpandedPlan(plan.id);
   };
 
-  const handleDeletePlan = (id: string) => {
-    setPlans(prev => prev.filter(p => p.id !== id));
+  const handleDeletePlan = async (id: string) => {
+    const res = await deleteTreatmentPlan(id, patientId);
+    if (res.success) {
+      setPlans(prev => prev.filter(p => p.id !== id));
+      onRefresh?.();
+    }
     setDeleteConfirm(null);
   };
 
-  const handleAddPhase = (planId: string) => {
+  const handleAddPhase = async (planId: string) => {
     if (!newPhase.name) return;
-    setPlans(prev => prev.map(p => {
-      if (p.id !== planId) return p;
-      const phase: Phase = {
-        id: `ph-${Date.now()}`,
-        step: p.phases.length + 1,
-        name: newPhase.name,
-        status: "Planned",
-        date: newPhase.date || "TBD",
-        price: newPhase.price || "$0",
-        notes: newPhase.notes,
-      };
-      const updatedPhases = [...p.phases, phase];
-      return { ...p, phases: updatedPhases, progress: calcProgress(updatedPhases), cost: calcCost(updatedPhases) };
-    }));
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    
+    const step = plan.phases.length + 1;
+    const res = await addTreatmentPhase(planId, newPhase, step, patientId);
+    if (res.success) {
+      await loadPlans();
+      onRefresh?.();
+    }
+    
     setNewPhase({ name: "", date: "", price: "", notes: "" });
     setAddPhaseDialog(null);
   };
 
-  const handleDeletePhase = (planId: string, phaseId: string) => {
-    setPlans(prev => prev.map(p => {
-      if (p.id !== planId) return p;
-      const updatedPhases = p.phases.filter(ph => ph.id !== phaseId).map((ph, i) => ({ ...ph, step: i + 1 }));
-      return { ...p, phases: updatedPhases, progress: calcProgress(updatedPhases), cost: calcCost(updatedPhases) };
-    }));
+  const handleDeletePhase = async (planId: string, phaseId: string) => {
+    const res = await deleteTreatmentPhase(phaseId, patientId);
+    if (res.success) {
+      await loadPlans();
+      onRefresh?.();
+    }
   };
 
-  const cyclePhaseStatus = (planId: string, phaseId: string) => {
+  const cyclePhaseStatus = async (planId: string, phaseId: string) => {
     const statusOrder: PhaseStatus[] = ["Planned", "In Progress", "Completed", "Cancelled"];
+    const plan = plans.find(p => p.id === planId);
+    const phase = plan?.phases.find(ph => ph.id === phaseId);
+    if (!phase) return;
+    
+    const currentIdx = statusOrder.indexOf(phase.status);
+    const nextStatus = statusOrder[(currentIdx + 1) % statusOrder.length];
+    
+    // Optimistic update
     setPlans(prev => prev.map(p => {
       if (p.id !== planId) return p;
       const updatedPhases = p.phases.map(ph => {
         if (ph.id !== phaseId) return ph;
-        const currentIdx = statusOrder.indexOf(ph.status);
-        const nextStatus = statusOrder[(currentIdx + 1) % statusOrder.length];
         return { ...ph, status: nextStatus };
       });
       const progress = calcProgress(updatedPhases);
-      const allDone = updatedPhases.every(ph => ph.status === "Completed");
-      return { ...p, phases: updatedPhases, progress, status: allDone && updatedPhases.length > 0 ? "Completed" : p.status === "Completed" && !allDone ? "Active" : p.status };
+      return { ...p, phases: updatedPhases, progress };
     }));
+    
+    const res = await updatePhaseStatus(phaseId, nextStatus, patientId);
+    if (res.success) {
+      onRefresh?.();
+    } else {
+      // Revert if failed (simplified: just reload)
+      await loadPlans();
+    }
   };
 
-  const changePlanStatus = (planId: string, status: PlanStatus) => {
-    setPlans(prev => prev.map(p => p.id === planId ? { ...p, status } : p));
+  const changePlanStatus = async (planId: string, status: PlanStatus) => {
+    const res = await updatePlanStatus(planId, status, patientId);
+    if (res.success) {
+      setPlans(prev => prev.map(p => p.id === planId ? { ...p, status } : p));
+      onRefresh?.();
+    }
     setEditPlanDialog(null);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in-up">

@@ -75,10 +75,3 @@ A premium, comprehensive Dental Clinic Management System designed for modern den
 
 Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-## 📄 License
-
-This project is private and intended for use by Neoliva Dental Clinic.
-
----
-
-Built with ❤️ for better dental care.

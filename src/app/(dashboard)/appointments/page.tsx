@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,20 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   PlusCircle, Search, CalendarDays, Clock, Filter,
-  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, LayoutList, Calendar as CalendarIcon
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, LayoutList, Calendar as CalendarIcon, Loader2
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-
-const initialAppointments = [
-  { id: "APT-1001", patient: "Emily Johnson", doctor: "Dr. Sarah Smith", treatment: "Teeth Cleaning", date: "2024-03-28", time: "09:00 AM", status: "Completed", avatar: "EJ", color: "from-blue-500 to-cyan-500" },
-  { id: "APT-1002", patient: "Marcus Williams", doctor: "Dr. Sarah Smith", treatment: "Root Canal", date: "2024-03-28", time: "10:30 AM", status: "In Progress", avatar: "MW", color: "from-purple-500 to-pink-500" },
-  { id: "APT-1003", patient: "Sarah Chen", doctor: "Dr. James Adams", treatment: "Orthodontic Consultation", date: "2024-03-28", time: "11:15 AM", status: "Scheduled", avatar: "SC", color: "from-amber-500 to-orange-500" },
-  { id: "APT-1004", patient: "James Rodriguez", doctor: "Dr. James Adams", treatment: "Dental Implant Review", date: "2024-03-29", time: "01:00 PM", status: "Scheduled", avatar: "JR", color: "from-emerald-500 to-teal-500" },
-  { id: "APT-1005", patient: "Aisha Patel", doctor: "Dr. Lisa Lee", treatment: "Teeth Whitening", date: "2024-03-29", time: "02:30 PM", status: "Cancelled", avatar: "AP", color: "from-rose-500 to-pink-500" },
-  { id: "APT-1006", patient: "David Kim", doctor: "Dr. Lisa Lee", treatment: "Composite Filling", date: "2024-03-30", time: "09:00 AM", status: "Scheduled", avatar: "DK", color: "from-indigo-500 to-violet-500" },
-];
+import { getAppointments } from "@/app/actions/appointments";
+import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDialog";
 
 const statusConfig: Record<string, { icon: any; className: string }> = {
   Completed: { icon: CheckCircle2, className: "bg-emerald-50 text-emerald-700 border-emerald-100" },
@@ -31,15 +24,28 @@ const statusConfig: Record<string, { icon: any; className: string }> = {
   Cancelled: { icon: XCircle, className: "bg-red-50 text-red-600 border-red-100" },
 };
 
-import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDialog";
-
 export default function AppointmentsPage() {
-  const [appointmentsList, setAppointmentsList] = useState(initialAppointments);
+  const [appointmentsList, setAppointmentsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [view, setView] = useState<"list" | "calendar">("calendar");
   const [editingApt, setEditingApt] = useState<any>(null);
   const [reschedulingApt, setReschedulingApt] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchAppointments() {
+      try {
+        const data = await getAppointments();
+        setAppointmentsList(data);
+      } catch (error) {
+        console.error("Failed to fetch appointments:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAppointments();
+  }, []);
 
   const filtered = appointmentsList.filter((a) => {
     const matchesSearch =
@@ -97,11 +103,10 @@ export default function AppointmentsPage() {
             <button
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                filterStatus === status
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${filterStatus === status
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
-              }`}
+                }`}
             >
               {status}
             </button>
@@ -112,80 +117,80 @@ export default function AppointmentsPage() {
             <LayoutList className="w-4 h-4" />
           </button>
           <button onClick={() => setView("calendar")} className={`p-1.5 rounded-lg transition-colors flex items-center justify-center ${view === "calendar" ? "bg-white shadow-sm text-blue-600" : "text-gray-400 hover:text-gray-600"}`}>
-             <CalendarIcon className="w-4 h-4" />
+            <CalendarIcon className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Main View Area */}
       {view === "list" ? (
-      <Card className="border-0 shadow-sm overflow-hidden animate-fade-in-up">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</TableHead>
-              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Doctor</TableHead>
-              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Treatment</TableHead>
-              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Schedule</TableHead>
-              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((apt) => {
-              const config = statusConfig[apt.status];
-              const StatusIcon = config.icon;
-              return (
-                <TableRow key={apt.id} className="table-row-hover group">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${apt.color} flex items-center justify-center text-white font-bold text-[10px]`}>
-                        {apt.avatar}
+        <Card className="border-0 shadow-sm overflow-hidden animate-fade-in-up">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Doctor</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Treatment</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Schedule</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((apt) => {
+                const config = statusConfig[apt.status];
+                const StatusIcon = config.icon;
+                return (
+                  <TableRow key={apt.id} className="table-row-hover group">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${apt.color} flex items-center justify-center text-white font-bold text-[10px]`}>
+                          {apt.avatar}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{apt.patient}</p>
+                          <p className="text-xs text-gray-400">{apt.id}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{apt.patient}</p>
-                        <p className="text-xs text-gray-400">{apt.id}</p>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">{apt.doctor}</TableCell>
+                    <TableCell className="text-sm text-gray-700 font-medium">{apt.treatment}</TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-700">{apt.date}</div>
+                      <div className="text-xs text-gray-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {apt.time}
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600">{apt.doctor}</TableCell>
-                  <TableCell className="text-sm text-gray-700 font-medium">{apt.treatment}</TableCell>
-                  <TableCell>
-                    <div className="text-sm text-gray-700">{apt.date}</div>
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {apt.time}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`${config.className} border text-[11px] font-semibold rounded-full px-2.5 hover:${config.className.split(' ')[0]}`}>
-                      <StatusIcon className="w-3 h-3 mr-1" />
-                      {apt.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg hover:bg-gray-100 flex items-center justify-center cursor-pointer border-0 bg-transparent">
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`${config.className} border text-[11px] font-semibold rounded-full px-2.5 hover:${config.className.split(' ')[0]}`}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {apt.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg hover:bg-gray-100 flex items-center justify-center cursor-pointer border-0 bg-transparent">
                           <MoreHorizontal className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-100 border p-1">
-                        <DropdownMenuItem onClick={() => setEditingApt(apt)} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-blue-50 focus:text-blue-700 cursor-pointer">
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setReschedulingApt({ ...apt, newDate: apt.date, newTime: apt.time })} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-gray-100 cursor-pointer">Reschedule</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setAppointmentsList(prev => prev.map(a => a.id === apt.id ? { ...a, status: "Cancelled" } : a));
-                        }} className="text-sm text-red-600 rounded-lg font-medium focus:bg-red-50 focus:text-red-700 cursor-pointer">
-                          Cancel
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </Card>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-100 border p-1">
+                          <DropdownMenuItem onClick={() => setEditingApt(apt)} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-blue-50 focus:text-blue-700 cursor-pointer">
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setReschedulingApt({ ...apt, newDate: apt.date, newTime: apt.time })} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-gray-100 cursor-pointer">Reschedule</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setAppointmentsList(prev => prev.map(a => a.id === apt.id ? { ...a, status: "Cancelled" } : a));
+                          }} className="text-sm text-red-600 rounded-lg font-medium focus:bg-red-50 focus:text-red-700 cursor-pointer">
+                            Cancel
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
       ) : (
         <CalendarView items={filtered} />
       )}
@@ -193,122 +198,122 @@ export default function AppointmentsPage() {
       {/* Edit Dialog */}
       <Dialog open={!!editingApt} onOpenChange={(open) => !open && setEditingApt(null)}>
         <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
-           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
-             <DialogTitle className="text-lg font-bold text-gray-800">Edit Appointment</DialogTitle>
-           </DialogHeader>
-           
-           <div className="p-6 space-y-6">
-              <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center gap-4">
-                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${editingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
-                   {editingApt?.avatar}
-                 </div>
-                 <div>
-                    <h3 className="font-bold text-gray-900">{editingApt?.patient}</h3>
-                    <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{editingApt?.treatment}</p>
-                 </div>
-              </div>
+          <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
+            <DialogTitle className="text-lg font-bold text-gray-800">Edit Appointment</DialogTitle>
+          </DialogHeader>
 
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">Update Status</label>
-                <div className="grid grid-cols-2 gap-3">
-                   {["Scheduled", "In Progress", "Completed", "Cancelled"].map(s => {
-                      const Icon = statusConfig[s]?.icon || Clock;
-                      return (
-                      <button 
-                        key={s} 
-                        type="button"
-                        onClick={() => {
-                           setAppointmentsList(prev => prev.map(a => a.id === editingApt.id ? { ...a, status: s } : a));
-                           setEditingApt(null);
-                        }}
-                        className={`p-3 border rounded-xl flex items-center gap-2 font-semibold text-sm transition-all shadow-sm ${
-                           editingApt?.status === s 
-                             ? 'ring-2 ring-blue-500 border-transparent bg-blue-50 shadow-blue-500/20 text-blue-700' 
-                             : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                         <Icon className={`w-4 h-4 ${editingApt?.status === s ? 'text-blue-600' : 'text-gray-400'}`} />
-                         {s}
-                      </button>
-                   )})}
-                </div>
+          <div className="p-6 space-y-6">
+            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${editingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
+                {editingApt?.avatar}
               </div>
-           </div>
+              <div>
+                <h3 className="font-bold text-gray-900">{editingApt?.patient}</h3>
+                <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{editingApt?.treatment}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">Update Status</label>
+              <div className="grid grid-cols-2 gap-3">
+                {["Scheduled", "In Progress", "Completed", "Cancelled"].map(s => {
+                  const Icon = statusConfig[s]?.icon || Clock;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setAppointmentsList(prev => prev.map(a => a.id === editingApt.id ? { ...a, status: s } : a));
+                        setEditingApt(null);
+                      }}
+                      className={`p-3 border rounded-xl flex items-center gap-2 font-semibold text-sm transition-all shadow-sm ${editingApt?.status === s
+                          ? 'ring-2 ring-blue-500 border-transparent bg-blue-50 shadow-blue-500/20 text-blue-700'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                      <Icon className={`w-4 h-4 ${editingApt?.status === s ? 'text-blue-600' : 'text-gray-400'}`} />
+                      {s}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Reschedule Dialog */}
       <Dialog open={!!reschedulingApt} onOpenChange={(open) => !open && setReschedulingApt(null)}>
         <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
-           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
-             <DialogTitle className="text-lg font-bold text-gray-800">Reschedule Appointment</DialogTitle>
-           </DialogHeader>
-           
-           <div className="p-6 space-y-6">
-              <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-xl flex items-center gap-4">
-                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${reschedulingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
-                   {reschedulingApt?.avatar}
-                 </div>
-                 <div>
-                    <h3 className="font-bold text-gray-900">{reschedulingApt?.patient}</h3>
-                    <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{reschedulingApt?.treatment}</p>
-                 </div>
-              </div>
+          <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
+            <DialogTitle className="text-lg font-bold text-gray-800">Reschedule Appointment</DialogTitle>
+          </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Date</label>
-                   <Input 
-                      type="date" 
-                      value={reschedulingApt?.newDate || ''} 
-                      onChange={(e) => setReschedulingApt({ ...reschedulingApt, newDate: e.target.value })}
-                      className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
-                   />
-                </div>
-                <div className="space-y-1.5">
-                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Time</label>
-                   <Input 
-                      type="time" 
-                      value={reschedulingApt?.newTime ? (() => {
-                         const time = reschedulingApt.newTime;
-                         if (!time.includes(' ')) return time;
-                         const [timePart, ampm] = time.split(' ');
-                         let [h, m] = timePart.split(':');
-                         if (ampm === 'PM' && h !== '12') h = (parseInt(h) + 12).toString();
-                         else if (ampm === 'AM' && h === '12') h = '00';
-                         return `${h.padStart(2, '0')}:${m}`;
-                      })() : ''}
-                      onChange={(e) => {
-                         const val = e.target.value;
-                         if (!val) return;
-                         let [h, m] = val.split(':');
-                         let ampm = 'AM';
-                         let hi = parseInt(h);
-                         if (hi >= 12) { ampm = 'PM'; if (hi > 12) hi -= 12; }
-                         else if (hi === 0) { hi = 12; }
-                         
-                         setReschedulingApt({ ...reschedulingApt, newTime: `${hi.toString().padStart(2, '0')}:${m} ${ampm}` })
-                      }}
-                      className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
-                   />
-                </div>
+          <div className="p-6 space-y-6">
+            <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-xl flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-gradient-to-br ${reschedulingApt?.color || 'from-gray-400 to-gray-500'} shadow-md`}>
+                {reschedulingApt?.avatar}
               </div>
-           </div>
-           <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-2 sm:justify-end">
-              <Button variant="outline" onClick={() => setReschedulingApt(null)} className="rounded-xl font-medium border-gray-200">Cancel</Button>
-              <Button onClick={() => {
-                 setAppointmentsList(prev => prev.map(a => a.id === reschedulingApt.id ? { ...a, date: reschedulingApt.newDate, time: reschedulingApt.newTime } : a));
-                 setReschedulingApt(null);
-              }} className="rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md">
-                 Save Changes
-              </Button>
-           </DialogFooter>
+              <div>
+                <h3 className="font-bold text-gray-900">{reschedulingApt?.patient}</h3>
+                <p className="text-xs font-semibold text-gray-500 tracking-wider uppercase mt-1">{reschedulingApt?.treatment}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Date</label>
+                <Input
+                  type="date"
+                  value={reschedulingApt?.newDate || ''}
+                  onChange={(e) => setReschedulingApt({ ...reschedulingApt, newDate: e.target.value })}
+                  className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">New Time</label>
+                <Input
+                  type="time"
+                  value={reschedulingApt?.newTime ? (() => {
+                    const time = reschedulingApt.newTime;
+                    if (!time.includes(' ')) return time;
+                    const [timePart, ampm] = time.split(' ');
+                    let [h, m] = timePart.split(':');
+                    if (ampm === 'PM' && h !== '12') h = (parseInt(h) + 12).toString();
+                    else if (ampm === 'AM' && h === '12') h = '00';
+                    return `${h.padStart(2, '0')}:${m}`;
+                  })() : ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    let [h, m] = val.split(':');
+                    let ampm = 'AM';
+                    let hi = parseInt(h);
+                    if (hi >= 12) { ampm = 'PM'; if (hi > 12) hi -= 12; }
+                    else if (hi === 0) { hi = 12; }
+
+                    setReschedulingApt({ ...reschedulingApt, newTime: `${hi.toString().padStart(2, '0')}:${m} ${ampm}` })
+                  }}
+                  className="border-gray-200 focus:ring-blue-500/20 rounded-xl bg-gray-50/50"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setReschedulingApt(null)} className="rounded-xl font-medium border-gray-200">Cancel</Button>
+            <Button onClick={() => {
+              setAppointmentsList(prev => prev.map(a => a.id === reschedulingApt.id ? { ...a, date: reschedulingApt.newDate, time: reschedulingApt.newTime } : a));
+              setReschedulingApt(null);
+            }} className="rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function CalendarView({ items }: { items: typeof initialAppointments }) {
+function CalendarView({ items }: { items: any[] }) {
   const daysInMonth = 31;
   const startDay = 5; // Assuming March 2024 starts on Friday (5)
   const weeks = [];
@@ -333,14 +338,14 @@ function CalendarView({ items }: { items: typeof initialAppointments }) {
   return (
     <Card className="border-0 shadow-sm overflow-hidden py-0 px-0 animate-fade-in-up bg-white">
       <div className="flex bg-white justify-between items-center px-6 py-4 border-b border-gray-100">
-         <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-           <CalendarDays className="w-5 h-5 text-blue-600" /> March 2024
-         </h3>
-         <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg text-gray-500">&lt;</Button>
-            <Button variant="outline" size="sm" className="h-8 rounded-lg font-semibold text-gray-700">Today</Button>
-            <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg text-gray-500">&gt;</Button>
-         </div>
+        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-blue-600" /> March 2024
+        </h3>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg text-gray-500">&lt;</Button>
+          <Button variant="outline" size="sm" className="h-8 rounded-lg font-semibold text-gray-700">Today</Button>
+          <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg text-gray-500">&gt;</Button>
+        </div>
       </div>
       <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/80">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (

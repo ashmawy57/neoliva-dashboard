@@ -1,14 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Smile, Lightbulb, MessageSquare, FileText, Plus, X, Save, Trash2, AlertTriangle,
-  Stethoscope, Pill, ChevronDown, Check, ClipboardList
+  Stethoscope, Pill, ChevronDown, Check, ClipboardList, Loader2
 } from "lucide-react";
+import { 
+  updateOralTissue, 
+  addVisitRecord, 
+  updatePatientNotes, 
+  updateOralCondition,
+  addPrescription as addPrescriptionAction,
+  deletePrescription as deletePrescriptionAction,
+  deleteVisitRecord
+} from "@/app/actions/patients";
+import { useRef } from "react";
 
 // ============ TYPES ============
 type TissueStatus = "healthy" | "needs attention" | "pathological";
@@ -65,30 +75,85 @@ const ALL_CONDITIONS_LIBRARY = [
   "Dental Fluorosis", "Oral Cancer", "Burning Mouth Syndrome",
 ];
 
-export function OralExam() {
+export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
+  const [isPending, startTransition] = useTransition();
   // ============ STATE ============
-  const [tissues, setTissues] = useState<TissueItem[]>([
-    { name: "Salivary Glands", status: "pathological", notes: "" },
-    { name: "Mucosa", status: "healthy", notes: "" },
-    { name: "Palate", status: "needs attention", notes: "" },
-    { name: "Occlusion", status: "needs attention", notes: "" },
-    { name: "Gingiva", status: "needs attention", notes: "" },
-    { name: "Tongue", status: "needs attention", notes: "" },
-    { name: "Lips", status: "healthy", notes: "" },
-  ]);
-
-  const [conditions, setConditions] = useState<OralCondition[]>(DEFAULT_CONDITIONS);
+  const [tissues, setTissues] = useState<TissueItem[]>([]);
+  const [conditions, setConditions] = useState<OralCondition[]>([]);
   const [otherNotes, setOtherNotes] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
 
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([
-    { id: "d1", date: "Mar 28, 2024", chiefComplaint: "Tooth sensitivity in upper right quadrant", diagnosis: "Dental Caries — Tooth #16", severity: "moderate", notes: "Patient reports pain when consuming cold beverages. Visible cavity on buccal surface." },
-  ]);
+  // Use a ref to track if we're currently updating to avoid useEffect stomping on local state
+  const isUpdatingRef = useRef(false);
 
-  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([
-    { id: "rx1", date: "Mar 28, 2024", medication: "Amoxicillin 500mg", dosage: "1 capsule", frequency: "3 times daily", duration: "7 days", notes: "Take with food. Complete full course." },
-    { id: "rx2", date: "Mar 28, 2024", medication: "Ibuprofen 400mg", dosage: "1 tablet", frequency: "As needed", duration: "5 days", notes: "Max 3 tablets per day. Take after meals." },
-  ]);
+  // Sync state when patient prop changes (Fixes the "disappearing data" bug)
+  useEffect(() => {
+    if (!patient || isUpdatingRef.current) return;
+
+    // Tissue Findings
+    const defaultNames = [
+      "Lips", "Buccal Mucosa", "Tongue", "Floor of Mouth", "Palate", "Gingiva",
+      "Salivary Glands", "Occlusion", "Pharynx"
+    ];
+    const existingTissues = patient.oralTissueFindings || [];
+    setTissues(defaultNames.map(name => {
+      const found = existingTissues.find((e: any) => e.name === name);
+      return { 
+        name, 
+        status: (found?.status as TissueStatus) || "healthy", 
+        notes: found?.notes || "" 
+      };
+    }));
+
+    // Oral Conditions
+    const conds = patient.oralConditions || [];
+    setConditions(conds.length > 0 ? conds.map((c: any) => ({
+      id: c.id, name: c.name, active: c.active
+    })) : DEFAULT_CONDITIONS);
+
+    // Diagnoses
+    const visits = patient.visitHistory || [];
+    setDiagnoses(visits.filter((v: any) => v.isClinicalRecord || v.treatment !== '—').map((v: any) => ({
+      id: v.id,
+      date: v.date,
+      chiefComplaint: v.chiefComplaint || v.notes?.split('\n')[0] || "",
+      diagnosis: v.treatment || v.diagnosis || v.type,
+      severity: "moderate" as const,
+      notes: v.notes || ""
+    })));
+
+    // Prescriptions
+    const pxs = patient.prescriptions || [];
+    setPrescriptions(pxs.map((p: any) => ({
+      id: p.id,
+      date: p.created_at ? new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "",
+      medication: p.prescription_items?.[0]?.medication_name || "Unknown",
+      dosage: p.prescription_items?.[0]?.dosage || "",
+      frequency: p.prescription_items?.[0]?.frequency || "",
+      duration: p.prescription_items?.[0]?.duration || "",
+      notes: p.notes || ""
+    })));
+
+    setOtherNotes(patient.notes || "");
+  }, [patient]);
+
+  // ============ HANDLERS ============
+  const handleTissueStatusChange = (index: number, status: TissueStatus) => {
+    const tissue = tissues[index];
+    setTissues(prev => prev.map((t, i) => i === index ? { ...t, status } : t));
+    
+    isUpdatingRef.current = true;
+    startTransition(async () => {
+      try {
+        await updateOralTissue(patient.id, tissue.name, status, tissue.notes || "");
+        onRefresh?.();
+      } finally {
+        isUpdatingRef.current = false;
+      }
+    });
+  };
 
   // Dialog states
   const [tissueDialog, setTissueDialog] = useState<number | null>(null); // index of tissue being edited
@@ -107,62 +172,130 @@ export function OralExam() {
     medication: "", dosage: "", frequency: "", duration: "", notes: "",
   });
 
-  // ============ HANDLERS ============
-  const handleTissueStatusChange = (index: number, status: TissueStatus) => {
-    setTissues(prev => prev.map((t, i) => i === index ? { ...t, status } : t));
-  };
-
   const handleTissueNoteSave = (index: number, notes: string) => {
+    const tissue = tissues[index];
     setTissues(prev => prev.map((t, i) => i === index ? { ...t, notes } : t));
     setTissueDialog(null);
+
+    isUpdatingRef.current = true;
+    startTransition(async () => {
+      try {
+        await updateOralTissue(patient.id, tissue.name, tissue.status, notes);
+        onRefresh?.();
+      } finally {
+        isUpdatingRef.current = false;
+      }
+    });
   };
 
   const toggleCondition = (id: string) => {
-    setConditions(prev => prev.map(c => c.id === id ? { ...c, active: !c.active } : c));
+    const cond = conditions.find(c => c.id === id);
+    if (!cond) return;
+    const newActive = !cond.active;
+    setConditions(prev => prev.map(c => c.id === id ? { ...c, active: newActive } : c));
+    
+    startTransition(async () => {
+      await updateOralCondition(patient.id, cond.name, newActive);
+      onRefresh?.();
+    });
   };
 
   const addCondition = (name: string) => {
     if (!name.trim()) return;
     const exists = conditions.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
-    if (exists) return;
-    setConditions(prev => [...prev, { id: `c-${Date.now()}`, name: name.trim(), active: true }]);
+    if (exists) {
+      if (!exists.active) toggleCondition(exists.id);
+      return;
+    }
+    
+    const newName = name.trim();
+    setConditions(prev => [...prev, { id: `c-${Date.now()}`, name: newName, active: true }]);
     setNewConditionName("");
+
+    startTransition(async () => {
+      await updateOralCondition(patient.id, newName, true);
+      onRefresh?.();
+    });
   };
 
   const removeCondition = (id: string) => {
+    const cond = conditions.find(c => c.id === id);
+    if (!cond) return;
+    
     setConditions(prev => prev.filter(c => c.id !== id));
+
+    startTransition(async () => {
+      await updateOralCondition(patient.id, cond.name, false);
+      onRefresh?.();
+    });
   };
 
   const addDiagnosis = () => {
     if (!newDiagnosis.chiefComplaint.trim() || !newDiagnosis.diagnosis.trim()) return;
+    
     const d: Diagnosis = {
       id: `d-${Date.now()}`,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
       ...newDiagnosis,
     };
+    
     setDiagnoses(prev => [d, ...prev]);
+    
+    startTransition(async () => {
+      await addVisitRecord(patient.id, {
+        treatment: newDiagnosis.diagnosis,
+        doctor: "Current User", // In a real app, get from session
+        notes: `${newDiagnosis.chiefComplaint}\n${newDiagnosis.notes}`,
+        date: new Date().toISOString()
+      });
+      onRefresh?.();
+    });
+
     setNewDiagnosis({ chiefComplaint: "", diagnosis: "", severity: "mild", notes: "" });
     setDiagnosisDialog(false);
   };
 
   const deleteDiagnosis = (id: string) => {
     setDiagnoses(prev => prev.filter(d => d.id !== id));
+    startTransition(async () => {
+      await deleteVisitRecord(id, patient.id);
+      onRefresh?.();
+    });
   };
 
   const addPrescription = () => {
     if (!newPrescription.medication.trim() || !newPrescription.dosage.trim()) return;
-    const p: PrescriptionItem = {
-      id: `rx-${Date.now()}`,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
-      ...newPrescription,
-    };
-    setPrescriptions(prev => [p, ...prev]);
+    
+    startTransition(async () => {
+      const data = {
+        doctor_name: "Current Doctor",
+        notes: newPrescription.notes,
+        medications: [
+          {
+            name: newPrescription.medication,
+            dosage: newPrescription.dosage,
+            frequency: newPrescription.frequency,
+            duration: newPrescription.duration
+          }
+        ]
+      };
+      
+      const result = await addPrescriptionAction(patient.id, data);
+      if (result.success) {
+        onRefresh?.();
+      }
+    });
+
     setNewPrescription({ medication: "", dosage: "", frequency: "", duration: "", notes: "" });
     setPrescriptionDialog(false);
   };
 
   const deletePrescription = (id: string) => {
     setPrescriptions(prev => prev.filter(p => p.id !== id));
+    startTransition(async () => {
+      await deletePrescriptionAction(id, patient.id);
+      onRefresh?.();
+    });
   };
 
   const getStatusConfig = (status: TissueStatus) => STATUS_OPTIONS.find(s => s.value === status)!;
@@ -176,29 +309,50 @@ export function OralExam() {
             <Smile className="w-4 h-4 text-blue-500" /> Soft Tissue Examination
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-4 space-y-1">
+        <CardContent className="pt-4 space-y-4">
           {tissues.map((item, idx) => {
-            const sc = getStatusConfig(item.status);
             return (
-              <div key={idx} className="flex items-center justify-between py-2 px-2 rounded-xl hover:bg-gray-50/80 transition-colors group">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-700">{item.name}</span>
+              <div key={item.name} className="flex items-center justify-between py-1 px-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 min-w-[120px]">{item.name}</span>
                   {item.notes && (
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-200 text-blue-600 bg-blue-50">note</Badge>
+                    <button onClick={() => setTissueDialog(idx)} className="text-[10px] text-blue-500 hover:underline">
+                      View Notes
+                    </button>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Quick status toggle dropdown */}
-                  <div className="relative group/dropdown">
-                    <button
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${sc.color} w-36 text-center cursor-pointer transition-all hover:opacity-90 flex items-center justify-center gap-1.5`}
-                      onClick={() => setTissueDialog(idx)}
-                    >
-                      {item.status}
-                      <ChevronDown className="w-3 h-3 opacity-60" />
-                    </button>
-                  </div>
+                
+                <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => handleTissueStatusChange(idx, "healthy")}
+                    disabled={isPending}
+                    className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      item.status === "healthy" 
+                        ? "bg-white text-emerald-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Normal
+                  </button>
+                  <button
+                    onClick={() => handleTissueStatusChange(idx, "pathological")}
+                    disabled={isPending}
+                    className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      item.status === "pathological" 
+                        ? "bg-white text-red-600 shadow-sm" 
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Abnormal
+                  </button>
                 </div>
+                
+                <button 
+                  onClick={() => setTissueDialog(idx)}
+                  className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </button>
               </div>
             );
           })}
@@ -254,7 +408,15 @@ export function OralExam() {
             Other disease/health condition:
           </CardTitle>
           <button 
-            onClick={() => setIsEditingNotes(!isEditingNotes)}
+            onClick={() => {
+              if (isEditingNotes) {
+                startTransition(async () => {
+                  await updatePatientNotes(patient.id, otherNotes);
+                  onRefresh?.();
+                });
+              }
+              setIsEditingNotes(!isEditingNotes);
+            }}
             className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-sm cursor-pointer hover:bg-blue-600 transition"
           >
             {isEditingNotes ? <Check className="w-4 h-4 text-white" /> : <MessageSquare className="w-4 h-4 text-white" />}
@@ -365,10 +527,16 @@ export function OralExam() {
             </div>
 
             <Button 
-              onClick={() => setTissueDialog(null)}
+              onClick={() => {
+                if (tissueDialog !== null) {
+                  handleTissueNoteSave(tissueDialog, tissues[tissueDialog].notes);
+                }
+              }}
+              disabled={isPending}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-blue-500/20"
             >
-              <Save className="w-4 h-4 mr-2" /> Save Changes
+              {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} 
+              Save Changes
             </Button>
           </div>
         </DialogContent>

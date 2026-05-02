@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   keywords: ["dental", "clinic", "management", "SaaS", "dashboard", "healthcare"],
 };
 
+import { Toaster } from "@/components/ui/sonner";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,7 +23,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full font-sans antialiased">{children}</body>
+      <body className="min-h-full font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
+

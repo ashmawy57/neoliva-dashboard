@@ -1,12 +1,12 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Phone, Mail, Calendar as CalendarIcon, MapPin, Activity,
+  Phone, Mail, Calendar as CalendarIcon, MapPin, Activity as ActivityIcon,
   FileText, Heart, Stethoscope, ArrowLeft, Image as ImageIcon, Pill, LayoutDashboard, ClipboardList, Smile, Lightbulb, MessageSquare, Plus, Printer
 } from "lucide-react";
 import Link from "next/link";
@@ -18,13 +18,68 @@ import { PatientDocuments } from "@/components/patients/PatientDocuments";
 import { OralExam } from "@/components/patients/OralExam";
 import { MedicalHistory } from "@/components/patients/MedicalHistory";
 import { VisitHistory } from "@/components/patients/VisitHistory";
-import { getPatientById } from "@/lib/patients-data";
+import { getPatientById, updateInvoiceStatus } from "@/app/actions/patients";
+import { Loader2 } from "lucide-react";
 
 export default function PatientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const [showInvoices, setShowInvoices] = useState(false);
+  const [patient, setPatient] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
 
-  const patient = getPatientById(resolvedParams.id);
+  const handlePayInvoice = async (invoiceId: string) => {
+    setPayingInvoiceId(invoiceId);
+    try {
+      const result = await updateInvoiceStatus(invoiceId, 'Paid', resolvedParams.id);
+      if (result.success) {
+        setPatient((prev: any) => {
+          const invoiceToUpdate = prev.invoiceHistory?.find((i: any) => i.id === invoiceId);
+          return {
+            ...prev,
+            invoiceHistory: prev.invoiceHistory?.map((inv: any) => 
+              inv.id === invoiceId ? { ...inv, status: 'Paid' } : inv
+            ),
+            outstanding: Math.max(0, prev.outstanding - (invoiceToUpdate?.amount || 0))
+          };
+        });
+      } else {
+        alert("Failed to pay invoice.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred while paying the invoice.");
+    } finally {
+      setPayingInvoiceId(null);
+    }
+  };
+
+  const loadPatient = async () => {
+    try {
+      const data = await getPatientById(resolvedParams.id);
+      setPatient(data);
+    } catch (err) {
+      console.error("Failed to load patient:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPatient();
+  }, [resolvedParams.id]);
+
+  const refreshData = async () => {
+    await loadPatient();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   if (!patient) {
     return (
@@ -43,7 +98,7 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const visits = patient.visitHistory;
+  const visits = patient.visitHistory || [];
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -91,7 +146,7 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                 { icon: Mail, label: "Email", value: patient.email },
                 { icon: CalendarIcon, label: "Date of Birth", value: patient.dob },
                 { icon: MapPin, label: "Address", value: patient.address },
-              ].map((item) => (
+              ].map((item: any) => (
                 <div key={item.label} className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                     <item.icon className="w-3.5 h-3.5 text-gray-400" />
@@ -105,14 +160,14 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
             </CardContent>
           </Card>
 
-          {patient.allergies.length > 0 && (
+          {(patient.allergies ?? []).length > 0 && (
           <Card className="border-0 shadow-sm border-l-4 border-l-red-400">
             <CardContent className="pt-5 pb-4">
               <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                <Activity className="w-3.5 h-3.5" /> Allergies & Alerts
+                <ActivityIcon className="w-3.5 h-3.5" /> Allergies & Alerts
               </h4>
               <div className="flex gap-1.5 flex-wrap">
-                {patient.allergies.map((allergy) => (
+                {patient.allergies.map((allergy: any) => (
                   <Badge 
                     key={allergy.name}
                     variant={allergy.severity === "destructive" ? "destructive" : allergy.severity === "outline" ? "outline" : "default"}
@@ -134,10 +189,10 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: "Total Visits", value: String(patient.visits) },
-                  { label: "Outstanding", value: patient.outstanding },
+                  { label: "Outstanding", value: `$${Number(patient.outstanding ?? 0).toFixed(2)}` },
                   { label: "Last X-Ray", value: patient.lastXRay },
                   { label: "Insurance", value: patient.insurance },
-                ].map((stat) => (
+                ].map((stat: any) => (
                   <div key={stat.label} className="p-3 rounded-xl bg-gray-50 text-center">
                     <p className="text-lg font-bold text-gray-900">{stat.value}</p>
                     <p className="text-[10px] text-gray-500 mt-0.5">{stat.label}</p>
@@ -157,12 +212,12 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                 { value: "medicalHistory", label: "Medical History", icon: ClipboardList },
                 { value: "oralExamination", label: "Oral Exam", icon: Smile },
                 { value: "odontogram", label: "Tooth Chart", icon: LayoutDashboard },
-                { value: "periodontogram", label: "Periodonto", icon: Activity },
+                { value: "periodontogram", label: "Periodonto", icon: ActivityIcon },
                 { value: "plan", label: "Plans", icon: FileText },
                 { value: "prescriptions", label: "Rx", icon: Pill },
                 { value: "documents", label: "Documents", icon: ImageIcon },
                 { value: "billing", label: "Billing", icon: FileText },
-              ].map((tab) => (
+              ].map((tab: any) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
@@ -179,31 +234,31 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
             </TabsContent>
 
             <TabsContent value="medicalHistory" className="mt-6 animate-fade-in-up">
-              <MedicalHistory patient={patient} />
+              <MedicalHistory patient={patient} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="oralExamination" className="mt-6 animate-fade-in-up">
-              <OralExam />
+              <OralExam patient={patient} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="odontogram" className="mt-6">
-              <ToothChart />
+              <ToothChart patient={patient} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="periodontogram" className="mt-6">
-              <Periodontogram />
+              <Periodontogram patient={patient} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="plan" className="mt-6">
-              <TreatmentPlans />
+              <TreatmentPlans patientId={patient.id} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="prescriptions" className="mt-6">
-              <Prescriptions />
+              <Prescriptions patientId={patient.id} initialData={patient.prescriptions} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="documents" className="mt-6">
-              <PatientDocuments />
+              <PatientDocuments patientId={patient.id} initialData={patient.patient_documents} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="billing" className="mt-6">
@@ -212,8 +267,8 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                   <div className="flex items-center justify-between p-5 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-100 mb-6">
                     <div>
                       <p className="text-sm font-medium text-gray-700">Total Outstanding Balance</p>
-                      <p className="text-3xl font-bold text-red-600 mt-1">{patient.outstanding}</p>
-                      <p className="text-xs text-gray-500 mt-1">{patient.invoices.length} invoice{patient.invoices.length !== 1 ? "s" : ""} pending payment</p>
+                      <p className="text-3xl font-bold text-red-600 mt-1">${Number(patient.outstanding ?? 0).toFixed(2)}</p>
+                      <p className="text-xs text-gray-500 mt-1">{(patient.invoiceHistory ?? []).length} invoice{(patient.invoiceHistory ?? []).length !== 1 ? "s" : ""} pending payment</p>
                     </div>
                     <Button 
                        variant="outline" 
@@ -227,9 +282,9 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                   {showInvoices && (
                      <div className="space-y-4 animate-fade-in-up">
                        <h3 className="font-semibold text-gray-900 border-b border-gray-100 pb-2">Pending Invoices</h3>
-                       {patient.invoices.length > 0 ? (
+                       {(patient.invoiceHistory ?? []).length > 0 ? (
                        <div className="grid gap-3">
-                         {patient.invoices.map(inv => (
+                         {(patient.invoiceHistory ?? []).map((inv: any) => (
                            <div key={inv.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 border border-gray-100 rounded-xl bg-white shadow-sm hover:border-blue-100 transition-colors">
                              <div>
                                <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -289,7 +344,7 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                                               <td colspan="2">
                                                 <table><tr>
                                                   <td style="color: #64748b;"><strong>CLINIC INFO</strong><br />SmileCare Dental Clinic<br /> 123 Main Street<br /> New York, NY 10001<br />+1 800-SMILE-99</td>
-                                                  <td style="color: #64748b;"><strong>BILL TO</strong><br />${patient.name}<br /> ${patient.email}<br /> ${patient.phone}<br />${patient.address.split('\n')[0]}</td>
+                                                  <td style="color: #64748b;"><strong>BILL TO</strong><br />${patient.name}<br /> ${patient.email}<br /> ${patient.phone}<br />${(patient.address ?? '').split('\n')[0]}</td>
                                                 </tr></table>
                                               </td>
                                             </tr>
@@ -329,7 +384,20 @@ export default function PatientProfilePage({ params }: { params: Promise<{ id: s
                                >
                                  <Printer className="w-4 h-4" /> Print
                                </Button>
-                               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm text-white font-medium px-4">Pay Now</Button>
+                               {inv.status !== 'Paid' && (
+                                 <Button 
+                                   size="sm" 
+                                   className="bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm text-white font-medium px-4"
+                                   onClick={() => handlePayInvoice(inv.id)}
+                                   disabled={payingInvoiceId === inv.id}
+                                 >
+                                   {payingInvoiceId === inv.id ? (
+                                     <Loader2 className="w-4 h-4 animate-spin" />
+                                   ) : (
+                                     "Pay Now"
+                                   )}
+                                 </Button>
+                               )}
                              </div>
                            </div>
                          ))}

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Package, Layers, Hash, AlertTriangle, Scale } from "lucide-react";
+import { PlusCircle, Package, Layers, Hash, AlertTriangle, Scale, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,9 +13,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { createInventoryItem } from "@/app/actions/inventory";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function NewInventoryItemDialog() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = await createInventoryItem(formData);
+
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Inventory item added successfully");
+        setOpen(false);
+        router.refresh();
+      }
+    } catch (error) {
+      toast.error("Failed to add inventory item");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -34,7 +62,7 @@ export function NewInventoryItemDialog() {
         </DialogHeader>
 
         <form 
-          onSubmit={(e) => { e.preventDefault(); setOpen(false); }} 
+          onSubmit={handleSubmit} 
           className="flex-1 flex flex-col overflow-hidden max-h-[80vh]"
         >
           <div className="flex-1 overflow-y-auto w-full p-6 space-y-5">
@@ -44,6 +72,7 @@ export function NewInventoryItemDialog() {
               <Label htmlFor="name" className="text-sm font-semibold text-gray-700">Item Name</Label>
               <Input 
                 id="name"
+                name="name"
                 placeholder="e.g. Lidocaine 2%" 
                 className="bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm h-11" 
                 required
@@ -56,16 +85,16 @@ export function NewInventoryItemDialog() {
                 <Label className="text-sm font-semibold text-gray-700">Category</Label>
                 <div className="relative">
                   <Layers className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 pointer-events-none" />
-                  <Select required>
+                  <Select name="category" required>
                     <SelectTrigger className="pl-10 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm h-11 w-full">
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="anesthetics">Anesthetics</SelectItem>
-                      <SelectItem value="materials">Materials</SelectItem>
-                      <SelectItem value="disposables">Disposables</SelectItem>
-                      <SelectItem value="preventive">Preventive</SelectItem>
-                      <SelectItem value="equipment">Equipment</SelectItem>
+                      <SelectItem value="Anesthetics">Anesthetics</SelectItem>
+                      <SelectItem value="Materials">Materials</SelectItem>
+                      <SelectItem value="Disposables">Disposables</SelectItem>
+                      <SelectItem value="Preventive">Preventive</SelectItem>
+                      <SelectItem value="Equipment">Equipment</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -75,17 +104,17 @@ export function NewInventoryItemDialog() {
                 <Label htmlFor="unit" className="text-sm font-semibold text-gray-700">Unit Type</Label>
                 <div className="relative">
                   <Scale className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10 pointer-events-none" />
-                  <Select required>
+                  <Select name="unit" required>
                     <SelectTrigger className="pl-10 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm h-11 w-full">
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="vials">Vials</SelectItem>
-                      <SelectItem value="syringes">Syringes</SelectItem>
-                      <SelectItem value="boxes">Boxes</SelectItem>
-                      <SelectItem value="pcs">Pcs</SelectItem>
-                      <SelectItem value="bags">Bags</SelectItem>
-                      <SelectItem value="tubes">Tubes</SelectItem>
+                      <SelectItem value="Vials">Vials</SelectItem>
+                      <SelectItem value="Syringes">Syringes</SelectItem>
+                      <SelectItem value="Boxes">Boxes</SelectItem>
+                      <SelectItem value="Pcs">Pcs</SelectItem>
+                      <SelectItem value="Bags">Bags</SelectItem>
+                      <SelectItem value="Tubes">Tubes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -100,6 +129,7 @@ export function NewInventoryItemDialog() {
                   <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input 
                     id="quantity"
+                    name="quantity"
                     type="number"
                     placeholder="0" 
                     min="0"
@@ -115,6 +145,7 @@ export function NewInventoryItemDialog() {
                   <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 text-amber-500" />
                   <Input 
                     id="minLevel"
+                    name="minLevel"
                     type="number"
                     placeholder="0" 
                     min="0"
@@ -133,15 +164,24 @@ export function NewInventoryItemDialog() {
               type="button" 
               variant="outline" 
               onClick={() => setOpen(false)}
+              disabled={loading}
               className="px-6 rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50 h-11 shadow-sm font-medium"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
+              disabled={loading}
               className="px-8 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 h-11 font-semibold"
             >
-              Save Item
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Item"
+              )}
             </Button>
           </DialogFooter>
         </form>

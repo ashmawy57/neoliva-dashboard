@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,7 +80,7 @@ function categorizeVisit(treatment: string): VisitCategory {
 export function VisitHistory({ visits: initialVisits }: { visits: VisitInput[] }) {
   // ============ STATE ============
   const [visits, setVisits] = useState<Visit[]>(
-    initialVisits.map((v, i) => ({
+    (initialVisits ?? []).map((v, i) => ({
       id: `v-${i}`,
       ...v,
       category: categorizeVisit(v.treatment),
@@ -89,6 +89,17 @@ export function VisitHistory({ visits: initialVisits }: { visits: VisitInput[] }
       attachments: [],
     }))
   );
+
+  useEffect(() => {
+    setVisits((initialVisits ?? []).map((v, i) => ({
+      id: `v-${i}`,
+      ...v,
+      category: categorizeVisit(v.treatment),
+      duration: "45 min",
+      cost: "",
+      attachments: [],
+    })));
+  }, [initialVisits]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<VisitCategory | "All">("All");

@@ -1,17 +1,21 @@
 "use client";
 
+import Link from "next/link";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Calendar, DollarSign, AlertTriangle, Users,
   TrendingUp, ArrowUpRight, ArrowDownRight, Clock,
-  Activity, MoreHorizontal, Plus
+  Activity as ActivityIcon, MoreHorizontal, Plus, Loader2
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, BarChart, Bar,
 } from "recharts";
+import { useState, useEffect } from "react";
+import { getDashboardData } from "@/app/actions/dashboard";
 
 const revenueData = [
   { name: "Jan", revenue: 4200, expenses: 2400 },
@@ -30,14 +34,6 @@ const appointmentData = [
   { day: "Thu", count: 22 },
   { day: "Fri", count: 18 },
   { day: "Sat", count: 8 },
-];
-
-const recentPatients = [
-  { name: "Emily Johnson", time: "09:00 AM", treatment: "Teeth Cleaning", status: "In Progress", avatar: "EJ", color: "from-blue-500 to-cyan-500" },
-  { name: "Marcus Williams", time: "10:30 AM", treatment: "Root Canal Therapy", status: "Waiting", avatar: "MW", color: "from-purple-500 to-pink-500" },
-  { name: "Sarah Chen", time: "11:15 AM", treatment: "Orthodontic Consultation", status: "Scheduled", avatar: "SC", color: "from-amber-500 to-orange-500" },
-  { name: "James Rodriguez", time: "01:00 PM", treatment: "Dental Implant Review", status: "Scheduled", avatar: "JR", color: "from-emerald-500 to-teal-500" },
-  { name: "Aisha Patel", time: "02:30 PM", treatment: "Whitening Session", status: "Scheduled", avatar: "AP", color: "from-rose-500 to-pink-500" },
 ];
 
 const upcomingAppointments = [
@@ -65,6 +61,33 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardPage() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const dashboardData = await getDashboardData();
+        setData(dashboardData);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  const recentPatients = data?.recentPatients || [];
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Page header */}
@@ -111,13 +134,13 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">24</div>
+            <div className="text-3xl font-bold text-gray-900">{data?.todaysAppointmentsCount || 0}</div>
             <div className="flex items-center gap-2 mt-2">
               <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[11px] font-semibold hover:bg-emerald-50">
-                8 completed
+                {data?.completedAppointmentsCount || 0} completed
               </Badge>
               <Badge className="bg-amber-50 text-amber-700 border-amber-100 text-[11px] font-semibold hover:bg-amber-50">
-                3 pending
+                {data?.pendingAppointmentsCount || 0} pending
               </Badge>
             </div>
           </CardContent>
@@ -132,10 +155,10 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">$4,320</div>
+            <div className="text-3xl font-bold text-gray-900">${data?.pendingPayments?.toLocaleString() || 0}</div>
             <div className="flex items-center gap-1 mt-2">
               <span className="flex items-center gap-0.5 text-red-600 text-xs font-semibold bg-red-50 rounded-full px-2 py-0.5">
-                <ArrowDownRight className="w-3 h-3" /> 12 overdue
+                <ArrowDownRight className="w-3 h-3" /> {data?.overdueCount || 0} overdue
               </span>
             </div>
           </CardContent>
@@ -150,7 +173,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">7</div>
+            <div className="text-3xl font-bold text-gray-900">{data?.lowInventoryCount || 0}</div>
             <div className="flex items-center gap-1 mt-2">
               <span className="text-xs text-gray-500">Items need restocking</span>
             </div>
@@ -235,9 +258,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentPatients.map((patient, i) => (
-                <div
+              {recentPatients.map((patient: any, i: number) => (
+                <Link
                   key={i}
+                  href={`/patients/${patient.id}`}
                   className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50/80 transition-colors group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
@@ -264,11 +288,11 @@ export default function DashboardPage() {
                           : "bg-gray-100 text-gray-600"
                       }`}
                     >
-                      {patient.status === "In Progress" && <Activity className="w-2.5 h-2.5 mr-1 animate-pulse" />}
+                      {patient.status === "In Progress" && <ActivityIcon className="w-2.5 h-2.5 mr-1 animate-pulse" />}
                       {patient.status}
                     </Badge>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

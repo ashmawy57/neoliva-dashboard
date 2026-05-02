@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Trash2, RotateCw, CheckSquare, Square } from "lucide-react";
+import { Trash2, RotateCw, CheckSquare, Square, Loader2 } from "lucide-react";
+import { updatePeriodontalMeasurement } from "@/app/actions/patients";
 
 const topTeeth = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const bottomTeeth = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -18,14 +19,43 @@ const parameters = [
 // Generic date placeholder for mock
 const mockDates = ["Mar 03 2025", "Apr 04 2026", "May 05 2027"];
 
-export function Periodontogram() {
+export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
+  const [isPending, startTransition] = useTransition();
   const [activeParam, setActiveParam] = useState("Mucogingival junction");
   const [showLingual, setShowLingual] = useState(true);
   const [showBuccal, setShowBuccal] = useState(true);
   const [openPopover, setOpenPopover] = useState<number | null>(null);
   const [isRotated, setIsRotated] = useState(false);
+
+  // Sync state when patient prop changes
+  useEffect(() => {
+    if (!patient) return;
+    const measurements = patient.periodontalMeasurements ?? [];
+    const mapping: any = {};
+    measurements.forEach((m: any) => {
+      if (!mapping[m.tooth_number]) mapping[m.tooth_number] = {};
+      mapping[m.tooth_number][m.parameter_name] = {
+        buccal: m.buccal_values || [0, 0, 0],
+        lingual: m.lingual_values || [0, 0, 0],
+        single: m.single_value
+      };
+    });
+    setData(mapping);
+  }, [patient]);
   
-  const [data, setData] = useState<Record<number, Record<string, { buccal: number[], lingual: number[], single?: number }>>>({});
+  const [data, setData] = useState<Record<number, Record<string, { buccal: number[], lingual: number[], single?: number }>>>(() => {
+    const measurements = patient?.periodontalMeasurements ?? [];
+    const mapping: any = {};
+    measurements.forEach((m: any) => {
+      if (!mapping[m.tooth_number]) mapping[m.tooth_number] = {};
+      mapping[m.tooth_number][m.parameter_name] = {
+        buccal: m.buccal_values || [0, 0, 0],
+        lingual: m.lingual_values || [0, 0, 0],
+        single: m.single_value
+      };
+    });
+    return mapping;
+  });
 
   const setParamValue = (tooth: number, param: string, side: "buccal" | "lingual", pos: number, value: number) => {
     setData(prev => {
@@ -43,6 +73,23 @@ export function Periodontogram() {
         if(!next[tooth]) next[tooth] = {};
         next[tooth][param] = { buccal: [0,0,0], lingual: [0,0,0], single: value };
         return next;
+    });
+  };
+
+  const saveMeasurement = (tooth: number, param: string) => {
+    const measurement = data[tooth]?.[param];
+    if (!measurement) return;
+
+    startTransition(async () => {
+      await updatePeriodontalMeasurement(patient.id, {
+        toothNumber: tooth,
+        parameterName: param,
+        buccalValues: measurement.buccal,
+        lingualValues: measurement.lingual,
+        singleValue: measurement.single,
+        date: new Date().toISOString()
+      });
+      onRefresh?.();
     });
   };
 
@@ -84,8 +131,15 @@ export function Periodontogram() {
               <span className="text-[10px] leading-none mt-1">{tooth - 1}</span>
            </div>
            
-           <Button onClick={() => setOpenPopover(null)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
-             Submit and close
+           <Button 
+             onClick={() => {
+               saveMeasurement(tooth, param);
+               setOpenPopover(null);
+             }} 
+             disabled={isPending}
+             className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm"
+           >
+             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit and close"}
            </Button>
 
            <div className="w-10 h-12 bg-blue-500 rounded-xl flex flex-col items-center justify-center text-white font-bold p-1">

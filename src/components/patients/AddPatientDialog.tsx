@@ -5,35 +5,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import { Textarea } from "@/components/ui/textarea";
 import { 
   PlusCircle, 
   Camera, 
   Phone, 
-  MessageCircle, 
-  MessageSquare,
-  Bell, 
-  MoreVertical, 
   Mail, 
   Search, 
-  Mic, 
   PenTool,
-  Save,
-  Cloud,
-  Menu,
-  Activity,
-  Users
+  Users,
+  Loader2,
+  Activity as ActivityIcon
 } from "lucide-react";
+import { createPatient } from "@/app/actions/patients";
+import { toast } from "sonner";
 
 export function AddPatientDialog() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Form State
+  const [name, setName] = useState("");
+  const [phone1, setPhone1] = useState("");
+  const [phone2, setPhone2] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [postCode, setPostCode] = useState("");
+  const [city, setCity] = useState("");
   const [gender, setGender] = useState("Female");
   const [maritalStatus, setMaritalStatus] = useState("Single");
   const [dob, setDob] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [insurance, setInsurance] = useState("");
+  const [ssn, setSsn] = useState("");
+  const [idNumber, setIdNumber] = useState("");
+  const [medicalAlert, setMedicalAlert] = useState("");
+  const [referredBy, setReferredBy] = useState("");
+  const [notes, setNotes] = useState("");
   const [isDeceased, setIsDeceased] = useState(false);
   const [isSigned, setIsSigned] = useState(false);
-  const [notes, setNotes] = useState("");
   
   const registrationDate = new Date().toLocaleDateString('en-GB', { 
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
@@ -51,13 +61,76 @@ export function AddPatientDialog() {
     return age.toString();
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !phone1) {
+      toast.error("Name and Phone 1 are required");
+      return;
+    }
+
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("phone1", phone1);
+    formData.append("phone2", phone2);
+    formData.append("email", email);
+    formData.append("address", address);
+    formData.append("postCode", postCode);
+    formData.append("city", city);
+    formData.append("dob", dob);
+    formData.append("gender", gender);
+    formData.append("maritalStatus", maritalStatus);
+    formData.append("occupation", occupation);
+    formData.append("insurance", insurance);
+    formData.append("ssn", ssn);
+    formData.append("idNumber", idNumber);
+    formData.append("medicalAlert", medicalAlert);
+    formData.append("referredBy", referredBy);
+    formData.append("notes", notes);
+    formData.append("isDeceased", isDeceased.toString());
+    formData.append("isSigned", isSigned.toString());
+
+    try {
+      const result = await createPatient(formData);
+      if (result.success) {
+        toast.success("Patient created successfully");
+        setOpen(false);
+        // Reset form
+        setName("");
+        setPhone1("");
+        setPhone2("");
+        setEmail("");
+        setAddress("");
+        setPostCode("");
+        setCity("");
+        setDob("");
+        setOccupation("");
+        setInsurance("");
+        setSsn("");
+        setIdNumber("");
+        setMedicalAlert("");
+        setReferredBy("");
+        setNotes("");
+        setIsDeceased(false);
+        setIsSigned(false);
+      } else {
+        toast.error(result.error || "Failed to create patient");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-primary-foreground bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium border-0 cursor-pointer">
+      <DialogTrigger className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium border-0 inline-flex items-center justify-center text-white">
         <PlusCircle className="mr-2 h-4 w-4" /> Add Patient
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-md md:max-w-xl lg:max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl">
+      <DialogContent className="sm:max-w-md md:max-w-xl lg:max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl text-gray-900">
         {/* App-like Header */}
         <DialogHeader className="bg-white px-4 py-3 flex flex-row items-center justify-between border-b shrink-0 m-0 space-y-0">
           <div className="flex items-center gap-3">
@@ -71,7 +144,7 @@ export function AddPatientDialog() {
         </DialogHeader>
 
         <form 
-          onSubmit={(e) => { e.preventDefault(); setOpen(false); }} 
+          onSubmit={handleSubmit} 
           className="flex-1 flex flex-col overflow-hidden"
         >
           <div className="flex-1 overflow-y-auto w-full">
@@ -105,14 +178,26 @@ export function AddPatientDialog() {
               <div className="p-4 space-y-4 bg-gray-100">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Name:</Label>
-                  <Input placeholder="enter patient's full name" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                  <Input 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="enter patient's full name" 
+                    className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                    required
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Phone 1:</Label>
                   <div className="flex gap-2">
-                    <Input placeholder="enter home phone number" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1" />
-                    <Button size="icon" className="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-11 w-11 shrink-0 shadow-sm">
+                    <Input 
+                      value={phone1}
+                      onChange={(e) => setPhone1(e.target.value)}
+                      placeholder="enter primary phone number" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1 text-gray-900" 
+                      required
+                    />
+                    <Button type="button" size="icon" className="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-11 w-11 shrink-0 shadow-sm">
                       <Phone className="h-5 w-5" />
                     </Button>
                   </div>
@@ -121,8 +206,13 @@ export function AddPatientDialog() {
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Phone 2:</Label>
                   <div className="flex gap-2">
-                    <Input placeholder="enter mobile phone number" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1" />
-                    <Button size="icon" className="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-11 w-11 shrink-0 shadow-sm">
+                    <Input 
+                      value={phone2}
+                      onChange={(e) => setPhone2(e.target.value)}
+                      placeholder="enter secondary phone number" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1 text-gray-900" 
+                    />
+                    <Button type="button" size="icon" className="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-11 w-11 shrink-0 shadow-sm">
                       <Phone className="h-5 w-5" />
                     </Button>
                   </div>
@@ -131,8 +221,14 @@ export function AddPatientDialog() {
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">E-mail:</Label>
                   <div className="flex gap-2">
-                    <Input placeholder="enter e-mail" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1" />
-                    <Button size="icon" className="bg-blue-400 hover:bg-blue-500 text-white rounded-xl h-11 w-11 shrink-0 shadow-sm">
+                    <Input 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      type="email"
+                      placeholder="enter e-mail" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm flex-1 text-gray-900" 
+                    />
+                    <Button type="button" size="icon" className="bg-blue-400 hover:bg-blue-500 text-white rounded-xl h-11 w-11 shrink-0 shadow-sm">
                       <Mail className="h-5 w-5" />
                     </Button>
                   </div>
@@ -140,17 +236,33 @@ export function AddPatientDialog() {
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Address:</Label>
-                  <Input placeholder="enter address" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                  <Input 
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="enter address" 
+                    className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                  />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700">Post code:</Label>
-                  <Input placeholder="enter post code" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700">City:</Label>
-                  <Input placeholder="enter city" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-gray-700">Post code:</Label>
+                    <Input 
+                      value={postCode}
+                      onChange={(e) => setPostCode(e.target.value)}
+                      placeholder="enter post code" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-gray-700">City:</Label>
+                    <Input 
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="enter city" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -217,27 +329,55 @@ export function AddPatientDialog() {
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Occupation:</Label>
-                  <Input placeholder="enter profession" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                  <Input 
+                    value={occupation}
+                    onChange={(e) => setOccupation(e.target.value)}
+                    placeholder="enter profession" 
+                    className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-gray-700">Insurance:</Label>
-                  <Input placeholder="enter insurance name" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                  <Input 
+                    value={insurance}
+                    onChange={(e) => setInsurance(e.target.value)}
+                    placeholder="enter insurance name" 
+                    className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                  />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700">Social Security Number:</Label>
-                  <Input placeholder="enter social security number" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700">Identification Number:</Label>
-                  <Input placeholder="enter identification number" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-gray-700">SSN:</Label>
+                    <Input 
+                      value={ssn}
+                      onChange={(e) => setSsn(e.target.value)}
+                      placeholder="SSN" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium text-gray-700">ID Number:</Label>
+                    <Input 
+                      value={idNumber}
+                      onChange={(e) => setIdNumber(e.target.value)}
+                      placeholder="ID Number" 
+                      className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900" 
+                    />
+                  </div>
                 </div>
                 
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-gray-700">Medical Alert:</Label>
-                  <Input placeholder="e.g. penicillin allergy" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm" />
+                  <Label className="text-sm font-medium text-gray-700 text-red-600 flex items-center gap-1">
+                    <ActivityIcon className="h-3.5 w-3.5" /> Medical Alert:
+                  </Label>
+                  <Input 
+                    value={medicalAlert}
+                    onChange={(e) => setMedicalAlert(e.target.value)}
+                    placeholder="e.g. penicillin allergy" 
+                    className="bg-white border-gray-200 rounded-xl h-11 shadow-sm text-gray-900 border-red-100 focus-visible:ring-red-500/20" 
+                  />
                 </div>
               </div>
 
@@ -252,9 +392,14 @@ export function AddPatientDialog() {
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input placeholder="Search" className="bg-white border-gray-200 rounded-xl h-11 shadow-sm pl-10" />
+                      <Input 
+                        value={referredBy}
+                        onChange={(e) => setReferredBy(e.target.value)}
+                        placeholder="Search or enter name" 
+                        className="bg-white border-gray-200 rounded-xl h-11 shadow-sm pl-10 text-gray-900" 
+                      />
                     </div>
-                    <Button size="icon" className="bg-blue-400 hover:bg-blue-500 text-white rounded-xl h-11 w-11 shrink-0 shadow-sm p-0 flex items-center justify-center">
+                    <Button type="button" size="icon" className="bg-blue-400 hover:bg-blue-500 text-white rounded-xl h-11 w-11 shrink-0 shadow-sm p-0 flex items-center justify-center">
                       <Users className="h-6 w-6" />
                     </Button>
                   </div>
@@ -273,7 +418,7 @@ export function AddPatientDialog() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Enter any other noteworthy information about this patient..." 
-                    className="bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm min-h-[120px] resize-none p-4" 
+                    className="bg-white border-gray-200 focus-visible:ring-blue-500 rounded-xl shadow-sm min-h-[120px] resize-none p-4 text-gray-900" 
                   />
                 </div>
 
@@ -325,14 +470,23 @@ export function AddPatientDialog() {
               variant="outline" 
               onClick={() => setOpen(false)}
               className="px-6 rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50 h-11 shadow-sm font-medium"
+              disabled={loading}
             >
               DISCARD
             </Button>
             <Button 
               type="submit" 
               className="px-8 min-w-[140px] rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 h-11 font-semibold"
+              disabled={loading}
             >
-              SAVE INFO
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  SAVING...
+                </>
+              ) : (
+                "SAVE INFO"
+              )}
             </Button>
           </DialogFooter>
         </form>

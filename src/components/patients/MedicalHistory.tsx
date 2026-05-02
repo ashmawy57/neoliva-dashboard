@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Activity, Heart, Pill, Plus, Trash2, Save, Edit2, X,
+  Activity as ActivityIcon, Heart, Pill, Plus, Trash2, Save, Edit2, X,
   Syringe, ShieldAlert, Clock, FileText, Droplets, AlertTriangle, CheckCircle2, Cigarette, Wine
 } from "lucide-react";
 
@@ -52,9 +52,16 @@ interface FamilyHistory {
 }
 
 interface PatientInput {
-  conditions: { name: string; diagnosed: string; status: string; statusColor: string }[];
-  allergies: { name: string; severity: string }[];
-  medications: { name: string; dosage: string; color: string }[];
+  id: string;
+  bloodGroup?: string;
+  smokingStatus?: string;
+  alcoholUse?: string;
+  generalMedicalNotes?: string;
+  conditions: any[];
+  allergies: any[];
+  medications: any[];
+  surgeries: any[];
+  familyHistory: any[];
 }
 
 // ============ CONFIG ============
@@ -84,49 +91,113 @@ const COMMON_ALLERGIES = [
   "Erythromycin", "NSAIDs", "Shellfish", "Nuts",
 ];
 
-export function MedicalHistory({ patient }: { patient: PatientInput }) {
+import { 
+  addMedicalCondition, deleteMedicalCondition,
+  addAllergy, deleteAllergy,
+  addMedication, deleteMedication,
+  addSurgery, deleteSurgery,
+  addFamilyHistory, deleteFamilyHistory,
+  updatePatientVitals, updateGeneralMedicalNotes
+} from "@/app/actions/patients";
+import { useEffect, useTransition } from "react";
+
+export function MedicalHistory({ patient, onRefresh }: { patient: PatientInput, onRefresh?: () => void }) {
+  const [isPending, startTransition] = useTransition();
+
   // ============ STATE — initialized from patient data ============
-  const [conditions, setConditions] = useState<MedicalCondition[]>(
-    patient.conditions.map((c, i) => ({
-      id: `c-${i}`,
-      name: c.name,
-      diagnosed: c.diagnosed,
-      status: c.status as ConditionStatus,
-      notes: "",
+  const [conditions, setConditions] = useState<MedicalCondition[]>(() => 
+    (patient?.conditions ?? []).map((c: any) => ({
+      id: c.id,
+      name: c.condition_name || c.name,
+      diagnosed: c.diagnosed_date || c.diagnosed || "",
+      status: (c.status as ConditionStatus) || "Active",
+      notes: c.notes || "",
     }))
   );
 
-  const [allergies, setAllergies] = useState<Allergy[]>(
-    patient.allergies.map((a, i) => ({
-      id: `a-${i}`,
-      name: a.name,
-      severity: a.severity === "destructive" ? "Severe" as const : a.severity === "warning" ? "Moderate" as const : "Mild" as const,
-      reaction: a.severity === "destructive" ? "Anaphylaxis" : "Skin irritation",
+  const [allergies, setAllergies] = useState<Allergy[]>(() => 
+    (patient?.allergies ?? []).map((a: any) => ({
+      id: a.id,
+      name: a.allergen || a.name,
+      severity: a.severity as AllergySeverity || "Mild",
+      reaction: a.reaction || "",
     }))
   );
 
-  const [medications, setMedications] = useState<Medication[]>(
-    patient.medications.map((m, i) => {
-      const parts = m.dosage.match(/^(.+?)\s*\((.+)\)$/);
-      return {
-        id: `m-${i}`,
-        name: m.name,
-        dosage: parts ? parts[1].trim() : m.dosage,
-        frequency: "Daily",
-        prescribedFor: parts ? parts[2].trim() : "",
-      };
-    })
+  const [medications, setMedications] = useState<Medication[]>(() => 
+    (patient?.medications ?? []).map((m: any) => ({
+      id: m.id,
+      name: m.medication_name || m.name,
+      dosage: m.dosage || "",
+      frequency: m.frequency || "Daily",
+      prescribedFor: m.notes || m.prescribedFor || "",
+    }))
   );
 
-  const [surgeries, setSurgeries] = useState<Surgery[]>([]);
-  const [familyHistory, setFamilyHistory] = useState<FamilyHistory[]>([]);
+  const [surgeries, setSurgeries] = useState<Surgery[]>(() => 
+    (patient?.surgeries ?? []).map((s: any) => ({
+      id: s.id,
+      name: s.surgery_name || s.name,
+      date: s.surgery_date || s.date || "",
+      notes: s.notes || "",
+    }))
+  );
+
+  const [familyHistory, setFamilyHistory] = useState<FamilyHistory[]>(() => 
+    (patient?.familyHistory ?? []).map((fh: any) => ({
+      id: fh.id,
+      condition: fh.condition_name || fh.condition,
+      relation: fh.relation || "",
+    }))
+  );
 
   // Lifestyle & vitals
-  const [bloodType, setBloodType] = useState<BloodType>("");
-  const [smoking, setSmoking] = useState<"Never" | "Former" | "Current">("Never");
-  const [alcohol, setAlcohol] = useState<"None" | "Social" | "Regular">("None");
-  const [generalNotes, setGeneralNotes] = useState("");
+  const [bloodType, setBloodType] = useState<BloodType>((patient?.bloodGroup as BloodType) || "");
+  const [smoking, setSmoking] = useState<"Never" | "Former" | "Current">((patient?.smokingStatus as any) || "Never");
+  const [alcohol, setAlcohol] = useState<"None" | "Social" | "Regular">((patient?.alcoholUse as any) || "None");
+  const [generalNotes, setGeneralNotes] = useState(patient?.generalMedicalNotes || "");
   const [editingNotes, setEditingNotes] = useState(false);
+
+  // ============ SYNC WITH PARENT PROPS ============
+  useEffect(() => {
+    if (patient) {
+      setConditions((patient.conditions ?? []).map((c: any) => ({
+        id: c.id,
+        name: c.condition_name || c.name,
+        diagnosed: c.diagnosed_date || c.diagnosed || "",
+        status: (c.status as ConditionStatus) || "Active",
+        notes: c.notes || "",
+      })));
+      setAllergies((patient.allergies ?? []).map((a: any) => ({
+        id: a.id,
+        name: a.allergen || a.name,
+        severity: a.severity as AllergySeverity || "Mild",
+        reaction: a.reaction || "",
+      })));
+      setMedications((patient.medications ?? []).map((m: any) => ({
+        id: m.id,
+        name: m.medication_name || m.name,
+        dosage: m.dosage || "",
+        frequency: m.frequency || "Daily",
+        prescribedFor: m.notes || m.prescribedFor || "",
+      })));
+      setSurgeries((patient.surgeries ?? []).map((s: any) => ({
+        id: s.id,
+        name: s.surgery_name || s.name,
+        date: s.surgery_date || s.date || "",
+        notes: s.notes || "",
+      })));
+      setFamilyHistory((patient.familyHistory ?? []).map((fh: any) => ({
+        id: fh.id,
+        condition: fh.condition_name || fh.condition,
+        relation: fh.relation || "",
+      })));
+      setBloodType((patient.bloodGroup as BloodType) || "");
+      setSmoking((patient.smokingStatus as any) || "Never");
+      setAlcohol((patient.alcoholUse as any) || "None");
+      setGeneralNotes(patient.generalMedicalNotes || "");
+    }
+  }, [patient]);
 
   // Dialog states
   const [conditionDialog, setConditionDialog] = useState(false);
@@ -143,39 +214,161 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
   const [newFamily, setNewFamily] = useState<Omit<FamilyHistory, "id">>({ condition: "", relation: "" });
 
   // ============ HANDLERS ============
-  const addCondition = () => {
-    if (!newCondition.name.trim()) return;
-    setConditions(prev => [...prev, { ...newCondition, id: `c-${Date.now()}` }]);
-    setNewCondition({ name: "", diagnosed: "", status: "Active", notes: "" });
+  const addConditionHandler = () => {
+    if (!newCondition.name.trim() || !patient?.id) return;
+    const tempId = `temp-${Date.now()}`;
+    setConditions(prev => [...prev, { ...newCondition, id: tempId }]);
     setConditionDialog(false);
+    
+    startTransition(async () => {
+      await addMedicalCondition(patient.id, newCondition);
+      onRefresh?.();
+    });
+    setNewCondition({ name: "", diagnosed: "", status: "Active", notes: "" });
   };
 
-  const addAllergy = () => {
-    if (!newAllergy.name.trim()) return;
-    setAllergies(prev => [...prev, { ...newAllergy, id: `a-${Date.now()}` }]);
-    setNewAllergy({ name: "", severity: "Mild", reaction: "" });
+  const deleteConditionHandler = (id: string) => {
+    if (!patient?.id) return;
+    setConditions(prev => prev.filter(c => c.id !== id));
+    startTransition(async () => {
+      if (!id.startsWith('temp-')) {
+        await deleteMedicalCondition(id, patient.id);
+        onRefresh?.();
+      }
+    });
+  };
+
+  const addAllergyHandler = () => {
+    if (!newAllergy.name.trim() || !patient?.id) return;
+    const tempId = `temp-${Date.now()}`;
+    setAllergies(prev => [...prev, { ...newAllergy, id: tempId }]);
     setAllergyDialog(false);
+    
+    startTransition(async () => {
+      await addAllergy(patient.id, newAllergy);
+      onRefresh?.();
+    });
+    setNewAllergy({ name: "", severity: "Mild", reaction: "" });
   };
 
-  const addMedication = () => {
-    if (!newMedication.name.trim()) return;
-    setMedications(prev => [...prev, { ...newMedication, id: `m-${Date.now()}` }]);
-    setNewMedication({ name: "", dosage: "", frequency: "", prescribedFor: "" });
+  const deleteAllergyHandler = (id: string) => {
+    if (!patient?.id) return;
+    setAllergies(prev => prev.filter(a => a.id !== id));
+    startTransition(async () => {
+      if (!id.startsWith('temp-')) {
+        await deleteAllergy(id, patient.id);
+        onRefresh?.();
+      }
+    });
+  };
+
+  const addMedicationHandler = () => {
+    if (!newMedication.name.trim() || !patient?.id) return;
+    const tempId = `temp-${Date.now()}`;
+    setMedications(prev => [...prev, { ...newMedication, id: tempId }]);
     setMedicationDialog(false);
+    
+    startTransition(async () => {
+      await addMedication(patient.id, newMedication);
+      onRefresh?.();
+    });
+    setNewMedication({ name: "", dosage: "", frequency: "", prescribedFor: "" });
   };
 
-  const addSurgery = () => {
-    if (!newSurgery.name.trim()) return;
-    setSurgeries(prev => [...prev, { ...newSurgery, id: `s-${Date.now()}` }]);
-    setNewSurgery({ name: "", date: "", notes: "" });
+  const deleteMedicationHandler = (id: string) => {
+    if (!patient?.id) return;
+    setMedications(prev => prev.filter(m => m.id !== id));
+    startTransition(async () => {
+      if (!id.startsWith('temp-')) {
+        await deleteMedication(id, patient.id);
+        onRefresh?.();
+      }
+    });
+  };
+
+  const addSurgeryHandler = () => {
+    if (!newSurgery.name.trim() || !patient?.id) return;
+    const tempId = `temp-${Date.now()}`;
+    setSurgeries(prev => [...prev, { ...newSurgery, id: tempId }]);
     setSurgeryDialog(false);
+    
+    startTransition(async () => {
+      await addSurgery(patient.id, newSurgery);
+      onRefresh?.();
+    });
+    setNewSurgery({ name: "", date: "", notes: "" });
   };
 
-  const addFamily = () => {
-    if (!newFamily.condition.trim()) return;
-    setFamilyHistory(prev => [...prev, { ...newFamily, id: `fh-${Date.now()}` }]);
-    setNewFamily({ condition: "", relation: "" });
+  const deleteSurgeryHandler = (id: string) => {
+    if (!patient?.id) return;
+    setSurgeries(prev => prev.filter(s => s.id !== id));
+    startTransition(async () => {
+      if (!id.startsWith('temp-')) {
+        await deleteSurgery(id, patient.id);
+        onRefresh?.();
+      }
+    });
+  };
+
+  const addFamilyHandler = () => {
+    if (!newFamily.condition.trim() || !patient?.id) return;
+    const tempId = `temp-${Date.now()}`;
+    setFamilyHistory(prev => [...prev, { ...newFamily, id: tempId }]);
     setFamilyDialog(false);
+    
+    startTransition(async () => {
+      await addFamilyHistory(patient.id, newFamily);
+      onRefresh?.();
+    });
+    setNewFamily({ condition: "", relation: "" });
+  };
+
+  const deleteFamilyHandler = (id: string) => {
+    if (!patient?.id) return;
+    setFamilyHistory(prev => prev.filter(fh => fh.id !== id));
+    startTransition(async () => {
+      if (!id.startsWith('temp-')) {
+        await deleteFamilyHistory(id, patient.id);
+        onRefresh?.();
+      }
+    });
+  };
+
+  const handleUpdateVitals = (type: 'bloodType' | 'smoking' | 'alcohol', val: string) => {
+    if (!patient?.id) return;
+    
+    let newBloodType = bloodType;
+    let newSmoking = smoking;
+    let newAlcohol = alcohol;
+    
+    if (type === 'bloodType') {
+      newBloodType = val as BloodType;
+      setBloodType(newBloodType);
+    } else if (type === 'smoking') {
+      newSmoking = val as any;
+      setSmoking(newSmoking);
+    } else if (type === 'alcohol') {
+      newAlcohol = val as any;
+      setAlcohol(newAlcohol);
+    }
+    
+    startTransition(async () => {
+      await updatePatientVitals(patient.id, {
+        bloodType: newBloodType,
+        smoking: newSmoking,
+        alcohol: newAlcohol
+      });
+      onRefresh?.();
+    });
+  };
+
+  const saveGeneralNotes = () => {
+    if (!patient?.id) return;
+    setEditingNotes(false);
+    startTransition(async () => {
+      await updateGeneralMedicalNotes(patient.id, generalNotes);
+      onRefresh?.();
+    });
   };
 
   return (
@@ -186,7 +379,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 border-b border-gray-100 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-500" /> Medical Conditions
+              <ActivityIcon className="w-4 h-4 text-blue-500" /> Medical Conditions
             </CardTitle>
             <Button size="sm" variant="ghost" onClick={() => setConditionDialog(true)} className="h-7 w-7 p-0 rounded-lg hover:bg-blue-50">
               <Plus className="w-4 h-4 text-blue-600" />
@@ -204,14 +397,14 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                   <Badge variant="outline" className={`text-xs ${STATUS_CONFIGS[cond.status].bg} ${STATUS_CONFIGS[cond.status].color}`}>
                     {cond.status}
                   </Badge>
-                  <button onClick={() => setConditions(prev => prev.filter(c => c.id !== cond.id))} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                  <button onClick={() => deleteConditionHandler(cond.id)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             )) : (
               <div className="text-center py-6">
-                <Activity className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                <ActivityIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                 <p className="text-sm text-gray-400">No medical conditions</p>
                 <Button size="sm" variant="link" onClick={() => setConditionDialog(true)} className="text-blue-600 text-xs mt-1">+ Add condition</Button>
               </div>
@@ -245,7 +438,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                       {allergy.severity} — {allergy.reaction || "No details"}
                     </p>
                   </div>
-                  <button onClick={() => setAllergies(prev => prev.filter(a => a.id !== allergy.id))} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity mt-1">
+                  <button onClick={() => deleteAllergyHandler(allergy.id)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity mt-1 disabled:opacity-50">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -286,7 +479,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                     <Badge variant="outline" className="mt-1.5 text-[9px] px-1.5 py-0 border-purple-200 text-purple-600 bg-purple-50">{med.prescribedFor}</Badge>
                   )}
                 </div>
-                <button onClick={() => setMedications(prev => prev.filter(m => m.id !== med.id))} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                <button onClick={() => deleteMedicationHandler(med.id)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -324,7 +517,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                   <p className="text-xs text-gray-500"><Clock className="w-3 h-3 inline mr-1" />{s.date}</p>
                   {s.notes && <p className="text-xs text-gray-400 mt-1">{s.notes}</p>}
                 </div>
-                <button onClick={() => setSurgeries(prev => prev.filter(x => x.id !== s.id))} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                <button onClick={() => deleteSurgeryHandler(s.id)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -355,7 +548,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                   <p className="text-sm font-semibold text-gray-900">{fh.condition}</p>
                   <p className="text-xs text-gray-500">Relation: {fh.relation}</p>
                 </div>
-                <button onClick={() => setFamilyHistory(prev => prev.filter(x => x.id !== fh.id))} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                <button onClick={() => deleteFamilyHandler(fh.id)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity disabled:opacity-50">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -386,8 +579,9 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                 {(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as BloodType[]).map(bt => (
                   <button
                     key={bt}
-                    onClick={() => setBloodType(bloodType === bt ? "" : bt)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    onClick={() => handleUpdateVitals('bloodType', bloodType === bt ? "" : bt)}
+                    disabled={isPending}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${
                       bloodType === bt
                         ? "bg-red-500 text-white shadow-sm"
                         : "bg-white border border-gray-200 text-gray-600 hover:border-red-200 hover:bg-red-50"
@@ -408,8 +602,9 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                 {(["Never", "Former", "Current"] as const).map(s => (
                   <button
                     key={s}
-                    onClick={() => setSmoking(s)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 ${
+                    onClick={() => handleUpdateVitals('smoking', s)}
+                    disabled={isPending}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 disabled:opacity-50 ${
                       smoking === s
                         ? s === "Current" ? "bg-red-500 text-white" : s === "Former" ? "bg-amber-500 text-white" : "bg-emerald-500 text-white"
                         : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
@@ -430,8 +625,9 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                 {(["None", "Social", "Regular"] as const).map(a => (
                   <button
                     key={a}
-                    onClick={() => setAlcohol(a)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 ${
+                    onClick={() => handleUpdateVitals('alcohol', a)}
+                    disabled={isPending}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 disabled:opacity-50 ${
                       alcohol === a
                         ? a === "Regular" ? "bg-red-500 text-white" : a === "Social" ? "bg-amber-500 text-white" : "bg-emerald-500 text-white"
                         : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
@@ -452,7 +648,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
           <CardTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-4 h-4 text-gray-500" /> General Medical Notes
           </CardTitle>
-          <button onClick={() => setEditingNotes(!editingNotes)} className="text-gray-400 hover:text-blue-600 transition-colors">
+          <button onClick={() => editingNotes ? saveGeneralNotes() : setEditingNotes(true)} disabled={isPending} className="text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50">
             {editingNotes ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <Edit2 className="w-4 h-4" />}
           </button>
         </CardHeader>
@@ -466,7 +662,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
               autoFocus
             />
           ) : (
-            <div onClick={() => setEditingNotes(true)} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 text-sm text-gray-500 min-h-[80px] cursor-pointer hover:bg-gray-100/50 transition-colors">
+            <div onClick={() => setEditingNotes(true)} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 text-sm text-gray-500 min-h-[80px] cursor-pointer hover:bg-gray-100/50 transition-colors whitespace-pre-wrap">
               {generalNotes || "Click to add medical notes..."}
             </div>
           )}
@@ -480,7 +676,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
         <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 m-0">
             <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-600" /> Add Medical Condition
+              <ActivityIcon className="w-5 h-5 text-blue-600" /> Add Medical Condition
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-4">
@@ -517,7 +713,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notes</label>
               <textarea value={newCondition.notes} onChange={(e) => setNewCondition(p => ({ ...p, notes: e.target.value }))} placeholder="Additional details..." className="w-full h-16 rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300" />
             </div>
-            <Button onClick={addCondition} disabled={!newCondition.name.trim()} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-blue-500/20">
+            <Button onClick={addConditionHandler} disabled={!newCondition.name.trim() || isPending} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-blue-500/20">
               <Save className="w-4 h-4 mr-2" /> Save Condition
             </Button>
           </div>
@@ -558,7 +754,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Reaction Type</label>
               <input type="text" value={newAllergy.reaction} onChange={(e) => setNewAllergy(p => ({ ...p, reaction: e.target.value }))} placeholder="e.g., Anaphylaxis, Rash, Swelling" className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300" />
             </div>
-            <Button onClick={addAllergy} disabled={!newAllergy.name.trim()} className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-red-500/20">
+            <Button onClick={addAllergyHandler} disabled={!newAllergy.name.trim() || isPending} className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-red-500/20">
               <Save className="w-4 h-4 mr-2" /> Save Allergy
             </Button>
           </div>
@@ -592,7 +788,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Prescribed For</label>
               <input type="text" value={newMedication.prescribedFor} onChange={(e) => setNewMedication(p => ({ ...p, prescribedFor: e.target.value }))} placeholder="e.g., Blood Pressure" className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300" />
             </div>
-            <Button onClick={addMedication} disabled={!newMedication.name.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-purple-500/20">
+            <Button onClick={addMedicationHandler} disabled={!newMedication.name.trim() || isPending} className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-purple-500/20">
               <Save className="w-4 h-4 mr-2" /> Save Medication
             </Button>
           </div>
@@ -620,7 +816,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notes</label>
               <textarea value={newSurgery.notes} onChange={(e) => setNewSurgery(p => ({ ...p, notes: e.target.value }))} placeholder="Complications, recovery notes..." className="w-full h-16 rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300" />
             </div>
-            <Button onClick={addSurgery} disabled={!newSurgery.name.trim()} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-blue-500/20">
+            <Button onClick={addSurgeryHandler} disabled={!newSurgery.name.trim() || isPending} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-blue-500/20">
               <Save className="w-4 h-4 mr-2" /> Save Surgery
             </Button>
           </div>
@@ -648,7 +844,7 @@ export function MedicalHistory({ patient }: { patient: PatientInput }) {
                 ))}
               </div>
             </div>
-            <Button onClick={addFamily} disabled={!newFamily.condition.trim()} className="w-full bg-pink-600 hover:bg-pink-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-pink-500/20">
+            <Button onClick={addFamilyHandler} disabled={!newFamily.condition.trim() || isPending} className="w-full bg-pink-600 hover:bg-pink-700 text-white rounded-xl h-10 text-sm font-semibold shadow-md shadow-pink-500/20">
               <Save className="w-4 h-4 mr-2" /> Save Family History
             </Button>
           </div>
