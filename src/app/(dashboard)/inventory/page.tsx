@@ -1,39 +1,14 @@
-"use client";
-
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, PlusCircle, Search, Package, TrendingDown, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { AlertTriangle, Package, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
 import { NewInventoryItemDialog } from "@/components/inventory/NewInventoryItemDialog";
+import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { getInventory } from "@/app/actions/inventory";
 
-export default function InventoryPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [inventoryList, setInventoryList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchInventory() {
-      try {
-        const data = await getInventory();
-        setInventoryList(data);
-      } catch (error) {
-        console.error("Failed to fetch inventory:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchInventory();
-  }, []);
-
+export default async function InventoryPage() {
+  const inventoryList = await getInventory();
   const lowItems = inventoryList.filter((i) => i.quantity <= i.minLevel);
-  const filtered = inventoryList.filter((i) =>
-    i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    i.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -46,7 +21,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Alert Banner */}
-      {!loading && lowItems.length > 0 && (
+      {lowItems.length > 0 && (
         <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 rounded-xl animate-scale-in">
           <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -97,78 +72,7 @@ export default function InventoryPage() {
         </Card>
       </div>
 
-      <div className="relative w-full sm:w-80">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input
-          placeholder="Search by name or category..."
-          className="pl-10 h-10 rounded-xl bg-white border-gray-200 focus-visible:ring-blue-500/20"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      <Card className="border-0 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center h-32">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Item</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Min Level</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock Level</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((item) => {
-                const isLow = item.quantity <= item.minLevel;
-                const pct = Math.min((item.quantity / item.minLevel) * 100, 100);
-                return (
-                  <TableRow key={item.id} className="table-row-hover">
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {isLow && <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
-                        <span className="text-sm font-semibold text-gray-900">{item.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px] rounded-full border-gray-200 text-gray-600">
-                        {item.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`text-sm font-bold ${isLow ? "text-red-600" : "text-gray-700"}`}>
-                      {item.quantity} {item.unit}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-500">{item.minLevel} {item.unit}</TableCell>
-                    <TableCell>
-                      <div className="w-24">
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${isLow ? "bg-gradient-to-r from-red-500 to-orange-500" : "bg-gradient-to-r from-emerald-500 to-teal-500"
-                              }`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={`text-[11px] font-semibold rounded-full px-2.5 border-none ${isLow ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
-                        }`}>
-                        {isLow ? "Low" : "OK"}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+      <InventoryTable initialInventory={inventoryList} />
     </div>
   );
 }

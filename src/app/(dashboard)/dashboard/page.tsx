@@ -1,40 +1,11 @@
-"use client";
-
-import Link from "next/link";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Calendar, DollarSign, AlertTriangle, Users,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Clock,
-  Activity as ActivityIcon, MoreHorizontal, Plus, Loader2
+  Calendar, DollarSign, AlertTriangle, TrendingUp, ArrowUpRight, ArrowDownRight, Clock
 } from "lucide-react";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar,
-} from "recharts";
-import { useState, useEffect } from "react";
 import { getDashboardData } from "@/app/actions/dashboard";
-
-const revenueData = [
-  { name: "Jan", revenue: 4200, expenses: 2400 },
-  { name: "Feb", revenue: 3800, expenses: 2100 },
-  { name: "Mar", revenue: 5100, expenses: 2800 },
-  { name: "Apr", revenue: 4780, expenses: 2600 },
-  { name: "May", revenue: 5890, expenses: 3100 },
-  { name: "Jun", revenue: 6390, expenses: 3400 },
-  { name: "Jul", revenue: 7490, expenses: 3200 },
-];
-
-const appointmentData = [
-  { day: "Mon", count: 12 },
-  { day: "Tue", count: 19 },
-  { day: "Wed", count: 15 },
-  { day: "Thu", count: 22 },
-  { day: "Fri", count: 18 },
-  { day: "Sat", count: 8 },
-];
+import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
+import { DashboardRecentPatients } from "@/components/dashboard/DashboardRecentPatients";
 
 const upcomingAppointments = [
   { patient: "Dr. Adams — Emily Johnson", time: "09:00 – 09:45", type: "Cleaning", progress: 65 },
@@ -42,51 +13,8 @@ const upcomingAppointments = [
   { patient: "Dr. Lee — Sarah Chen", time: "11:15 – 11:45", type: "Consultation", progress: 0 },
 ];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-xl border border-gray-100 text-xs">
-        <p className="font-semibold text-gray-800 mb-1">{label}</p>
-        {payload.map((entry: any, i: number) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
-            <span className="text-gray-500 capitalize">{entry.dataKey}:</span>
-            <span className="font-semibold text-gray-800">${entry.value.toLocaleString()}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
-
-export default function DashboardPage() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const dashboardData = await getDashboardData();
-        setData(dashboardData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-full min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
-  const recentPatients = data?.recentPatients || [];
+export default async function DashboardPage() {
+  const data = await getDashboardData();
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -182,121 +110,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-4 lg:grid-cols-7">
-        {/* Revenue Chart */}
-        <Card className="lg:col-span-4 border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold text-gray-900">Revenue Overview</CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Revenue vs expenses over 7 months</p>
-            </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 rounded-lg">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="h-[300px] pb-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2.5} fill="url(#revenueGrad)" dot={false} activeDot={{ r: 5, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }} />
-                <Area type="monotone" dataKey="expenses" stroke="#f59e0b" strokeWidth={2} fill="url(#expenseGrad)" dot={false} strokeDasharray="5 5" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Appointment Stats */}
-        <Card className="lg:col-span-3 border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold text-gray-900">Weekly Appointments</CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Patient visits this week</p>
-            </div>
-            <Badge className="bg-blue-50 text-blue-700 border-blue-100 font-semibold hover:bg-blue-50">
-              94 total
-            </Badge>
-          </CardHeader>
-          <CardContent className="h-[260px] pb-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={appointmentData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#94a3b8" }} />
-                <Tooltip cursor={{ fill: "rgba(59,130,246,0.04)" }} contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 12 }} />
-                <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+      <DashboardCharts />
 
       {/* Bottom Row */}
       <div className="grid gap-4 lg:grid-cols-5">
         {/* Recent Patients */}
-        <Card className="lg:col-span-3 border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold text-gray-900">Today&apos;s Patient Queue</CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Live patient status tracker</p>
-            </div>
-            <Button variant="outline" size="sm" className="rounded-lg text-xs h-8">
-              View All
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentPatients.map((patient: any, i: number) => (
-                <Link
-                  key={i}
-                  href={`/patients/${patient.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50/80 transition-colors group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${patient.color} flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
-                      {patient.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{patient.name}</p>
-                      <p className="text-xs text-gray-500">{patient.treatment}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {patient.time}
-                      </p>
-                    </div>
-                    <Badge
-                      className={`text-[10px] font-semibold rounded-full px-2.5 border-none ${
-                        patient.status === "In Progress"
-                          ? "bg-blue-100 text-blue-700"
-                          : patient.status === "Waiting"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {patient.status === "In Progress" && <ActivityIcon className="w-2.5 h-2.5 mr-1 animate-pulse" />}
-                      {patient.status}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <DashboardRecentPatients patients={data?.recentPatients || []} />
 
         {/* Live Progress */}
         <Card className="lg:col-span-2 border-0 shadow-sm">

@@ -26,8 +26,11 @@ A premium, comprehensive Dental Clinic Management System designed for modern den
 
 - **Frontend**: [Next.js 16](https://nextjs.org/) (App Router), [React 19](https://react.dev/)
 - **Styling**: [Tailwind CSS 4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
-- **Backend/Database**: [Supabase](https://supabase.com/), [Prisma ORM](https://www.prisma.io/)
-- **Authentication**: [NextAuth.js](https://next-auth.js.org/)
+- **Backend/Database**: [Supabase](https://supabase.com/) (PostgreSQL), [Prisma ORM](https://www.prisma.io/)
+- **Authentication**: [Supabase Auth](https://supabase.com/auth)
+- **File Storage**: [Supabase Storage](https://supabase.com/storage)
+- **Database Access**: [Prisma Client](https://www.prisma.io/client) for secure, type-safe server-side operations
+- **Security**: Row Level Security (RLS) enabled across all public tables with restricted API access
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Charts**: [Recharts](https://recharts.org/)
 - **Forms**: [React Hook Form](https://react-hook-form.com/) with [Zod](https://zod.dev/) validation
