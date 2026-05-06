@@ -1,6 +1,7 @@
 import { AppointmentRepository } from "@/repositories/appointment.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { InventoryService } from "./inventory.service";
+import { AppointmentStatus } from "@prisma/client";
 
 const appointmentRepository = new AppointmentRepository();
 const inventoryService = new InventoryService();
@@ -13,19 +14,28 @@ export class AppointmentService {
     const tenantId = await resolveTenantContext();
     const appointments = await appointmentRepository.findMany(tenantId);
 
-    return appointments.map(apt => ({
-      id: apt.id,
-      patient: apt.patient?.name || "Unknown Patient",
-      doctor: apt.staff?.name ? `Dr. ${apt.staff.name}` : "No Doctor",
-      startTime: apt.startTime,
-      endTime: apt.endTime,
-      status: apt.status,
-      type: apt.type,
-      notes: apt.notes,
-      hasInvoice: !!apt.invoice,
-      invoiceStatus: apt.invoice?.status,
-      invoiceAmount: apt.invoice?.amount ? Number(apt.invoice.amount) : 0
-    }));
+    return appointments.map(apt => {
+      const start = new Date(apt.date);
+      const time = new Date(apt.time);
+      start.setHours(time.getHours(), time.getMinutes());
+      
+      const end = new Date(start);
+      end.setMinutes(end.getMinutes() + apt.duration);
+
+      return {
+        id: apt.id,
+        patient: apt.patient?.name || "Unknown Patient",
+        doctor: apt.doctor?.name ? `Dr. ${apt.doctor.name}` : "No Doctor",
+        startTime: start,
+        endTime: end,
+        status: apt.status,
+        treatment: apt.treatment,
+        notes: apt.notes,
+        hasInvoice: !!apt.invoice,
+        invoiceStatus: apt.invoice?.status,
+        invoiceAmount: apt.invoice?.amount ? Number(apt.invoice.amount) : 0
+      };
+    });
   }
 
   /**
@@ -35,17 +45,26 @@ export class AppointmentService {
     const tenantId = await resolveTenantContext();
     const appointments = await appointmentRepository.findMany(tenantId);
 
-    return appointments.map(apt => ({
-      id: apt.id,
-      title: `${apt.patient?.name || "Unknown"} - ${apt.type}`,
-      start: apt.startTime,
-      end: apt.endTime,
-      extendedProps: {
-        status: apt.status,
-        doctor: apt.staff?.name ? `Dr. ${apt.staff.name}` : "No Doctor",
-        patientId: apt.patientId
-      }
-    }));
+    return appointments.map(apt => {
+      const start = new Date(apt.date);
+      const time = new Date(apt.time);
+      start.setHours(time.getHours(), time.getMinutes());
+      
+      const end = new Date(start);
+      end.setMinutes(end.getMinutes() + apt.duration);
+
+      return {
+        id: apt.id,
+        title: `${apt.patient?.name || "Unknown"} - ${apt.treatment || 'No Treatment'}`,
+        start: start,
+        end: end,
+        extendedProps: {
+          status: apt.status,
+          doctor: apt.doctor?.name ? `Dr. ${apt.doctor.name}` : "No Doctor",
+          patientId: apt.patientId
+        }
+      };
+    });
   }
 
   /**
@@ -56,7 +75,7 @@ export class AppointmentService {
     const appointments = await appointmentRepository.findMany(tenantId);
     
     const today = new Date().toDateString();
-    const todayApts = appointments.filter(a => new Date(a.startTime).toDateString() === today);
+    const todayApts = appointments.filter(a => new Date(a.date).toDateString() === today);
 
     return {
       totalToday: todayApts.length,
@@ -79,10 +98,11 @@ export class AppointmentService {
    */
   async createAppointment(data: {
     patientId: string;
-    staffId: string;
-    startTime: Date;
-    endTime: Date;
-    type: string;
+    doctorId: string;
+    date: Date;
+    time: Date;
+    duration: number;
+    treatment: string;
     notes?: string;
   }) {
     const tenantId = await resolveTenantContext();
@@ -96,7 +116,7 @@ export class AppointmentService {
   /**
    * Update appointment status and handle automatic triggers
    */
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: AppointmentStatus) {
     const tenantId = await resolveTenantContext();
     
     // 1. Fetch current appointment to get serviceId

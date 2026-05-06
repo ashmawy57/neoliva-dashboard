@@ -9,11 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Search, CalendarDays, Clock, 
-  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, LayoutList, Calendar as CalendarIcon
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, LayoutList, Calendar as CalendarIcon,
+  Receipt, DollarSign
 } from "lucide-react";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+import { 
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator 
 } from "@/components/ui/dropdown-menu";
+import { generateInvoiceFromAppointment } from "@/app/actions/billing";
+import { toast } from "sonner";
 
 const statusConfig: Record<string, { icon: any; className: string }> = {
   Completed: { icon: CheckCircle2, className: "bg-emerald-50 text-emerald-700 border-emerald-100" },
@@ -29,6 +32,9 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
   const [view, setView] = useState<"list" | "calendar">("calendar");
   const [editingApt, setEditingApt] = useState<any>(null);
   const [reschedulingApt, setReschedulingApt] = useState<any>(null);
+  const [generatingInvoiceApt, setGeneratingInvoiceApt] = useState<any>(null);
+  const [invoiceAmount, setInvoiceAmount] = useState<string>("100.00");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const filtered = appointmentsList.filter((a) => {
     const matchesSearch =
@@ -122,7 +128,7 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger>
                           <Button variant="ghost" size="icon" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg hover:bg-gray-100 flex items-center justify-center cursor-pointer border-0 bg-transparent">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -132,6 +138,23 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setReschedulingApt({ ...apt, newDate: apt.date, newTime: apt.time })} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-gray-100 cursor-pointer">Reschedule</DropdownMenuItem>
+                          
+                          {!apt.hasInvoice && apt.status === "Completed" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  setGeneratingInvoiceApt(apt);
+                                  setInvoiceAmount("100.00"); // Default amount
+                                }} 
+                                className="text-sm rounded-lg font-semibold text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 cursor-pointer"
+                              >
+                                <Receipt className="w-4 h-4 mr-2" />
+                                Generate Invoice
+                              </DropdownMenuItem>
+                            </>
+                          )}
+
                           <DropdownMenuItem onClick={() => {
                             setAppointmentsList(prev => prev.map(a => a.id === apt.id ? { ...a, status: "Cancelled" } : a));
                           }} className="text-sm text-red-600 rounded-lg font-medium focus:bg-red-50 focus:text-red-700 cursor-pointer">
@@ -267,6 +290,72 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
               setReschedulingApt(null);
             }} className="rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-md">
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Invoice Dialog */}
+      <Dialog open={!!generatingInvoiceApt} onOpenChange={(open) => !open && setGeneratingInvoiceApt(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
+            <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-emerald-600" />
+              Generate Patient Invoice
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="p-6 space-y-6">
+            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-emerald-600 shadow-md`}>
+                {generatingInvoiceApt?.patient?.[0] || 'P'}
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">{generatingInvoiceApt?.patient}</h3>
+                <p className="text-xs font-semibold text-emerald-600 tracking-wider uppercase mt-1">
+                  {generatingInvoiceApt?.type} - {generatingInvoiceApt?.date}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Invoice Amount ($)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={invoiceAmount}
+                    onChange={(e) => setInvoiceAmount(e.target.value)}
+                    className="pl-10 border-gray-200 focus:ring-emerald-500/20 rounded-xl bg-gray-50/50 font-bold text-lg"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400">Confirm the total amount for the services provided during this visit.</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setGeneratingInvoiceApt(null)} className="rounded-xl font-medium border-gray-200" disabled={isGenerating}>Cancel</Button>
+            <Button 
+              disabled={isGenerating}
+              onClick={async () => {
+                setIsGenerating(true);
+                const res = await generateInvoiceFromAppointment(generatingInvoiceApt.id, parseFloat(invoiceAmount));
+                setIsGenerating(false);
+                
+                if (res.success) {
+                  toast.success("Invoice generated successfully!");
+                  setGeneratingInvoiceApt(null);
+                  // Optionally refresh state or wait for revalidatePath
+                } else {
+                  toast.error(res.error || "Failed to generate invoice");
+                }
+              }} 
+              className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-2"
+            >
+              {isGenerating ? "Generating..." : "Confirm & Generate"}
             </Button>
           </DialogFooter>
         </DialogContent>

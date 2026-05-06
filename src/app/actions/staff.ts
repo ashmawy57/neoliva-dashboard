@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { StaffService } from "@/services/staff.service";
 import { resolveTenantContext } from "@/lib/tenant-context";
+import { ensurePermission } from "@/lib/permissions";
 
 const staffService = new StaffService();
 
 export async function getStaff() {
   try {
+    await ensurePermission('VIEW_STAFF');
     const tenantId = await resolveTenantContext();
     const data = await staffService.getStaffList(tenantId);
 
@@ -55,6 +57,7 @@ export async function getStaff() {
 
 export async function createStaff(formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) {
   try {
+    await ensurePermission('MANAGE_STAFF');
     const tenantId = await resolveTenantContext();
     const data = await staffService.createStaffMember(tenantId, formData);
 
@@ -68,6 +71,7 @@ export async function createStaff(formData: { name: string; role: string; title:
 
 export async function updateStaff(id: string, updates: Partial<{ name: string; role: string; title: string; email: string; phone: string; status: string }>) {
   try {
+    await ensurePermission('MANAGE_STAFF');
     const tenantId = await resolveTenantContext();
     const data = await staffService.updateStaffMember(tenantId, id, updates);
 
@@ -81,6 +85,7 @@ export async function updateStaff(id: string, updates: Partial<{ name: string; r
 
 export async function deleteStaff(id: string) {
   try {
+    await ensurePermission('MANAGE_STAFF');
     const tenantId = await resolveTenantContext();
     await staffService.deleteStaffMember(tenantId, id);
 

@@ -9,13 +9,11 @@ export class DashboardService {
 
   async getDashboardData(tenantId: string) {
     // 1. Low inventory
-    const inventoryData = await this.inventoryRepo.findAll(tenantId, {
-      // select only needed fields if possible, but our repository uses generic findMany
-    });
+    const inventoryData = await this.inventoryRepo.findMany(tenantId);
     const lowInventoryCount = inventoryData.filter(item => item.quantity <= item.minLevel).length;
 
     // 2. Pending payments
-    const invoiceData = await this.invoiceRepo.findAll(tenantId);
+    const invoiceData = await this.invoiceRepo.findMany(tenantId);
     const pendingPayments = invoiceData
       .filter(inv => inv.status !== "PAID")
       .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
@@ -25,7 +23,7 @@ export class DashboardService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const appointmentsData = await this.appointmentRepo.findAll(tenantId, {
+    const appointmentsData = await this.appointmentRepo.findMany(tenantId, {
       where: { date: today },
       include: { patient: { select: { name: true } } }
     });

@@ -1,6 +1,7 @@
 import { BillingRepository } from "@/repositories/billing.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import prisma from "@/lib/prisma";
+import { InvoiceStatus } from "@prisma/client";
 
 const billingRepository = new BillingRepository();
 
@@ -23,7 +24,7 @@ export class BillingService {
 
       return {
         id: inv.id,
-        patientName: `${inv.patient?.firstName} ${inv.patient?.lastName}`,
+        patientName: inv.patient?.name || "Unknown Patient",
         amount: Number(inv.amount),
         status: currentStatus,
         date: inv.createdAt,
@@ -72,8 +73,7 @@ export class BillingService {
   async markAsPaid(id: string) {
     const tenantId = await resolveTenantContext();
     return await billingRepository.update(id, tenantId, {
-      status: 'PAID',
-      paidAt: new Date()
+      status: 'PAID'
     });
   }
 

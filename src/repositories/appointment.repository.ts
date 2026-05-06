@@ -5,10 +5,20 @@ export class AppointmentRepository {
   /**
    * Fetch all appointments for a specific tenant with related patient and doctor info
    */
-  async findMany(tenantId: string) {
+  async findMany(tenantId: string, params?: {
+    where?: Prisma.AppointmentWhereInput;
+    include?: Prisma.AppointmentInclude;
+    orderBy?: Prisma.AppointmentOrderByWithRelationInput | Prisma.AppointmentOrderByWithRelationInput[];
+    skip?: number;
+    take?: number;
+  }) {
     return await prisma.appointment.findMany({
-      where: { tenantId },
-      include: {
+      ...params,
+      where: {
+        ...params?.where,
+        tenantId
+      },
+      include: params?.include || {
         patient: {
           select: {
             id: true,
@@ -30,7 +40,10 @@ export class AppointmentRepository {
           }
         }
       },
-      orderBy: { startTime: 'asc' }
+      orderBy: params?.orderBy || [
+        { date: 'asc' },
+        { time: 'asc' }
+      ]
     });
   }
 
@@ -42,8 +55,8 @@ export class AppointmentRepository {
       where: { id, tenantId },
       include: {
         patient: true,
-        staff: true,
-        treatmentPlanItem: true,
+        doctor: true,
+        service: true,
         invoice: true
       }
     });

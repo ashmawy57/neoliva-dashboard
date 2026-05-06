@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { Invoice, Prisma } from "@prisma/client";
 
 export class InvoiceRepository {
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
     include?: Prisma.InvoiceInclude;

@@ -5,7 +5,7 @@ export class InvoiceService {
   private repository = new InvoiceRepository();
 
   async getInvoices(tenantId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       include: {
         patient: { select: { id: true, name: true } }
       },

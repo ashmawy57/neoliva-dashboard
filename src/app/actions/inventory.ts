@@ -1,85 +1,84 @@
-'use server'
+"use server"
 
-import { revalidatePath } from 'next/cache'
 import { InventoryService } from "@/services/inventory.service";
+import { revalidatePath } from "next/cache";
+import prisma from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant-context";
 
 const inventoryService = new InventoryService();
 
 export async function getInventory() {
   try {
-    const tenantId = await resolveTenantContext();
-    const data = await inventoryService.getInventory(tenantId);
-
-    return data.map((item) => ({
-      id: item.id,
-      name: item.name,
-      category: item.category || 'Uncategorized',
-      quantity: item.quantity,
-      minLevel: item.minLevel,
-      unit: item.unit || 'Units'
-    }));
+    return await inventoryService.getInventoryList();
   } catch (error) {
-    console.error('Error fetching inventory:', error);
+    console.error("Failed to fetch inventory:", error);
     return [];
   }
 }
 
-export async function createInventoryItem(formData: FormData) {
-  const name = formData.get('name') as string
-  const category = formData.get('category') as string
-  const quantityStr = formData.get('quantity') as string
-  const minLevelStr = formData.get('minLevel') as string
-  const unit = formData.get('unit') as string
-
-  if (!name || !category || !quantityStr || !minLevelStr || !unit) {
-    return { error: 'Missing required fields' }
-  }
-
-  const quantity = parseInt(quantityStr, 10)
-  const minLevel = parseInt(minLevelStr, 10)
-
+export async function getLowStockAlerts() {
   try {
-    const tenantId = await resolveTenantContext();
-    await inventoryService.createInventoryItem(tenantId, {
-      name,
-      category,
-      quantity,
-      minLevel,
-      unit
-    });
-
-    revalidatePath('/inventory');
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error creating inventory item:', error);
-    return { error: error.message };
+    return await inventoryService.getLowStockItems();
+  } catch (error) {
+    return [];
   }
 }
 
-export async function updateInventoryItem(id: string, data: any) {
+export async function createInventoryItem(data: any) {
   try {
-    const tenantId = await resolveTenantContext();
-    await inventoryService.updateInventoryItem(tenantId, id, data);
+    let finalData = data;
+    
+    // Handle FormData if passed (from standard form actions)
+    if (data instanceof FormData) {
+      finalData = {
+        name: data.get("name") as string,
+        category: data.get("category") as string,
+        quantity: parseInt(data.get("quantity") as string),
+        minLevel: parseInt(data.get("minLevel") as string),
+        unit: data.get("unit") as string,
+      };
+    }
 
-    revalidatePath('/inventory');
+    await inventoryService.addItem(finalData);
+    revalidatePath("/inventory");
     return { success: true };
   } catch (error: any) {
-    console.error('Error updating inventory item:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
+  }
+}
+
+export async function adjustInventoryStock(id: string, adjustment: number) {
+  try {
+    await inventoryService.adjustStock(id, adjustment);
+    revalidatePath("/inventory");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 
 export async function deleteInventoryItem(id: string) {
   try {
-    const tenantId = await resolveTenantContext();
-    await inventoryService.deleteInventoryItem(tenantId, id);
-
-    revalidatePath('/inventory');
+    await inventoryService.deleteItem(id);
+    revalidatePath("/inventory");
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting inventory item:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }
 
+export async function mapServiceConsumable(serviceId: string, inventoryId: string, quantity: number) {
+  try {
+    const tenantId = await resolveTenantContext();
+    await prisma.serviceInventoryUsage.upsert({
+      where: {
+        serviceId_inventoryId: { serviceId, inventoryId }
+      },
+      update: { quantity, tenantId },
+      create: { serviceId, inventoryId, quantity, tenantId }
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
