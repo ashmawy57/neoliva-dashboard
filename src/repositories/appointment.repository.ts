@@ -1,56 +1,79 @@
 import prisma from "@/lib/prisma";
-import { Appointment, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export class AppointmentRepository {
-  async findAll(tenantId: string, params?: {
-    skip?: number;
-    take?: number;
-    include?: Prisma.AppointmentInclude;
-    orderBy?: Prisma.AppointmentOrderByWithRelationInput;
-  }): Promise<Appointment[]> {
-    return prisma.appointment.findMany({
-      ...params,
-      where: {
-        tenantId,
+  /**
+   * Fetch all appointments for a specific tenant with related patient and doctor info
+   */
+  async findMany(tenantId: string) {
+    return await prisma.appointment.findMany({
+      where: { tenantId },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            phone: true
+          }
+        },
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        invoice: {
+          select: {
+            id: true,
+            status: true,
+            amount: true
+          }
+        }
       },
+      orderBy: { startTime: 'asc' }
     });
   }
 
-  async findById(tenantId: string, id: string, include?: Prisma.AppointmentInclude): Promise<Appointment | null> {
-    return prisma.appointment.findFirst({
-      where: {
-        id,
-        tenantId,
-      },
-      include,
+  /**
+   * Find a specific appointment by ID within a tenant context
+   */
+  async findUnique(id: string, tenantId: string) {
+    return await prisma.appointment.findUnique({
+      where: { id, tenantId },
+      include: {
+        patient: true,
+        staff: true,
+        treatmentPlanItem: true,
+        invoice: true
+      }
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.AppointmentCreateInput, 'tenant'>): Promise<Appointment> {
-    return prisma.appointment.create({
-      data: {
-        ...data,
-        tenant: { connect: { id: tenantId } },
-      },
+  /**
+   * Create a new appointment
+   */
+  async create(data: Prisma.AppointmentUncheckedCreateInput) {
+    return await prisma.appointment.create({
+      data
     });
   }
 
-  async update(tenantId: string, id: string, data: Prisma.AppointmentUpdateInput): Promise<Appointment> {
-    return prisma.appointment.update({
-      where: {
-        id,
-        tenantId,
-      },
-      data,
+  /**
+   * Update an appointment status or details
+   */
+  async update(id: string, tenantId: string, data: Prisma.AppointmentUncheckedUpdateInput) {
+    return await prisma.appointment.update({
+      where: { id, tenantId },
+      data
     });
   }
 
-  async delete(tenantId: string, id: string): Promise<Appointment> {
-    return prisma.appointment.delete({
-      where: {
-        id,
-        tenantId,
-      },
+  /**
+   * Delete/Cancel an appointment
+   */
+  async delete(id: string, tenantId: string) {
+    return await prisma.appointment.delete({
+      where: { id, tenantId }
     });
   }
 }

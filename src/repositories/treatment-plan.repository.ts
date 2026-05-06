@@ -6,7 +6,9 @@ export class TreatmentPlanRepository {
     where?: Prisma.TreatmentPlanWhereInput;
     include?: Prisma.TreatmentPlanInclude;
     orderBy?: Prisma.TreatmentPlanOrderByWithRelationInput;
-  }): Promise<TreatmentPlan[]> {
+    take?: number;
+    skip?: number;
+  }): Promise<any[]> {
     return prisma.treatmentPlan.findMany({
       ...params,
       where: {

@@ -11,6 +11,10 @@ export class StaffService {
   }
 
   async createStaffMember(tenantId: string, data: any) {
+    const inviteToken = crypto.randomUUID();
+    const inviteExpiresAt = new Date();
+    inviteExpiresAt.setDate(inviteExpiresAt.getDate() + 7); // 7 days expiry
+
     return this.repository.create(tenantId, {
       displayId: `STF-${Math.floor(1000 + Math.random() * 9000)}`,
       name: data.name,
@@ -18,7 +22,10 @@ export class StaffService {
       title: data.title,
       email: data.email,
       phone: data.phone,
-      status: 'Online'
+      status: 'Offline',
+      inviteToken,
+      inviteExpiresAt,
+      inviteAccepted: false
     });
   }
 

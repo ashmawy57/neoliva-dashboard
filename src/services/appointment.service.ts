@@ -1,50 +1,123 @@
 import { AppointmentRepository } from "@/repositories/appointment.repository";
-import { Appointment, Prisma } from "@prisma/client";
+import { resolveTenantContext } from "@/lib/tenant-context";
+import { InventoryService } from "./inventory.service";
+
+const appointmentRepository = new AppointmentRepository();
+const inventoryService = new InventoryService();
 
 export class AppointmentService {
-  private repository = new AppointmentRepository();
+  /**
+   * Get formatted list of appointments for the main table/list view
+   */
+  async getAppointmentsList() {
+    const tenantId = await resolveTenantContext();
+    const appointments = await appointmentRepository.findMany(tenantId);
 
-  async getAppointments(tenantId: string) {
-    return this.repository.findAll(tenantId, {
-      include: {
-        patient: { select: { id: true, name: true } },
-        doctor: { select: { id: true, name: true } }
-      },
-      orderBy: { date: 'asc' }
-    });
+    return appointments.map(apt => ({
+      id: apt.id,
+      patient: apt.patient?.name || "Unknown Patient",
+      doctor: apt.staff?.name ? `Dr. ${apt.staff.name}` : "No Doctor",
+      startTime: apt.startTime,
+      endTime: apt.endTime,
+      status: apt.status,
+      type: apt.type,
+      notes: apt.notes,
+      hasInvoice: !!apt.invoice,
+      invoiceStatus: apt.invoice?.status,
+      invoiceAmount: apt.invoice?.amount ? Number(apt.invoice.amount) : 0
+    }));
   }
 
-  async createAppointment(tenantId: string, data: any) {
-    const { patientId, doctorId, serviceId, ...rest } = data;
+  /**
+   * Get appointments formatted for Calendar view
+   */
+  async getAppointmentsCalendarView() {
+    const tenantId = await resolveTenantContext();
+    const appointments = await appointmentRepository.findMany(tenantId);
+
+    return appointments.map(apt => ({
+      id: apt.id,
+      title: `${apt.patient?.name || "Unknown"} - ${apt.type}`,
+      start: apt.startTime,
+      end: apt.endTime,
+      extendedProps: {
+        status: apt.status,
+        doctor: apt.staff?.name ? `Dr. ${apt.staff.name}` : "No Doctor",
+        patientId: apt.patientId
+      }
+    }));
+  }
+
+  /**
+   * Get summary stats for today's appointments
+   */
+  async getAppointmentStats() {
+    const tenantId = await resolveTenantContext();
+    const appointments = await appointmentRepository.findMany(tenantId);
     
-    return this.repository.create(tenantId, {
-      ...rest,
-      displayId: `APT-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: new Date(data.date),
-      time: new Date(`${data.date}T${data.time}:00`),
-      duration: parseInt(data.duration || '30'),
-      status: (data.status as any) || 'SCHEDULED',
-      patient: { connect: { id: patientId } },
-      doctor: { connect: { id: doctorId } },
-      ...(serviceId ? { service: { connect: { id: serviceId } } } : {})
+    const today = new Date().toDateString();
+    const todayApts = appointments.filter(a => new Date(a.startTime).toDateString() === today);
+
+    return {
+      totalToday: todayApts.length,
+      completed: todayApts.filter(a => a.status === 'COMPLETED').length,
+      inProgress: todayApts.filter(a => a.status === 'IN_PROGRESS').length,
+      cancelled: todayApts.filter(a => a.status === 'CANCELLED').length
+    };
+  }
+
+  /**
+   * Get detailed info for a single appointment
+   */
+  async getAppointmentDetails(id: string) {
+    const tenantId = await resolveTenantContext();
+    return await appointmentRepository.findUnique(id, tenantId);
+  }
+
+  /**
+   * Create a new appointment
+   */
+  async createAppointment(data: {
+    patientId: string;
+    staffId: string;
+    startTime: Date;
+    endTime: Date;
+    type: string;
+    notes?: string;
+  }) {
+    const tenantId = await resolveTenantContext();
+    return await appointmentRepository.create({
+      ...data,
+      tenantId,
+      status: 'SCHEDULED'
     });
   }
 
-  async updateAppointment(tenantId: string, id: string, updates: any) {
-    const { patientId, doctorId, serviceId, ...rest } = updates;
+  /**
+   * Update appointment status and handle automatic triggers
+   */
+  async updateStatus(id: string, status: string) {
+    const tenantId = await resolveTenantContext();
     
-    return this.repository.update(tenantId, id, {
-      ...rest,
-      ...(updates.date ? { date: new Date(updates.date) } : {}),
-      ...(updates.time && updates.date ? { time: new Date(`${updates.date}T${updates.time}:00`) } : {}),
-      ...(patientId ? { patient: { connect: { id: patientId } } } : {}),
-      ...(doctorId ? { doctor: { connect: { id: doctorId } } } : {}),
-      ...(serviceId ? { service: { connect: { id: serviceId } } } : {}),
-      updatedAt: new Date()
-    });
+    // 1. Fetch current appointment to get serviceId
+    const appointment = await appointmentRepository.findUnique(id, tenantId);
+    
+    // 2. Update status
+    const updated = await appointmentRepository.update(id, tenantId, { status });
+
+    // 3. If completed, trigger smart logic
+    if (status === 'COMPLETED' && appointment?.serviceId) {
+      await inventoryService.consumeItemsFromService(appointment.serviceId);
+    }
+
+    return updated;
   }
 
-  async deleteAppointment(tenantId: string, id: string) {
-    return this.repository.delete(tenantId, id);
+  /**
+   * Cancel/Delete appointment
+   */
+  async cancelAppointment(id: string) {
+    const tenantId = await resolveTenantContext();
+    return await appointmentRepository.delete(id, tenantId);
   }
 }

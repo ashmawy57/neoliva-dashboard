@@ -1,34 +1,99 @@
 import { InventoryRepository } from "@/repositories/inventory.repository";
-import { Inventory, Prisma } from "@prisma/client";
+import { resolveTenantContext } from "@/lib/tenant-context";
+
+const inventoryRepository = new InventoryRepository();
 
 export class InventoryService {
-  private repository = new InventoryRepository();
+  /**
+   * Get formatted inventory list with status alerts
+   */
+  async getInventoryList() {
+    const tenantId = await resolveTenantContext();
+    const items = await inventoryRepository.findMany(tenantId);
 
-  async getInventory(tenantId: string) {
-    return this.repository.findAll(tenantId, {
-      orderBy: { name: 'asc' }
+    return items.map(item => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      minLevel: item.minLevel,
+      unit: item.unit || 'pcs',
+      status: (item.quantity <= item.minLevel ? 'Low' : 'OK') as 'Low' | 'OK',
+      location: item.location,
+      lastUpdated: item.updatedAt
+    }));
+  }
+
+  /**
+   * Get items that are below or at minimum stock level
+   */
+  async getLowStockItems() {
+    const tenantId = await resolveTenantContext();
+    const items = await inventoryRepository.findMany(tenantId);
+    return items.filter(item => item.quantity <= item.minLevel);
+  }
+
+  /**
+   * Adjust stock manually (restock or manual correction)
+   */
+  async adjustStock(id: string, adjustment: number) {
+    const tenantId = await resolveTenantContext();
+    const item = await inventoryRepository.findUnique(id, tenantId);
+    
+    if (!item) throw new Error("Item not found");
+    
+    const newQuantity = Math.max(0, item.quantity + adjustment);
+    
+    return await inventoryRepository.update(id, tenantId, {
+      quantity: newQuantity
     });
   }
 
-  async createInventoryItem(tenantId: string, data: any) {
-    return this.repository.create(tenantId, {
-      name: data.name,
-      category: data.category,
-      quantity: data.quantity,
-      minLevel: data.minLevel,
-      unit: data.unit,
-      displayId: `INV-${Math.floor(1000 + Math.random() * 9000)}`
-    });
+  /**
+   * Deduct items based on service usage
+   */
+  async consumeItemsFromService(serviceId: string) {
+    const tenantId = await resolveTenantContext();
+    const usages = await inventoryRepository.getServiceUsages(serviceId, tenantId);
+
+    if (usages.length === 0) return;
+
+    // Perform deduction for each item used in this service
+    for (const usage of usages) {
+      const currentItem = usage.inventory;
+      const newQuantity = Math.max(0, currentItem.quantity - usage.quantity);
+      
+      await inventoryRepository.update(currentItem.id, tenantId, {
+        quantity: newQuantity
+      });
+      
+      // Potential to log usage history here if needed
+    }
   }
 
-  async updateInventoryItem(tenantId: string, id: string, data: any) {
-    return this.repository.update(tenantId, id, {
+  /**
+   * Add new item to inventory
+   */
+  async addItem(data: {
+    name: string;
+    category: string;
+    quantity: number;
+    minLevel: number;
+    unit?: string;
+    location?: string;
+  }) {
+    const tenantId = await resolveTenantContext();
+    return await inventoryRepository.create({
       ...data,
-      updatedAt: new Date()
+      tenantId
     });
   }
 
-  async deleteInventoryItem(tenantId: string, id: string) {
-    return this.repository.delete(tenantId, id);
+  /**
+   * Delete item
+   */
+  async deleteItem(id: string) {
+    const tenantId = await resolveTenantContext();
+    return await inventoryRepository.delete(id, tenantId);
   }
 }
