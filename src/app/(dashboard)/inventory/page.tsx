@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { getInventory, getLowStockAlerts } from "@/app/actions/inventory";
 import InventoryView from "@/components/inventory/InventoryView";
 import { Suspense } from "react";

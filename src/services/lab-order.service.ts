@@ -5,7 +5,7 @@ export class LabOrderService {
   private repository = new LabOrderRepository();
 
   async getLabOrders(tenantId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       include: {
         patient: { select: { name: true } }
       }

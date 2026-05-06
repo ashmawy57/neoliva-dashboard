@@ -26,23 +26,22 @@ export async function getAppointmentStats() {
 
 export async function createAppointment(data: any) {
   try {
-    const tenantId = await resolveTenantContext();
-    // Logic will be handled in service in next step
-    // For now, let's ensure we have a standard pattern
+    const created = await appointmentService.createAppointment(data);
     revalidatePath('/appointments');
-    return { success: true };
+    revalidatePath('/dashboard');
+    return { success: true, data: created };
   } catch (error: any) {
     console.error('Error creating appointment:', error);
-    throw new Error('Failed to create appointment');
+    throw new Error(error.message || 'Failed to create appointment');
   }
 }
 
-export async function updateAppointmentStatus(id: string, status: string) {
+export async function updateAppointmentStatus(id: string, status: any) {
   try {
-    const tenantId = await resolveTenantContext();
-    // Logic will be handled in service
+    const updated = await appointmentService.updateStatus(id, status);
     revalidatePath('/appointments');
-    return { success: true };
+    revalidatePath('/dashboard');
+    return { success: true, data: updated };
   } catch (error: any) {
     console.error('Error updating appointment:', error);
     throw new Error('Failed to update appointment');

@@ -5,19 +5,23 @@ export class ServiceService {
   private repository = new ServiceRepository();
 
   async getServices(tenantId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       orderBy: { name: 'asc' }
     });
   }
 
   async createService(tenantId: string, data: any) {
+    const { inventoryUsages, ...serviceData } = data;
+    
     return this.repository.create(tenantId, {
-      name: data.name,
-      price: data.price,
-      duration: data.duration,
-      description: data.description,
-      category: data.category,
-      popular: data.popular || false
+      ...serviceData,
+      inventoryUsages: inventoryUsages?.length ? {
+        create: inventoryUsages.map((usage: any) => ({
+          inventoryId: usage.inventoryId,
+          quantity: usage.quantity,
+          tenantId: tenantId
+        }))
+      } : undefined
     });
   }
 

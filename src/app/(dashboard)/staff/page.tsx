@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { Card, CardContent } from "@/components/ui/card";
 import { NewStaffDialog } from "@/components/staff/NewStaffDialog";
 import { StaffTable } from "@/components/staff/StaffTable";

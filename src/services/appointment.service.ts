@@ -99,6 +99,7 @@ export class AppointmentService {
   async createAppointment(data: {
     patientId: string;
     doctorId: string;
+    serviceId?: string;
     date: Date;
     time: Date;
     duration: number;

@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { Staff, Prisma } from "@prisma/client";
 
 export class StaffRepository {
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
     orderBy?: Prisma.StaffOrderByWithRelationInput;

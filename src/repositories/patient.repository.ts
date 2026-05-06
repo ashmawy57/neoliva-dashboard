@@ -5,7 +5,7 @@ export class PatientRepository {
   /**
    * Enforces tenant isolation for all patient queries
    */
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
     where?: Prisma.PatientWhereInput;

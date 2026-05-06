@@ -5,7 +5,7 @@ export class ExpenseService {
   private repository = new ExpenseRepository();
 
   async getExpenses(tenantId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       orderBy: { createdAt: 'desc' }
     });
   }

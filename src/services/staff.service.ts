@@ -5,7 +5,7 @@ export class StaffService {
   private repository = new StaffRepository();
 
   async getStaffList(tenantId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       orderBy: { name: 'asc' }
     });
   }

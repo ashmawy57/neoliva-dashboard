@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { LabOrder, Prisma } from "@prisma/client";
 
 export class LabOrderRepository {
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
     include?: Prisma.LabOrderInclude;

@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { Expense, Prisma } from "@prisma/client";
 
 export class ExpenseRepository {
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
     orderBy?: Prisma.ExpenseOrderByWithRelationInput;

@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { TreatmentPlan, TreatmentPlanItem, Prisma } from "@prisma/client";
 
 export class TreatmentPlanRepository {
-  async findAll(tenantId: string, params?: {
+  async findMany(tenantId: string, params?: {
     where?: Prisma.TreatmentPlanWhereInput;
     include?: Prisma.TreatmentPlanInclude;
     orderBy?: Prisma.TreatmentPlanOrderByWithRelationInput;

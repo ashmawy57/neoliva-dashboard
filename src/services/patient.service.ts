@@ -5,7 +5,7 @@ const patientRepository = new PatientRepository();
 
 export class PatientService {
   async getAllPatients(tenantId: string) {
-    return patientRepository.findAll(tenantId, {
+    return patientRepository.findMany(tenantId, {
       orderBy: { createdAt: 'desc' },
       include: {
         appointments: {

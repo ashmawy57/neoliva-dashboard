@@ -5,7 +5,7 @@ export class TreatmentPlanService {
   private repository = new TreatmentPlanRepository();
 
   async getTreatmentPlans(tenantId: string, patientId: string) {
-    return this.repository.findAll(tenantId, {
+    return this.repository.findMany(tenantId, {
       where: { patientId },
       include: { items: true },
       orderBy: { createdAt: 'desc' }
