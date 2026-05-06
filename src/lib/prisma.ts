@@ -4,6 +4,10 @@ import { Pool } from "pg";
 
 const prismaClientSingleton = () => {
   const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error("CRITICAL: DATABASE_URL is not set in environment variables.");
+  }
+  
   // Use a pool with a low connection count for dev to avoid exhausting resources
   const pool = new Pool({ 
     connectionString,
