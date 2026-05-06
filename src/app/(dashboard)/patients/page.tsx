@@ -1,10 +1,13 @@
-import { Users as UsersIcon } from "lucide-react";
 import { AddPatientDialog } from "@/components/patients/AddPatientDialog";
-import { getPatients } from "@/app/actions/patients";
 import { PatientsTable } from "@/components/patients/PatientsTable";
+import { PatientService } from "@/services/patient.service";
+import { resolveTenantContext } from "@/lib/tenant-context";
+
+const patientService = new PatientService();
 
 export default async function PatientsPage() {
-  const patientsData = await getPatients();
+  const tenantId = await resolveTenantContext();
+  const patientsData = await patientService.getPatientsList(tenantId);
 
   return (
     <div className="space-y-6 animate-fade-in-up">

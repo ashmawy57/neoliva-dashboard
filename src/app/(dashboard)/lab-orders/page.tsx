@@ -7,9 +7,9 @@ import { getLabOrders } from "@/app/actions/lab_orders";
 export default async function LabOrdersPage() {
   const labOrders = await getLabOrders();
 
-  const totalActive = labOrders.filter(o => o.status === "In Progress" || o.status === "Pending").length;
-  const dueThisWeek = labOrders.filter(o => o.status === "In Progress" || o.status === "Pending").length; 
-  const received = labOrders.filter(o => o.status === "Received").length;
+  const totalActive = labOrders.filter(o => o.status === "IN_PROGRESS" || o.status === "SENT").length;
+  const dueThisWeek = labOrders.filter(o => o.status === "IN_PROGRESS" || o.status === "SENT").length; 
+  const received = labOrders.filter(o => o.status === "RECEIVED").length;
   const totalCost = labOrders.reduce((acc, curr) => acc + (curr.cost || 0), 0);
 
   const stats = [

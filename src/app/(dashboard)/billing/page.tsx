@@ -7,16 +7,14 @@ import {
   Download, Printer, TrendingUp, Receipt
 } from "lucide-react";
 import Link from "next/link";
-import { getInvoices } from "@/app/actions/invoices";
+import { getInvoices, getBillingStats } from "@/app/actions/billing";
 import { NewInvoiceDialog } from "@/components/billing/NewInvoiceDialog";
 
 export default async function BillingPage() {
-  const transactions = await getInvoices();
-
-  const totalRevenue = transactions.filter(t => t.status === "Paid").reduce((acc, curr) => acc + curr.amount, 0);
-  const paidCount = transactions.filter(t => t.status === "Paid").length;
-  const outstandingAmount = transactions.filter(t => t.status !== "Paid").reduce((acc, curr) => acc + curr.amount, 0);
-  const outstandingCount = transactions.filter(t => t.status !== "Paid").length;
+  const [transactions, stats] = await Promise.all([
+    getInvoices(),
+    getBillingStats()
+  ]);
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -46,33 +44,33 @@ export default async function BillingPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-bold">${totalRevenue.toLocaleString()}</div>
+            <div className="text-3xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
           </CardContent>
         </Card>
 
         <Card className="card-hover border-0 shadow-sm bg-white overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Paid Invoices</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Pending Payments</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
               <CreditCard className="h-4 w-4 text-blue-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{paidCount}</div>
+            <div className="text-3xl font-bold text-gray-900">${stats.pendingAmount.toLocaleString()}</div>
           </CardContent>
         </Card>
 
         <Card className="card-hover border-0 shadow-sm bg-white overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Outstanding Payments</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Overdue Amount</CardTitle>
             <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
               <DollarSign className="h-4 w-4 text-red-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-600">${outstandingAmount.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-red-600">${stats.overdueAmount.toLocaleString()}</div>
             <p className="text-xs text-red-600 font-semibold mt-2 flex items-center gap-1">
-              <ArrowDownRight className="w-3 h-3" /> {outstandingCount} invoices overdue
+              <ArrowDownRight className="w-3 h-3" /> Requires attention
             </p>
           </CardContent>
         </Card>
@@ -90,10 +88,9 @@ export default async function BillingPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice</TableHead>
+                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice #</TableHead>
                 <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</TableHead>
                 <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</TableHead>
-                <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Method</TableHead>
                 <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
                 <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Amount</TableHead>
                 <TableHead className="w-[80px]"></TableHead>
@@ -103,22 +100,24 @@ export default async function BillingPage() {
               {transactions.map((tx) => (
                 <TableRow key={tx.id} className="table-row-hover group">
                   <TableCell className="text-sm font-medium text-gray-500">
-                    {tx.id.toString().substring(0, 8)}
+                    {tx.invoiceNumber}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${tx.color} flex items-center justify-center text-white font-bold text-[10px]`}>
-                        {tx.avatar}
+                      <div className={`w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-[10px]`}>
+                        {tx.patientName.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">{tx.patient}</span>
+                      <span className="text-sm font-semibold text-gray-900">{tx.patientName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-500">{tx.date}</TableCell>
-                  <TableCell className="text-sm text-gray-500">{tx.method}</TableCell>
+                  <TableCell className="text-sm text-gray-500">
+                    {tx.date ? new Date(tx.date).toLocaleDateString() : 'N/A'}
+                  </TableCell>
                   <TableCell>
-                    <Badge className={`text-[11px] font-semibold rounded-full px-2.5 border-none ${tx.status === "Paid" ? "bg-emerald-50 text-emerald-700" :
-                        tx.status === "Pending" ? "bg-amber-50 text-amber-700" :
-                          "bg-red-50 text-red-700"
+                    <Badge className={`text-[11px] font-semibold rounded-full px-2.5 border-none ${
+                        tx.status === "PAID" ? "bg-emerald-50 text-emerald-700" :
+                        tx.status === "PENDING" ? "bg-amber-50 text-amber-700" :
+                        "bg-red-50 text-red-700"
                       }`}>
                       {tx.status}
                     </Badge>
@@ -134,8 +133,11 @@ export default async function BillingPage() {
               ))}
               {transactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No transactions found.
+                  <TableCell colSpan={6} className="text-center py-20 text-gray-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <Receipt className="w-10 h-10 text-gray-200" />
+                      <p>No transactions found.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

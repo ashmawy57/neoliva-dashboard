@@ -3,18 +3,21 @@ import {
   CalendarDays, Clock, 
   CheckCircle2, XCircle
 } from "lucide-react";
-import { getAppointments } from "@/app/actions/appointments";
+import { getAppointments, getAppointmentStats } from "@/app/actions/appointments";
 import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDialog";
 import { AppointmentsView } from "@/components/appointments/AppointmentsView";
 
 export default async function AppointmentsPage() {
-  const appointmentsList = await getAppointments();
+  const [appointmentsList, statsData] = await Promise.all([
+    getAppointments(),
+    getAppointmentStats()
+  ]);
 
   const stats = [
-    { label: "Total Today", value: "24", icon: CalendarDays, accent: "text-blue-600 bg-blue-50" },
-    { label: "Completed", value: "8", icon: CheckCircle2, accent: "text-emerald-600 bg-emerald-50" },
-    { label: "In Progress", value: "2", icon: Clock, accent: "text-amber-600 bg-amber-50" },
-    { label: "Cancelled", value: "1", icon: XCircle, accent: "text-red-600 bg-red-50" },
+    { label: "Total Today", value: statsData.totalToday.toString(), icon: CalendarDays, accent: "text-blue-600 bg-blue-50" },
+    { label: "Completed", value: statsData.completed.toString(), icon: CheckCircle2, accent: "text-emerald-600 bg-emerald-50" },
+    { label: "In Progress", value: statsData.inProgress.toString(), icon: Clock, accent: "text-amber-600 bg-amber-50" },
+    { label: "Cancelled", value: statsData.cancelled.toString(), icon: XCircle, accent: "text-red-600 bg-red-50" },
   ];
 
   return (
