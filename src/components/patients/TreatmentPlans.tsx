@@ -68,34 +68,7 @@ function calcCost(phases: Phase[]): string {
   return `$${total.toLocaleString()}`;
 }
 
-const initialPlans: Plan[] = [
-  {
-    id: "TP-2024-001",
-    title: "Root Canal & Crown (Tooth #16)",
-    status: "Active",
-    progress: 50,
-    cost: "$1,200",
-    created: "Feb 20, 2024",
-    notes: "",
-    phases: [
-      { id: "ph-1", step: 1, name: "Initial Consultation & X-Rays", status: "Completed", date: "Feb 20, 2024", price: "$150", notes: "" },
-      { id: "ph-2", step: 2, name: "Root Canal Treatment", status: "Completed", date: "Mar 15, 2024", price: "$650", notes: "" },
-      { id: "ph-3", step: 3, name: "Crown Placing", status: "Planned", date: "Apr 05, 2024", price: "$400", notes: "" },
-    ],
-  },
-  {
-    id: "TP-2023-104",
-    title: "Wisdom Teeth Extraction",
-    status: "Completed",
-    progress: 100,
-    cost: "$800",
-    created: "Nov 10, 2023",
-    notes: "",
-    phases: [
-      { id: "ph-4", step: 1, name: "Extraction (#38, #48)", status: "Completed", date: "Nov 25, 2023", price: "$800", notes: "" },
-    ],
-  },
-];
+
 
 export function TreatmentPlans({ 
   patientId,

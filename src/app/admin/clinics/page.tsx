@@ -3,7 +3,8 @@ import { getAllTenants, updateTenantStatus } from "@/app/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Building2, Users, Calendar, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Building2, Users, Calendar, Shield, LogOut } from "lucide-react";
+import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
 
 export default async function AdminClinicsPage() {
   const tenants = await getAllTenants();
@@ -11,15 +12,20 @@ export default async function AdminClinicsPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 bg-slate-50 min-h-screen">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clinic Registrations</h1>
-          <p className="text-gray-500">Manage and approve new dental clinic requests</p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Clinic Registrations</h1>
+            <p className="text-gray-500 text-sm">Manage and approve new dental clinic requests</p>
+          </div>
         </div>
+        <AdminLogoutButton />
       </div>
 
       <div className="grid gap-6">
         {tenants.map((tenant) => {
-          // Pre-binding the actions for reliability
           const approveAction = updateTenantStatus.bind(null, tenant.id, 'APPROVED');
           const rejectAction = updateTenantStatus.bind(null, tenant.id, 'REJECTED');
 
@@ -35,7 +41,7 @@ export default async function AdminClinicsPage() {
                     <p className="text-xs text-gray-400 font-mono">ID: {tenant.id}</p>
                   </div>
                 </div>
-                <Badge 
+                <Badge
                   className={`px-3 py-1 rounded-full text-xs font-semibold ${
                     tenant.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                     tenant.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-100' :
@@ -63,7 +69,7 @@ export default async function AdminClinicsPage() {
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-end gap-3">
                     {tenant.status === 'PENDING' && (
                       <>

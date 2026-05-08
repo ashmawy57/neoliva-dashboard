@@ -258,10 +258,11 @@ export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () 
   const deleteDiagnosis = (id: string) => {
     setDiagnoses(prev => prev.filter(d => d.id !== id));
     startTransition(async () => {
-      await deleteVisitRecord(id, patient.id);
+      await deleteVisitRecord(patient.id, id);
       onRefresh?.();
     });
   };
+
 
   const addPrescription = () => {
     if (!newPrescription.medication.trim() || !newPrescription.dosage.trim()) return;

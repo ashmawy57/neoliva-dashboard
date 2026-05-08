@@ -7,19 +7,20 @@ const prismaClientSingleton = () => {
   if (!connectionString) {
     console.error("CRITICAL: DATABASE_URL is not set in environment variables.");
   }
-  
-  // Use a pool with a low connection count for dev to avoid exhausting resources
-  const pool = new Pool({ 
+
+  const pool = new Pool({
     connectionString,
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    max: 5,                        // Supabase free tier: keep low
+    idleTimeoutMillis: 60000,      // 60s idle before closing
+    connectionTimeoutMillis: 10000, // 10s to establish connection (was 2s)
+    query_timeout: 30000,          // 30s max per query
+    statement_timeout: 30000,      // 30s statement timeout
   });
-  
+
   const adapter = new PrismaPg(pool);
-  return new PrismaClient({ 
+  return new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 };
 

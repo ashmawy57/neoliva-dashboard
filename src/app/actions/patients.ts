@@ -317,6 +317,18 @@ export async function addVisitRecord(patientId: string, visit: any) {
   }
 }
 
+export async function deleteVisitRecord(patientId: string, visitId: string) {
+  const tenantId = await resolveTenantContext();
+  try {
+    await patientService.deleteVisitRecord(tenantId, visitId);
+    revalidatePath(`/patients/${patientId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting visit record:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function updateToothCondition(patientId: string, toothNumber: number, condition: string, notes: string) {
   const tenantId = await resolveTenantContext();
   try {
@@ -325,25 +337,6 @@ export async function updateToothCondition(patientId: string, toothNumber: numbe
     return { success: true };
   } catch (error: any) {
     console.error('Error updating tooth condition:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function updatePeriodontalMeasurement(patientId: string, measurement: any) {
-  const tenantId = await resolveTenantContext();
-  try {
-    await patientService.updatePeriodontalMeasurement(tenantId, patientId, {
-      toothNumber: measurement.toothNumber,
-      parameterName: measurement.parameterName,
-      buccalValues: measurement.buccalValues,
-      lingualValues: measurement.lingualValues,
-      singleValue: measurement.singleValue,
-      measurementDate: measurement.date ? new Date(measurement.date) : new Date()
-    });
-    revalidatePath(`/patients/${patientId}`);
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error updating periodontal measurement:', error);
     return { success: false, error: error.message };
   }
 }
@@ -359,6 +352,100 @@ export async function updatePatientNotes(patientId: string, notes: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function uploadToothPhoto(patientId: string, toothNumber: number, formData: FormData) {
+  const tenantId = await resolveTenantContext();
+  try {
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+
+    const file = formData.get('file') as File;
+    if (!file) return { success: false, error: 'No file provided' };
+
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${tenantId}/${patientId}/teeth/${toothNumber}/${Date.now()}.${ext}`;
+
+    const bytes = await file.arrayBuffer();
+    const { error: uploadError } = await supabase.storage
+      .from('patient-photos')
+      .upload(path, bytes, { contentType: file.type, upsert: false });
+
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: urlData } = supabase.storage.from('patient-photos').getPublicUrl(path);
+
+    const doc = await patientService.addDocument(tenantId, patientId, {
+      name: `tooth-${toothNumber}-${file.name}`,
+      type: `TOOTH_PHOTO_${toothNumber}`,
+      fileUrl: urlData.publicUrl,
+    });
+
+    revalidatePath(`/patients/${patientId}`);
+    return { success: true, document: doc };
+  } catch (error: any) {
+    console.error('Error uploading tooth photo:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteToothPhoto(patientId: string, documentId: string, fileUrl: string) {
+  const tenantId = await resolveTenantContext();
+  try {
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+
+    try {
+      const url = new URL(fileUrl);
+      const storagePath = url.pathname.split('/patient-photos/')[1];
+      if (storagePath) {
+        await supabase.storage.from('patient-photos').remove([storagePath]);
+      }
+    } catch {
+      // Storage cleanup failed — log but continue to remove DB record
+      console.warn('Storage file removal failed for:', fileUrl);
+    }
+
+    await patientService.deleteDocument(tenantId, documentId);
+    revalidatePath(`/patients/${patientId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting tooth photo:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+
+export async function updatePeriodontalMeasurement(patientId: string, measurement: any) {
+  const tenantId = await resolveTenantContext();
+  try {
+    await patientService.updatePeriodontalMeasurement(tenantId, patientId, {
+      toothNumber: measurement.toothNumber,
+      parameterName: measurement.parameterName,
+      buccalValues: measurement.buccalValues,
+      lingualValues: measurement.lingualValues,
+      singleValue: measurement.singleValue ?? null,
+      measurementDate: measurement.date ? new Date(measurement.date) : new Date()
+    });
+    revalidatePath(`/patients/${patientId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating periodontal measurement:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function clearPeriodontalMeasurements(patientId: string) {
+  const tenantId = await resolveTenantContext();
+  try {
+    await patientService.clearPeriodontalMeasurements(tenantId, patientId);
+    revalidatePath(`/patients/${patientId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error clearing periodontal measurements:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 
 export async function addMedicalCondition(
   patientId: string, 
@@ -639,14 +726,3 @@ export async function deletePrescription(id: string, patientId: string) {
   }
 }
 
-export async function deleteVisitRecord(id: string, patientId: string) {
-  const tenantId = await resolveTenantContext();
-  try {
-    await patientService.deleteVisitRecord(tenantId, id);
-    revalidatePath(`/patients/${patientId}`);
-    return { success: true };
-  } catch (error: any) {
-    console.error("Error deleting visit record:", error);
-    return { success: false, error: error.message };
-  }
-}

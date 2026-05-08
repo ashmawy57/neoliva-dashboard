@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import {
   Stethoscope, Plus, Trash2, Save, Search, Filter, Calendar, Clock,
   User, FileText, ChevronDown, ChevronUp, Eye, Printer, Hash, X, SlidersHorizontal
 } from "lucide-react";
+import { addVisitRecord, deleteVisitRecord } from "@/app/actions/patients";
 
 // ============ TYPES ============
 interface Visit {
@@ -77,28 +79,30 @@ function categorizeVisit(treatment: string): VisitCategory {
   return "Other";
 }
 
-export function VisitHistory({ visits: initialVisits }: { visits: VisitInput[] }) {
+export function VisitHistory({ visits: initialVisits, patientId }: { visits: VisitInput[]; patientId: string }) {
   // ============ STATE ============
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const mapVisit = (v: any, i: number): Visit => ({
+    id: v.id ?? `v-${i}`,
+    date: v.date ?? "",
+    treatment: v.treatment ?? "",
+    doctor: v.doctor ?? "",
+    notes: v.notes ?? "",
+    tooth: v.tooth ?? "",
+    category: categorizeVisit(v.treatment ?? ""),
+    duration: "45 min",
+    cost: "",
+    attachments: [],
+  });
+
   const [visits, setVisits] = useState<Visit[]>(
-    (initialVisits ?? []).map((v, i) => ({
-      id: `v-${i}`,
-      ...v,
-      category: categorizeVisit(v.treatment),
-      duration: "45 min",
-      cost: "",
-      attachments: [],
-    }))
+    (initialVisits ?? []).map(mapVisit)
   );
 
   useEffect(() => {
-    setVisits((initialVisits ?? []).map((v, i) => ({
-      id: `v-${i}`,
-      ...v,
-      category: categorizeVisit(v.treatment),
-      duration: "45 min",
-      cost: "",
-      attachments: [],
-    })));
+    setVisits((initialVisits ?? []).map(mapVisit));
   }, [initialVisits]);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,8 +155,10 @@ export function VisitHistory({ visits: initialVisits }: { visits: VisitInput[] }
   // ============ HANDLERS ============
   const addVisit = () => {
     if (!newVisit.treatment.trim()) return;
+    // Optimistic update
+    const optimisticId = `v-${Date.now()}`;
     const v: Visit = {
-      id: `v-${Date.now()}`,
+      id: optimisticId,
       date: newVisit.date,
       treatment: newVisit.treatment,
       doctor: newVisit.doctor,
@@ -169,10 +175,42 @@ export function VisitHistory({ visits: initialVisits }: { visits: VisitInput[] }
       treatment: "", doctor: DOCTORS[0], notes: "", tooth: "", category: "Other", duration: "", cost: "",
     });
     setAddDialog(false);
+
+    // Persist to DB
+    startTransition(async () => {
+      const result = await addVisitRecord(patientId, {
+        date: newVisit.date,
+        treatment: newVisit.treatment,
+        doctor: newVisit.doctor,
+        notes: newVisit.notes,
+        tooth: newVisit.tooth || "",
+      });
+      if (result.success) {
+        router.refresh();
+      } else {
+        // Rollback optimistic update on failure
+        setVisits(prev => prev.filter(v => v.id !== optimisticId));
+        console.error("Failed to save visit:", result.error);
+      }
+    });
   };
 
   const deleteVisit = (id: string) => {
+    // Optimistic update
     setVisits(prev => prev.filter(v => v.id !== id));
+
+    // Persist to DB (only for real DB records, not optimistic temp ids)
+    if (!id.startsWith("v-")) {
+      startTransition(async () => {
+        const result = await deleteVisitRecord(patientId, id);
+        if (result.success) {
+          router.refresh();
+        } else {
+          console.error("Failed to delete visit:", result.error);
+          router.refresh(); // Re-sync from server
+        }
+      });
+    }
   };
 
   const selectPreset = (preset: { name: string; category: VisitCategory }) => {

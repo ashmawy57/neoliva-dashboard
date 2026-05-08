@@ -71,26 +71,52 @@ export class PatientService {
   }
 
   async getPatientById(tenantId: string, id: string) {
-    return patientRepository.findById(tenantId, id, {
-      appointments: true,
-      invoices: true,
-      patientAllergies: true,
-      medicalConditions: true,
-      patientMedications: true,
-      patientSurgeries: true,
-      patientFamilyHistory: true,
-      visitRecords: true,
-      oralTissueFindings: true,
-      toothConditions: true,
-      periodontalMeasurements: true,
-      prescriptions: {
-        include: {
-          items: true
-        }
-      },
-      patientDocuments: true,
-      oralConditions: true
-    });
+    // Split into two parallel queries to avoid connection timeout
+    // Query 1: Core demographics + scheduling + billing
+    // Query 2: All clinical records
+    const [core, clinical] = await Promise.all([
+      patientRepository.findById(tenantId, id, {
+        appointments: true,
+        invoices: true,
+        visitRecords: true,
+        patientDocuments: true,
+      }),
+      patientRepository.findById(tenantId, id, {
+        patientAllergies: true,
+        medicalConditions: true,
+        patientMedications: true,
+        patientSurgeries: true,
+        patientFamilyHistory: true,
+        oralTissueFindings: true,
+        toothConditions: true,
+        periodontalMeasurements: true,
+        prescriptions: {
+          include: {
+            items: true
+          }
+        },
+        oralConditions: true,
+      }),
+    ]);
+
+    if (!core) return null;
+
+    // Merge both results — core fields take priority for patient scalars
+    return {
+      ...clinical,
+      ...core,
+      // Merge relational arrays from both queries
+      patientAllergies: clinical?.patientAllergies ?? [],
+      medicalConditions: clinical?.medicalConditions ?? [],
+      patientMedications: clinical?.patientMedications ?? [],
+      patientSurgeries: clinical?.patientSurgeries ?? [],
+      patientFamilyHistory: clinical?.patientFamilyHistory ?? [],
+      oralTissueFindings: clinical?.oralTissueFindings ?? [],
+      toothConditions: clinical?.toothConditions ?? [],
+      periodontalMeasurements: clinical?.periodontalMeasurements ?? [],
+      prescriptions: clinical?.prescriptions ?? [],
+      oralConditions: clinical?.oralConditions ?? [],
+    };
   }
 
   async createPatient(tenantId: string, data: Omit<Prisma.PatientCreateInput, 'tenant'>) {
@@ -254,6 +280,10 @@ export class PatientService {
     return patientRepository.createPeriodontalMeasurement(tenantId, patientId, data);
   }
 
+  async clearPeriodontalMeasurements(tenantId: string, patientId: string) {
+    return patientRepository.deleteAllPeriodontalMeasurements(tenantId, patientId);
+  }
+
   async addMedicalCondition(tenantId: string, patientId: string, data: any) {
     return patientRepository.createMedicalCondition(tenantId, patientId, data);
   }
@@ -306,7 +336,12 @@ export class PatientService {
     return patientRepository.createDocument(tenantId, patientId, data);
   }
 
+  async deleteDocument(tenantId: string, id: string) {
+    return patientRepository.deleteDocument(tenantId, id);
+  }
+
   async updateInvoiceStatus(tenantId: string, id: string, status: string) {
     return patientRepository.updateInvoice(tenantId, id, { status });
   }
 }
+

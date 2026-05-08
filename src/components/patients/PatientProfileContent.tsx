@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,11 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
   const [showInvoices, setShowInvoices] = useState(false);
   const [patient, setPatient] = useState(initialPatient);
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+
+  // Sync local patient state when server re-fetches after router.refresh()
+  useEffect(() => {
+    setPatient(initialPatient);
+  }, [initialPatient]);
 
   const handlePayInvoice = async (invoiceId: string) => {
     setPayingInvoiceId(invoiceId);
@@ -190,7 +195,8 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
             </TabsList>
 
             <TabsContent value="history" className="mt-6">
-              <VisitHistory visits={visits} />
+              <VisitHistory visits={visits} patientId={patient.id} />
+
             </TabsContent>
 
             <TabsContent value="medicalHistory" className="mt-6 animate-fade-in-up">
@@ -205,7 +211,7 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
               <ToothChart patient={patient} onRefresh={refreshData} />
             </TabsContent>
 
-            <TabsContent value="periodontogram" className="mt-6">
+            <TabsContent value="periodontogram" className="mt-6" keepMounted>
               <Periodontogram patient={patient} onRefresh={refreshData} />
             </TabsContent>
 

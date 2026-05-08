@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RefreshCw, Stethoscope, Image as ImageIcon, PenTool, X, Info, Save, Trash2, FileText, Camera, AlertTriangle } from "lucide-react";
-import { updateToothCondition } from "@/app/actions/patients";
+import { RefreshCw, Stethoscope, Image as ImageIcon, PenTool, X, Info, Save, Trash2, FileText, Camera, AlertTriangle, Edit3, Check } from "lucide-react";
+import { updateToothCondition, uploadToothPhoto, deleteToothPhoto, updatePatientNotes } from "@/app/actions/patients";
 
 type ToothCondition = "healthy" | "caries" | "filled" | "extracted" | "crown";
 type ToothType = "permanent" | "primary";
@@ -36,6 +36,41 @@ interface ToothPhoto {
   name: string;
   date: string;
   size: string;
+  url: string;
+}
+
+interface ToothMeta {
+  surfaces: ToothSurfaces;
+  toothType: ToothType;
+  findings: ClinicalFinding[];
+}
+
+const emptySurfaces = (): ToothSurfaces => ({
+  buccal: null, lingual: null, distal: null, mesial: null, occlusal: null,
+});
+
+const defaultMeta = (): ToothMeta => ({
+  surfaces: emptySurfaces(),
+  toothType: 'permanent',
+  findings: [],
+});
+
+function parseToothMeta(notesJson?: string | null): ToothMeta {
+  try {
+    if (!notesJson) return defaultMeta();
+    const parsed = JSON.parse(notesJson);
+    // Only treat as metadata if it has our expected shape
+    if (typeof parsed === 'object' && ('surfaces' in parsed || 'toothType' in parsed || 'findings' in parsed)) {
+      return {
+        surfaces: { ...emptySurfaces(), ...(parsed.surfaces ?? {}) },
+        toothType: parsed.toothType ?? 'permanent',
+        findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+      };
+    }
+    return defaultMeta();
+  } catch {
+    return defaultMeta();
+  }
 }
 
 const TOOTH_CONDITIONS: Record<ToothCondition, { color: string; label: string; tooltip: string }> = {
@@ -205,109 +240,201 @@ const SurfacesPopover = ({ tooth, surfaces, onSurfaceChange }: { tooth: number; 
 
 export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
   const [isPending, startTransition] = useTransition();
+  const [noteSaving, startNoteSave] = useTransition();
+  // Guards against useEffect resetting state during an active save
+  const isUpdatingRef = useRef(false);
+
+  // ── Tooth conditions (condition + surfaces + toothType + findings packed as JSON in notes) ──
   const [teeth, setTeeth] = useState<Record<number, ToothCondition>>(() => {
-    const conditions = patient?.toothConditions ?? [];
     const mapping: Record<number, ToothCondition> = {};
-    conditions.forEach((c: any) => {
-      mapping[c.tooth_number] = c.condition as ToothCondition;
+    (patient?.toothConditions ?? []).forEach((c: any) => {
+      mapping[c.toothNumber] = c.condition as ToothCondition;
     });
     return mapping;
   });
 
-  const [toothTypes, setToothTypes] = useState<Record<number, ToothType>>({});
-  const [toothSurfaces, setToothSurfaces] = useState<Record<number, ToothSurfaces>>({});
-  const [findings, setFindings] = useState<ClinicalFinding[]>([]);
-  const [photos, setPhotos] = useState<ToothPhoto[]>([]);
+  const [toothMeta, setToothMeta] = useState<Record<number, ToothMeta>>(() => {
+    const map: Record<number, ToothMeta> = {};
+    (patient?.toothConditions ?? []).forEach((c: any) => {
+      map[c.toothNumber] = parseToothMeta(c.notes);
+    });
+    return map;
+  });
+
+  // ── Photos from PatientDocument (type = TOOTH_PHOTO_<number>) ──
+  const buildPhotos = (docs: any[]): ToothPhoto[] =>
+    (docs ?? [])
+      .filter((d: any) => d.type?.startsWith('TOOTH_PHOTO_'))
+      .map((d: any) => ({
+        id: d.id,
+        tooth: parseInt(d.type.replace('TOOTH_PHOTO_', '')) || 0,
+        name: d.name.replace(/^tooth-\d+-/, ''),
+        date: d.uploadDate
+          ? new Date(d.uploadDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+          : '—',
+        size: '—',
+        url: d.fileUrl,
+      }));
+
+  const [photos, setPhotos] = useState<ToothPhoto[]>(() =>
+    buildPhotos(patient?.patientDocuments ?? [])
+  );
+
+  // ── Doctor's chart note ──
+  const [chartNote, setChartNote] = useState<string>(patient?.notes || '');
+  const [isEditingNote, setIsEditingNote] = useState(false);
 
   // Dialogs state
   const [findingsDialog, setFindingsDialog] = useState<number | null>(null);
   const [photosDialog, setPhotosDialog] = useState<number | null>(null);
   const [extractionDialog, setExtractionDialog] = useState<number | null>(null);
   const [colorCodeDialog, setColorCodeDialog] = useState(false);
-  const [newFinding, setNewFinding] = useState("");
-  const [findingType, setFindingType] = useState<"finding" | "parameter">("finding");
+  const [newFinding, setNewFinding] = useState('');
+  const [findingType, setFindingType] = useState<'finding' | 'parameter'>('finding');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Sync state when patient prop changes
+  // Sync ALL state when patient prop refreshes (skip during active mutations)
   useEffect(() => {
-    if (!patient) return;
-    const conditions = patient.toothConditions ?? [];
-    const mapping: Record<number, ToothCondition> = {};
-    conditions.forEach((c: any) => {
-      mapping[c.tooth_number] = c.condition as ToothCondition;
+    if (!patient || isUpdatingRef.current) return;
+    const condMap: Record<number, ToothCondition> = {};
+    const metaMap: Record<number, ToothMeta> = {};
+    (patient.toothConditions ?? []).forEach((c: any) => {
+      condMap[c.toothNumber] = c.condition as ToothCondition;
+      metaMap[c.toothNumber] = parseToothMeta(c.notes);
     });
-    setTeeth(mapping);
+    setTeeth(condMap);
+    setToothMeta(metaMap);
+    setPhotos(buildPhotos(patient.patientDocuments ?? []));
+    setChartNote(patient.notes || '');
   }, [patient]);
 
+  // ── Unified save: writes condition + full metadata JSON atomically ──
+  const saveTooth = async (
+    tooth: number,
+    conditionOverride?: ToothCondition,
+    metaOverride?: Partial<ToothMeta>
+  ) => {
+    const condition = conditionOverride ?? (teeth[tooth] || 'healthy');
+    const currentMeta = toothMeta[tooth] ?? defaultMeta();
+    const finalMeta = metaOverride ? { ...currentMeta, ...metaOverride } : currentMeta;
+    const result = await updateToothCondition(patient.id, tooth, condition, JSON.stringify(finalMeta));
+    if (!result?.success) {
+      console.error('Failed to save tooth data:', result?.error);
+    }
+    isUpdatingRef.current = false;
+    onRefresh?.();
+  };
+
+  // ── Condition ──
   const handleConditionChange = (tooth: number, cond: ToothCondition) => {
-    setTeeth((prev) => ({ ...prev, [tooth]: cond }));
-    startTransition(async () => {
-      await updateToothCondition(patient.id, tooth, cond, "");
-      onRefresh?.();
-    });
+    isUpdatingRef.current = true;
+    setTeeth(prev => ({ ...prev, [tooth]: cond }));
+    startTransition(() => saveTooth(tooth, cond));
   };
 
+  // ── Surface ──
   const handleSurfaceChange = (tooth: number, surface: SurfaceKey, color: SurfaceColor) => {
-    setToothSurfaces(prev => ({
+    isUpdatingRef.current = true;
+    const currentMeta = toothMeta[tooth] ?? defaultMeta();
+    const newSurfaces = { ...currentMeta.surfaces, [surface]: color };
+    setToothMeta(prev => ({
       ...prev,
-      [tooth]: {
-        ...(prev[tooth] || { buccal: null, lingual: null, distal: null, mesial: null, occlusal: null }),
-        [surface]: color,
-      }
+      [tooth]: { ...(prev[tooth] ?? defaultMeta()), surfaces: newSurfaces },
     }));
+    startTransition(() => saveTooth(tooth, undefined, { surfaces: newSurfaces }));
   };
 
+  // ── Tooth Type (Primary / Permanent) ──
   const handleToggleToothType = (tooth: number) => {
-    setToothTypes(prev => ({
+    isUpdatingRef.current = true;
+    const currentMeta = toothMeta[tooth] ?? defaultMeta();
+    const newType: ToothType = currentMeta.toothType === 'primary' ? 'permanent' : 'primary';
+    setToothMeta(prev => ({
       ...prev,
-      [tooth]: prev[tooth] === "primary" ? "permanent" : "primary",
+      [tooth]: { ...(prev[tooth] ?? defaultMeta()), toothType: newType },
     }));
+    startTransition(() => saveTooth(tooth, undefined, { toothType: newType }));
   };
 
+  // ── Clinical Findings ──
   const handleAddFinding = (tooth: number) => {
     if (!newFinding.trim()) return;
+    isUpdatingRef.current = true;
     const f: ClinicalFinding = {
       id: `f-${Date.now()}`,
       tooth,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       note: newFinding.trim(),
       type: findingType,
     };
-    setFindings(prev => [f, ...prev]);
-    setNewFinding("");
+    const currentMeta = toothMeta[tooth] ?? defaultMeta();
+    const newFindings = [f, ...currentMeta.findings];
+    setToothMeta(prev => ({
+      ...prev,
+      [tooth]: { ...(prev[tooth] ?? defaultMeta()), findings: newFindings },
+    }));
+    setNewFinding('');
+    startTransition(() => saveTooth(tooth, undefined, { findings: newFindings }));
   };
 
-  const handleDeleteFinding = (id: string) => {
-    setFindings(prev => prev.filter(f => f.id !== id));
+  const handleDeleteFinding = (tooth: number, findingId: string) => {
+    isUpdatingRef.current = true;
+    const currentMeta = toothMeta[tooth] ?? defaultMeta();
+    const newFindings = currentMeta.findings.filter(f => f.id !== findingId);
+    setToothMeta(prev => ({
+      ...prev,
+      [tooth]: { ...(prev[tooth] ?? defaultMeta()), findings: newFindings },
+    }));
+    startTransition(() => saveTooth(tooth, undefined, { findings: newFindings }));
   };
 
+  // ── Photos ──
   const handleAddPhoto = (tooth: number) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const p: ToothPhoto = {
-          id: `p-${Date.now()}`,
+      if (!file) return;
+      setPhotoUploading(true);
+      setPhotoError(null);
+      const formData = new FormData();
+      formData.append('file', file);
+      const result = await uploadToothPhoto(patient.id, tooth, formData);
+      setPhotoUploading(false);
+      if (result?.success && result.document) {
+        const newPhoto: ToothPhoto = {
+          id: (result.document as any).id,
           tooth,
           name: file.name,
-          date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
           size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+          url: (result.document as any).fileUrl,
         };
-        setPhotos(prev => [p, ...prev]);
+        setPhotos(prev => [newPhoto, ...prev]);
+      } else {
+        setPhotoError(result?.error || 'Upload failed. Ensure the "patient-photos" bucket exists in Supabase Storage.');
       }
     };
     input.click();
   };
 
+  const handleDeletePhoto = async (documentId: string, fileUrl: string) => {
+    setPhotos(prev => prev.filter(p => p.id !== documentId));
+    await deleteToothPhoto(patient.id, documentId, fileUrl);
+  };
+
   const handleExtraction = (tooth: number) => {
-    handleConditionChange(tooth, "extracted");
+    handleConditionChange(tooth, 'extracted');
     setExtractionDialog(null);
   };
 
-  const currentCondition = (tooth: number) => teeth[tooth] || "healthy";
-  const getToothType = (tooth: number) => toothTypes[tooth] || "permanent";
-  const getToothSurfaces = (tooth: number): ToothSurfaces => toothSurfaces[tooth] || { buccal: null, lingual: null, distal: null, mesial: null, occlusal: null };
+  const currentCondition = (tooth: number) => teeth[tooth] || 'healthy';
+  const getToothType = (tooth: number): ToothType => toothMeta[tooth]?.toothType ?? 'permanent';
+  const getToothSurfaces = (tooth: number): ToothSurfaces => toothMeta[tooth]?.surfaces ?? emptySurfaces();
+
+
 
   // SVG for teeth with double roots (Molars)
   const MolarSvg = ({ className, fill, stroke }: { className?: string, fill: string, stroke: string }) => (
@@ -438,8 +565,8 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                 className="w-full justify-start text-xs rounded-xl bg-gray-100/80 hover:bg-gray-200 text-gray-700 h-10"
               >
                 <Stethoscope className="w-4 h-4 mr-2.5 text-gray-500" /> Clinical findings & Parameters
-                {findings.filter(f => f.tooth === tooth).length > 0 && (
-                  <Badge className="ml-auto bg-blue-100 text-blue-700 text-[10px] px-1.5">{findings.filter(f => f.tooth === tooth).length}</Badge>
+                {(toothMeta[tooth]?.findings?.length ?? 0) > 0 && (
+                  <Badge className="ml-auto bg-blue-100 text-blue-700 text-[10px] px-1.5">{toothMeta[tooth].findings.length}</Badge>
                 )}
               </Button>
               <Button 
@@ -575,17 +702,21 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
             {/* Existing findings */}
             <div className="space-y-3 pt-2">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Previous Findings</p>
-              {findings.filter(f => f.tooth === findingsDialog).length > 0 ? (
-                findings.filter(f => f.tooth === findingsDialog).map(f => (
+              {(findingsDialog !== null ? (toothMeta[findingsDialog]?.findings ?? []) : []).length > 0 ? (
+                (toothMeta[findingsDialog!]?.findings ?? []).map(f => (
                   <div key={f.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50/50 flex gap-3 group">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${f.type === "finding" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"}`}>
-                      {f.type === "finding" ? <FileText className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${f.type === 'finding' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                      {f.type === 'finding' ? <FileText className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-800">{f.note}</p>
-                      <p className="text-[10px] text-gray-400 mt-1">{f.date} · {f.type === "finding" ? "Clinical Finding" : "Parameter"}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">{f.date} · {f.type === 'finding' ? 'Clinical Finding' : 'Parameter'}</p>
                     </div>
-                    <button onClick={() => handleDeleteFinding(f.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500">
+                    <button
+                      onClick={() => findingsDialog !== null && handleDeleteFinding(findingsDialog, f.id)}
+                      disabled={isPending}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 disabled:opacity-30"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -594,6 +725,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                 <p className="text-sm text-gray-400 text-center py-4">No findings recorded yet</p>
               )}
             </div>
+
           </div>
         </DialogContent>
       </Dialog>
@@ -607,26 +739,33 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-5">
-            <Button 
-              onClick={() => photosDialog && handleAddPhoto(photosDialog)}
+            <Button
+              onClick={() => photosDialog !== null && handleAddPhoto(photosDialog)}
+              disabled={photoUploading}
               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 text-sm font-semibold w-full shadow-md shadow-emerald-500/20"
             >
-              <Camera className="w-4 h-4 mr-2" /> Upload Photo
+              {photoUploading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Camera className="w-4 h-4 mr-2" />}
+              {photoUploading ? 'Uploading…' : 'Upload Photo'}
             </Button>
-
+            {photoError && (
+              <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{photoError}</p>
+            )}
             <div className="space-y-3">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Attached Photos</p>
               {photos.filter(p => p.tooth === photosDialog).length > 0 ? (
                 photos.filter(p => p.tooth === photosDialog).map(p => (
                   <div key={p.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center gap-3 group">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <a href={p.url} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0 hover:bg-emerald-100 transition-colors">
                       <ImageIcon className="w-5 h-5 text-emerald-600" />
-                    </div>
+                    </a>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
                       <p className="text-[10px] text-gray-400">{p.date} · {p.size}</p>
                     </div>
-                    <button onClick={() => setPhotos(prev => prev.filter(x => x.id !== p.id))} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500">
+                    <button
+                      onClick={() => handleDeletePhoto(p.id, p.url)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -697,6 +836,57 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Doctor's Chart Note */}
+      <div className="mt-6 rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-500" /> Doctor&apos;s Chart Note
+          </h3>
+          {!isEditingNote ? (
+            <button
+              onClick={() => setIsEditingNote(true)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setChartNote(patient?.notes || ''); setIsEditingNote(false); }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  startNoteSave(async () => {
+                    await updatePatientNotes(patient.id, chartNote);
+                    setIsEditingNote(false);
+                    onRefresh?.();
+                  });
+                }}
+                disabled={noteSaving}
+                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {noteSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+              </button>
+            </div>
+          )}
+        </div>
+        {isEditingNote ? (
+          <textarea
+            value={chartNote}
+            onChange={e => setChartNote(e.target.value)}
+            placeholder="Add clinical notes about this patient's dental chart…"
+            className="w-full h-28 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+          />
+        ) : (
+          <p className="text-sm text-gray-600 min-h-[2.5rem] whitespace-pre-wrap">
+            {chartNote || <span className="text-gray-400 italic">No notes recorded. Click Edit to add a note.</span>}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

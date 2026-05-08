@@ -103,8 +103,32 @@ export class PatientRepository {
   }
 
   async createPeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
-    return prisma.periodontalMeasurement.create({
-      data: { ...data, patientId, tenantId }
+    // Upsert to avoid duplicate rows for the same tooth + parameter combination
+    return prisma.periodontalMeasurement.upsert({
+      where: {
+        patientId_toothNumber_parameterName: {
+          patientId,
+          toothNumber: data.toothNumber,
+          parameterName: data.parameterName,
+        }
+      },
+      update: {
+        buccalValues: data.buccalValues,
+        lingualValues: data.lingualValues,
+        singleValue: data.singleValue ?? null,
+        measurementDate: data.measurementDate ?? new Date(),
+      },
+      create: {
+        ...data,
+        patientId,
+        tenantId,
+      }
+    });
+  }
+
+  async deleteAllPeriodontalMeasurements(tenantId: string, patientId: string) {
+    return prisma.periodontalMeasurement.deleteMany({
+      where: { patientId, tenantId }
     });
   }
 
@@ -190,6 +214,12 @@ export class PatientRepository {
   async createDocument(tenantId: string, patientId: string, data: any) {
     return prisma.patientDocument.create({
       data: { ...data, patientId, tenantId }
+    });
+  }
+
+  async deleteDocument(tenantId: string, id: string) {
+    return prisma.patientDocument.delete({
+      where: { id, tenantId }
     });
   }
 

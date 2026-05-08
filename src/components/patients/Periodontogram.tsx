@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trash2, RotateCw, CheckSquare, Square, Loader2 } from "lucide-react";
-import { updatePeriodontalMeasurement } from "@/app/actions/patients";
+import { updatePeriodontalMeasurement, clearPeriodontalMeasurements } from "@/app/actions/patients";
 
 const topTeeth = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const bottomTeeth = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -16,8 +16,7 @@ const parameters = [
   "Furcation", "Bleeding", "Gingival margin"
 ];
 
-// Generic date placeholder for mock
-const mockDates = ["Mar 03 2025", "Apr 04 2026", "May 05 2027"];
+
 
 export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
   const [isPending, startTransition] = useTransition();
@@ -26,36 +25,53 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   const [showBuccal, setShowBuccal] = useState(true);
   const [openPopover, setOpenPopover] = useState<number | null>(null);
   const [isRotated, setIsRotated] = useState(false);
+  const [measurementDates, setMeasurementDates] = useState<Record<string, string>>({});
+  // Prevents useEffect from overwriting local state while a save is in-flight
+  const isUpdatingRef = useRef(false);
+
+  // Helper: parse measurements array → mapping object (Prisma returns camelCase)
+  const parseMeasurements = (measurements: any[]) => {
+    const mapping: any = {};
+    const dates: Record<string, string> = {};
+    measurements.forEach((m: any) => {
+      const tooth = m.toothNumber;       // camelCase from Prisma
+      const param = m.parameterName;
+      if (!mapping[tooth]) mapping[tooth] = {};
+      mapping[tooth][param] = {
+        buccal: m.buccalValues || [0, 0, 0],
+        lingual: m.lingualValues || [0, 0, 0],
+        single: m.singleValue ?? undefined
+      };
+      const dateKey = `${tooth}-${param}`;
+      if (m.measurementDate) {
+        dates[dateKey] = new Date(m.measurementDate).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+      }
+    });
+    return { mapping, dates };
+  };
 
   // Sync state when patient prop changes
+  // Skip-once pattern: if a save is in-flight, consume the guard and skip this render.
+  // The next natural patient change (e.g. navigation) will sync correctly.
   useEffect(() => {
     if (!patient) return;
-    const measurements = patient.periodontalMeasurements ?? [];
-    const mapping: any = {};
-    measurements.forEach((m: any) => {
-      if (!mapping[m.tooth_number]) mapping[m.tooth_number] = {};
-      mapping[m.tooth_number][m.parameter_name] = {
-        buccal: m.buccal_values || [0, 0, 0],
-        lingual: m.lingual_values || [0, 0, 0],
-        single: m.single_value
-      };
-    });
+    if (isUpdatingRef.current) {
+      isUpdatingRef.current = false; // consume the guard — skip this stale render
+      return;
+    }
+    const { mapping, dates } = parseMeasurements(patient.periodontalMeasurements ?? []);
     setData(mapping);
+    setMeasurementDates(dates);
   }, [patient]);
   
   const [data, setData] = useState<Record<number, Record<string, { buccal: number[], lingual: number[], single?: number }>>>(() => {
-    const measurements = patient?.periodontalMeasurements ?? [];
-    const mapping: any = {};
-    measurements.forEach((m: any) => {
-      if (!mapping[m.tooth_number]) mapping[m.tooth_number] = {};
-      mapping[m.tooth_number][m.parameter_name] = {
-        buccal: m.buccal_values || [0, 0, 0],
-        lingual: m.lingual_values || [0, 0, 0],
-        single: m.single_value
-      };
-    });
+    const { mapping } = parseMeasurements(patient?.periodontalMeasurements ?? []);
     return mapping;
   });
+
+  const getMeasurementDate = (tooth: number, param: string) => {
+    return measurementDates[`${tooth}-${param}`] ?? new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  };
 
   const setParamValue = (tooth: number, param: string, side: "buccal" | "lingual", pos: number, value: number) => {
     setData(prev => {
@@ -80,15 +96,22 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
     const measurement = data[tooth]?.[param];
     if (!measurement) return;
 
+    // isUpdatingRef = true → the skip-once guard in useEffect prevents the
+    // router.refresh() below from immediately overwriting local state.
+    // When the component remounts after a tab switch it reads the REFRESHED
+    // parent patient state which now contains the saved measurement.
+    isUpdatingRef.current = true;
     startTransition(async () => {
       await updatePeriodontalMeasurement(patient.id, {
         toothNumber: tooth,
         parameterName: param,
         buccalValues: measurement.buccal,
         lingualValues: measurement.lingual,
-        singleValue: measurement.single,
+        singleValue: measurement.single ?? null,
         date: new Date().toISOString()
       });
+      // Must call onRefresh so parent patient.periodontalMeasurements updates.
+      // Without this, tab remounts re-initialize from stale parent state.
       onRefresh?.();
     });
   };
@@ -205,13 +228,9 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
            </div>
         </div>
 
-        <div className="bg-[#e0e0e0] p-3 text-center border-t border-gray-300 relative">
-           <div className="inline-block relative">
-              <div className="text-gray-400 text-sm opacity-50 absolute -top-5 left-0 right-0">Mar 03 2025</div>
-              <div className="text-gray-700 text-lg font-bold border-y-2 border-blue-500 py-0.5 px-4 w-48 mx-auto flex justify-between">
-                <span>Apr</span> <span>04</span> <span>2026</span>
-              </div>
-              <div className="text-gray-400 text-sm opacity-50 absolute -bottom-5 left-0 right-0">May 05 2027</div>
+        <div className="bg-[#e0e0e0] p-3 text-center border-t border-gray-300">
+           <div className="text-gray-700 text-base font-semibold border-y-2 border-blue-500 py-1 px-4 inline-block">
+             {getMeasurementDate(tooth, param)}
            </div>
         </div>
       </PopoverContent>
@@ -225,8 +244,15 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold p-1">
               <span className="text-[12px]">{tooth - 1}</span>
            </div>
-           <Button onClick={() => setOpenPopover(null)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm">
-             Submit and close
+           <Button
+             onClick={() => {
+               saveMeasurement(tooth, param);
+               setOpenPopover(null);
+             }}
+             disabled={isPending}
+             className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-10 px-6 shadow-sm"
+           >
+             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit and close"}
            </Button>
            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold p-1">
               <span className="text-[12px]">{tooth + 1}</span>
@@ -251,9 +277,9 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
            })}
         </div>
 
-        <div className="bg-[#e0e0e0] p-4 text-center border-t border-gray-300 h-28 relative flex items-center justify-center">
-           <div className="text-gray-700 text-lg font-bold border-y-2 border-blue-500 py-1 px-4 w-48 flex justify-between absolute">
-             <span>Apr</span> <span>04</span> <span>2026</span>
+        <div className="bg-[#e0e0e0] p-4 text-center border-t border-gray-300">
+           <div className="text-gray-700 text-base font-semibold border-y-2 border-blue-500 py-1 px-4 inline-block">
+             {getMeasurementDate(tooth, param)}
            </div>
         </div>
       </PopoverContent>
@@ -295,8 +321,8 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
           {!isTop && <span className="text-[12px] font-bold text-[#8D6E63] w-full text-center pt-1">{tooth}</span>}
         </PopoverTrigger>
         
-        {/* Determining which popup to show based on param */}
-        {activeParam === "Mobility" ? renderSingleValueDropdown(tooth, activeParam) : renderValueTable(tooth, activeParam)}
+        {/* Single-value params: Mobility (0-4) and Furcation (0-3) */}
+        {(activeParam === "Mobility" || activeParam === "Furcation") ? renderSingleValueDropdown(tooth, activeParam) : renderValueTable(tooth, activeParam)}
       </Popover>
     )
   }
@@ -310,22 +336,25 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
 
       <div className="p-3 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3 mb-3">
-          <div className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">4 April 2026</div>
-          <Button onClick={() => {
-              const loadedData: any = {};
-              [11, 21, 16, 26, 31, 41, 36, 46].forEach(t => {
-                 loadedData[t] = {
-                   "Probing depth": { buccal: [2,3,2], lingual: [1,2,1] },
-                   "Bleeding": { buccal: [0,1,0], lingual: [0,0,0] },
-                   "Mobility": { single: 1 }
-                 };
+          <div className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+            {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+          </div>
+          <Button
+            onClick={() => {
+              isUpdatingRef.current = true;
+              startTransition(async () => {
+                await clearPeriodontalMeasurements(patient.id);
+                setData({});
+                setMeasurementDates({});
+                isUpdatingRef.current = false;
+                onRefresh?.();
               });
-              setData(loadedData);
-          }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold rounded-full h-9 px-6 text-sm">
-            Load
-          </Button>
-          <Button onClick={() => setData({})} className="bg-[#f44336] hover:bg-[#e53935] text-white p-2 rounded-full h-9 w-9">
-            <Trash2 className="w-4 h-4" />
+            }}
+            disabled={isPending}
+            className="bg-[#f44336] hover:bg-[#e53935] text-white p-2 rounded-full h-9 w-9"
+            title="Clear all measurements"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </Button>
         </div>
 
@@ -370,7 +399,7 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
 
         {/* Scrollable grid area */}
         <div className="flex-1 overflow-x-auto bg-blue-50/50">
-           <div className={`min-w-[800px] p-6 pt-8 pb-10 flex flex-col items-center justify-center gap-6 relative transition-transform duration-500 ${isRotated ? 'rotate-0 origin-center' : ''}`}>
+           <div className={`min-w-[800px] p-6 pt-8 pb-10 flex flex-col items-center justify-center gap-6 relative transition-transform duration-500 origin-center ${isRotated ? 'rotate-90' : 'rotate-0'}`}>
               {/* Top View */}
               <div className="flex w-full justify-center relative">
                  <div className="w-full absolute top-[62px] border-t-[1.5px] border-[#0000cd] z-0" /> {/* main line */}

@@ -538,6 +538,7 @@ model PeriodontalMeasurement {
   @@index([tenantId, id])
   @@index([tenantId, patientId])
   @@index([tenantId, createdAt])
+  @@unique([patientId, toothNumber, parameterName], name: "patientId_toothNumber_parameterName")
   @@map("periodontal_measurements")
 }
 
