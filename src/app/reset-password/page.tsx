@@ -26,38 +26,30 @@ function ResetPasswordContent() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const code = searchParams.get('code');
-
     const init = async () => {
-      // PKCE flow: exchange the ?code= query param for a session
-      if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) {
-          console.error('Code exchange failed:', exchangeError.message);
-          setSessionError(true);
-          return;
-        }
-        setSessionReady(true);
-        return;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) { 
+        setSessionReady(true); 
+        return; 
       }
 
-      // Implicit / hash flow fallback
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) { setSessionReady(true); return; }
-
+      // If no session is found, wait a bit for auth state changes 
+      // (in case of implicit flow or local storage syncing)
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setSessionReady(true);
       });
 
       setTimeout(async () => {
         const { data: { session: s } } = await supabase.auth.getSession();
-        if (!s) setSessionError(true); else setSessionReady(true);
+        if (!s) setSessionError(true); 
+        else setSessionReady(true);
         subscription.unsubscribe();
       }, 2000);
     };
 
     init();
-  }, [searchParams]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

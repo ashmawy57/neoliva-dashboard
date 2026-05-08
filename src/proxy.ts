@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -89,6 +89,7 @@ export async function middleware(request: NextRequest) {
                        request.nextUrl.pathname.startsWith('/unauthorized') ||
                        request.nextUrl.pathname.startsWith('/forgot-password') ||
                        request.nextUrl.pathname.startsWith('/reset-password') ||
+                       request.nextUrl.pathname.startsWith('/auth/callback') ||
                        request.nextUrl.pathname.startsWith('/admin') // admin login is public to Supabase auth
 
   // Redirect to login if no user and not on a public page

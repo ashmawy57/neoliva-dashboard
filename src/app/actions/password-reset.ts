@@ -10,18 +10,24 @@ export async function sendPasswordResetEmail(formData: FormData) {
 
   if (!email) return { success: false, error: 'Email is required' };
 
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  // Determine the redirect URL based on environment
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    // Use the production URL from env, fallback to localhost for dev
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/reset-password`,
-  });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
+    });
 
-  if (error) return { success: false, error: error.message };
+    if (error) return { success: false, error: error.message };
 
-  return { success: true };
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('sendPasswordResetEmail error:', err);
+    const msg = err instanceof Error ? err.message : 'Unexpected server error';
+    return { success: false, error: msg };
+  }
 }
 
 /**
