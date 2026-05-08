@@ -1,7 +1,8 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBanner } from "@/components/layout/TopBanner";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext, TenantContextError } from "@/lib/tenant-context";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 export default async function DashboardLayout({
   children,
@@ -9,16 +10,30 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   try {
-    // Force tenant resolution - this will check for APPROVED status
+    // Force tenant resolution - this will throw/redirect if not APPROVED
     await resolveTenantContext();
   } catch (error: any) {
-    if (error.code === 'PENDING') {
-      redirect("/pending-approval");
+    // CRITICAL: Let Next.js redirect() errors propagate naturally.
+    // redirect() works by throwing a special error internally — catching
+    // it here would silently swallow the redirect.
+    if (isRedirectError(error)) {
+      throw error;
     }
-    if (error.code === 'REJECTED') {
-      redirect("/rejected");
+
+    // Handle TenantContextError codes explicitly
+    if (error instanceof TenantContextError) {
+      if (error.code === 'PENDING') {
+        redirect("/pending-approval");
+      }
+      if (error.code === 'REJECTED') {
+        redirect("/rejected");
+      }
+      // NO_USER_RECORD, UNAUTHORIZED, etc.
+      redirect("/unauthorized");
     }
-    // If user is authenticated but has no tenant access, redirect
+
+    // Unknown error — log and redirect to unauthorized
+    console.error('[DashboardLayout] Unexpected error resolving tenant context:', error);
     redirect("/unauthorized");
   }
 

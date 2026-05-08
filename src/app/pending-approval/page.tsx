@@ -1,6 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, Mail, LogOut } from "lucide-react";
 import Link from "next/link";
@@ -8,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function PendingApprovalPage() {
+  // Check if the user is actually approved now — they may have refreshed
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   
   const handleSignOut = async () => {
     'use server';
@@ -47,16 +46,20 @@ export default async function PendingApprovalPage() {
           <div className="pt-4 flex flex-col gap-3">
             <Link 
               href="mailto:support@neoliva.com"
-              className={cn(buttonVariants({ variant: "outline" }), "w-full py-6 text-base font-medium")}
+              className="w-full py-3 px-4 text-base font-medium border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
             >
+              <Mail className="w-4 h-4" />
               Contact Support
             </Link>
             
             <form action={handleSignOut}>
-              <Button type="submit" variant="ghost" className="w-full text-gray-400 hover:text-gray-600">
-                <LogOut className="w-4 h-4 mr-2" />
+              <button 
+                type="submit" 
+                className="w-full py-3 text-gray-400 hover:text-gray-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
                 Sign Out
-              </Button>
+              </button>
             </form>
           </div>
         </CardContent>
