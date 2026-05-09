@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Clock, PlayCircle, Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, DollarSign, AlertCircle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getTreatmentPlans, createTreatmentPlan, deleteTreatmentPlan, updatePlanStatus, addTreatmentPhase, updatePhaseStatus, deleteTreatmentPhase } from "@/app/actions/treatment-plans";
+import { ToothSelector } from "@/components/shared/ToothSelector";
+import { ServiceCombobox } from "@/components/shared/ServiceCombobox";
+import { CurrencyInput } from "@/components/shared/CurrencyInput";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // ============ TYPES ============
 type PhaseStatus = "Completed" | "In Progress" | "Planned" | "Cancelled";
@@ -18,8 +22,10 @@ interface Phase {
   name: string;
   status: PhaseStatus;
   date: string;
-  price: string;
+  price: number; // Changed to number for internal logic
   notes: string;
+  serviceId?: string;
+  toothList?: string[];
 }
 
 interface Plan {
@@ -27,7 +33,7 @@ interface Plan {
   title: string;
   status: PlanStatus;
   progress: number;
-  cost: string;
+  cost: number; // Changed to number
   created: string;
   notes: string;
   phases: Phase[];
@@ -54,18 +60,37 @@ const TREATMENT_PRESETS = [
   "Orthodontic Adjustment", "Teeth Whitening", "Scaling & Root Planing", "Follow-up Visit",
 ];
 
-function calcProgress(phases: Phase[]): number {
-  if (phases.length === 0) return 0;
-  const completed = phases.filter(p => p.status === "Completed").length;
-  return Math.round((completed / phases.length) * 100);
+interface PlanStats {
+  clinical: number;
+  financial: number;
+  totalCost: number;
+  completedCost: number;
+  remainingBalance: number;
 }
 
-function calcCost(phases: Phase[]): string {
-  const total = phases.reduce((sum, p) => {
-    const num = parseFloat(p.price.replace(/[^0-9.]/g, ""));
-    return sum + (isNaN(num) ? 0 : num);
+function calcPlanStats(phases: Phase[]): PlanStats {
+  if (phases.length === 0) return { clinical: 0, financial: 0, totalCost: 0, completedCost: 0, remainingBalance: 0 };
+  
+  const totalPhases = phases.length;
+  const completedPhases = phases.filter(p => p.status === "Completed").length;
+  const clinicalProgress = Math.round((completedPhases / totalPhases) * 100);
+
+  const totalCost = phases.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const completedCost = phases.reduce((sum, p) => {
+    if (p.status !== "Completed") return sum;
+    return sum + (Number(p.price) || 0);
   }, 0);
-  return `$${total.toLocaleString()}`;
+
+  const financialProgress = totalCost > 0 ? Math.round((completedCost / totalCost) * 100) : 0;
+  const remainingBalance = totalCost - completedCost;
+
+  return {
+    clinical: clinicalProgress,
+    financial: financialProgress,
+    totalCost,
+    completedCost,
+    remainingBalance
+  };
 }
 
 
@@ -110,19 +135,40 @@ export function TreatmentPlans({
 
   // Forms
   const [newPlan, setNewPlan] = useState({ title: "", notes: "" });
-  const [newPlanPhases, setNewPlanPhases] = useState<{ name: string; date: string; price: string }[]>([]);
-  const [inlinePhase, setInlinePhase] = useState({ name: "", date: "", price: "" });
-  const [newPhase, setNewPhase] = useState({ name: "", date: "", price: "", notes: "" });
+  const [newPlanPhases, setNewPlanPhases] = useState<{ 
+    name: string; 
+    date: string; 
+    price: number;
+    notes: string;
+    serviceId?: string;
+    toothList?: string[];
+  }[]>([]);
+  const [inlinePhase, setInlinePhase] = useState({ 
+    name: "", 
+    date: "", 
+    price: 0,
+    notes: "",
+    serviceId: undefined as string | undefined,
+    toothList: [] as string[]
+  });
+  const [newPhase, setNewPhase] = useState({ 
+    name: "", 
+    date: "", 
+    price: 0, 
+    notes: "",
+    serviceId: undefined as string | undefined,
+    toothList: [] as string[]
+  });
 
   const newPlanTotalCost = newPlanPhases.reduce((s, p) => {
-    const n = parseFloat(p.price.replace(/[^0-9.]/g, ""));
+    const n = typeof p.price === 'number' ? p.price : parseFloat(String(p.price).replace(/[^0-9.]/g, ""));
     return s + (isNaN(n) ? 0 : n);
   }, 0);
 
   const addInlinePhase = () => {
     if (!inlinePhase.name.trim()) return;
     setNewPlanPhases(prev => [...prev, { ...inlinePhase }]);
-    setInlinePhase({ name: "", date: "", price: "" });
+    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] });
   };
 
   const removeInlinePhase = (idx: number) => {
@@ -139,8 +185,11 @@ export function TreatmentPlans({
       phases: newPlanPhases.map(p => ({
         name: p.name,
         date: p.date,
-        price: p.price,
-        status: "Planned"
+        price: p.price.toString(),
+        status: "Planned",
+        serviceId: p.serviceId,
+        toothList: p.toothList,
+        notes: p.notes
       }))
     };
     
@@ -154,7 +203,7 @@ export function TreatmentPlans({
     setNewPlanDialog(false);
     setNewPlan({ title: "", notes: "" });
     setNewPlanPhases([]);
-    setInlinePhase({ name: "", date: "", price: "" });
+    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] });
   };
 
   const handleDeletePlan = async (id: string) => {
@@ -172,13 +221,24 @@ export function TreatmentPlans({
     if (!plan) return;
     
     const step = plan.phases.length + 1;
-    const res = await addTreatmentPhase(planId, newPhase, step, patientId);
+    const phaseData = {
+      ...newPhase,
+      price: newPhase.price.toString()
+    };
+    const res = await addTreatmentPhase(planId, phaseData, step, patientId);
     if (res.success) {
       await loadPlans();
       onRefresh?.();
     }
     
-    setNewPhase({ name: "", date: "", price: "", notes: "" });
+    setNewPhase({ 
+      name: "", 
+      date: "", 
+      price: 0, 
+      notes: "",
+      serviceId: undefined,
+      toothList: []
+    });
     setAddPhaseDialog(null);
   };
 
@@ -206,8 +266,8 @@ export function TreatmentPlans({
         if (ph.id !== phaseId) return ph;
         return { ...ph, status: nextStatus };
       });
-      const progress = calcProgress(updatedPhases);
-      return { ...p, phases: updatedPhases, progress };
+      const stats = calcPlanStats(updatedPhases);
+      return { ...p, phases: updatedPhases, progress: stats.clinical };
     }));
     
     const res = await updatePhaseStatus(phaseId, nextStatus, patientId);
@@ -267,7 +327,7 @@ export function TreatmentPlans({
           <div className="p-3 rounded-xl bg-purple-50 border border-purple-100 text-center">
             <p className="text-xl font-black text-purple-700">
               ${plans.reduce((s, p) => {
-                const n = parseFloat(p.cost.replace(/[^0-9.]/g, ""));
+                const n = typeof p.cost === 'number' ? p.cost : parseFloat(String(p.cost).replace(/[^0-9.]/g, ""));
                 return s + (isNaN(n) ? 0 : n);
               }, 0).toLocaleString()}
             </p>
@@ -304,7 +364,7 @@ export function TreatmentPlans({
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-[10px] font-semibold text-gray-400 uppercase">Est. Cost</p>
-                      <p className="text-lg font-bold text-emerald-600">{plan.cost}</p>
+                      <p className="text-lg font-bold text-emerald-600">${plan.cost.toLocaleString()}</p>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                   </div>
@@ -313,21 +373,47 @@ export function TreatmentPlans({
                 {/* Expanded Content */}
                 {isExpanded && (
                   <div className="p-5 animate-fade-in-up">
-                    {/* Progress Bar */}
-                    <div className="mb-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Treatment Phases</span>
-                        <span className="text-[10px] font-bold text-blue-600 border border-blue-200 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-wider">
-                          {plan.progress}% Progress
-                        </span>
+                    {/* Progress Stats */}
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="flex flex-col p-4 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm transition-all hover:shadow-md">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Clinical Progress</p>
+                          <div className="p-1.5 bg-blue-100 rounded-lg">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <p className="text-2xl font-black text-blue-900 leading-none">{calcPlanStats(plan.phases).clinical}%</p>
+                          <p className="text-[10px] text-blue-600 font-medium">{plan.phases.filter(p => p.status === 'Completed').length}/{plan.phases.length} Phases</p>
+                        </div>
+                        <div className="w-full h-1.5 bg-blue-100 rounded-full mt-3 overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out" 
+                            style={{ width: `${calcPlanStats(plan.phases).clinical}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                          style={{ width: `${plan.progress}%` }}
-                        />
+
+                      <div className="flex flex-col p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 shadow-sm transition-all hover:shadow-md">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Financial Progress</p>
+                          <div className="p-1.5 bg-emerald-100 rounded-lg">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                          </div>
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <p className="text-2xl font-black text-emerald-900 leading-none">{calcPlanStats(plan.phases).financial}%</p>
+                          <p className="text-[10px] text-emerald-600 font-medium">Balance: ${calcPlanStats(plan.phases).remainingBalance.toLocaleString()}</p>
+                        </div>
+                        <div className="w-full h-1.5 bg-emerald-100 rounded-full mt-3 overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out" 
+                            style={{ width: `${calcPlanStats(plan.phases).financial}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
+
 
                     {/* Phases Timeline */}
                     {plan.phases.length > 0 ? (
@@ -352,6 +438,16 @@ export function TreatmentPlans({
                                   </p>
                                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                                     <p className="text-xs text-gray-400">{phase.date}</p>
+                                    {phase.toothList && phase.toothList.length > 0 && (
+                                      <div className="flex gap-1 items-center">
+                                        <span className="text-[9px] text-gray-300 font-bold ml-1">•</span>
+                                        {phase.toothList.map(t => (
+                                          <Badge key={t} variant="outline" className="text-[9px] px-1 py-0 rounded-md bg-blue-50/30 text-blue-500 border-blue-100">
+                                            #{t}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
                                     <Badge variant="outline" className={`text-[9px] px-1.5 py-0 rounded-full
                                       ${phase.status === "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
                                         phase.status === "In Progress" ? "bg-blue-50 text-blue-600 border-blue-200" :
@@ -364,7 +460,7 @@ export function TreatmentPlans({
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <p className={`text-sm font-bold ${phase.status === 'Completed' ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                    {phase.price}
+                                    ${Number(phase.price).toLocaleString()}
                                   </p>
                                   <button
                                     onClick={() => handleDeletePhase(plan.id, phase.id)}
@@ -503,15 +599,42 @@ export function TreatmentPlans({
               </div>
 
               {/* Inline add phase form */}
-              <div className="p-3 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30 space-y-3">
-                <input
-                  type="text"
-                  value={inlinePhase.name}
-                  onChange={(e) => setInlinePhase(p => ({ ...p, name: e.target.value }))}
-                  placeholder="Phase name (e.g., Root Canal Treatment)"
-                  className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
-                  onKeyDown={(e) => e.key === "Enter" && addInlinePhase()}
-                />
+              <div className="space-y-3 p-3 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <ServiceCombobox 
+                      selectedServiceId={inlinePhase.serviceId}
+                      onSelect={(service) => setInlinePhase(p => ({ 
+                        ...p, 
+                        name: service.name, 
+                        serviceId: service.id,
+                        price: Number(service.price)
+                      }))}
+                      className="w-full h-9"
+                    />
+                  </div>
+                  <Popover>
+                    <PopoverTrigger render={<Button variant="outline" size="sm" className="h-9 rounded-lg border-blue-200 bg-white text-blue-600 hover:bg-blue-50" />}>
+                      {inlinePhase.toothList.length > 0 ? (
+                        <Badge className="bg-blue-600 text-white hover:bg-blue-600 px-1.5 py-0 h-5">
+                          {inlinePhase.toothList.length} Teeth
+                        </Badge>
+                      ) : (
+                        "Select Teeth"
+                      )}
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[350px] p-4 rounded-2xl shadow-xl" align="end">
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Affected Teeth</p>
+                        <ToothSelector 
+                          selectedTeeth={inlinePhase.toothList}
+                          onChange={(teeth) => setInlinePhase(p => ({ ...p, toothList: teeth }))}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   <input
                     type="text"
@@ -520,12 +643,10 @@ export function TreatmentPlans({
                     placeholder="Date"
                     className="h-9 px-3 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
                   />
-                  <input
-                    type="text"
+                   <CurrencyInput 
                     value={inlinePhase.price}
-                    onChange={(e) => setInlinePhase(p => ({ ...p, price: e.target.value }))}
-                    placeholder="Price"
-                    className="h-9 px-3 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+                    onChange={(val) => setInlinePhase(p => ({ ...p, price: val }))}
+                    className="h-9"
                   />
                   <Button
                     size="sm"
@@ -541,7 +662,7 @@ export function TreatmentPlans({
 
             {/* Create Button */}
             <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: "" }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
+              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: 0, notes: "", toothList: [] }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
               <Button onClick={handleAddPlan} disabled={!newPlan.title.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-semibold shadow-md shadow-blue-500/20">
                 <Save className="w-4 h-4 mr-2" /> Create Plan
                 {newPlanPhases.length > 0 && (
@@ -575,9 +696,38 @@ export function TreatmentPlans({
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Phase Name *</label>
-              <input type="text" value={newPhase.name} onChange={(e) => setNewPhase(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Crown Preparation" className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Service *</label>
+              <ServiceCombobox 
+                selectedServiceId={newPhase.serviceId}
+                onSelect={(service) => setNewPhase(p => ({ 
+                  ...p, 
+                  name: service.name, 
+                  serviceId: service.id,
+                  price: Number(service.price)
+                }))}
+                className="w-full"
+              />
             </div>
+            
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Teeth Selection</label>
+              <div className="p-3 rounded-xl border border-gray-100 bg-gray-50/50">
+                <ToothSelector 
+                  selectedTeeth={newPhase.toothList || []}
+                  onChange={(teeth) => setNewPhase(p => ({ ...p, toothList: teeth }))}
+                />
+                {newPhase.toothList && newPhase.toothList.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {newPhase.toothList.map(t => (
+                      <Badge key={t} variant="secondary" className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">
+                        #{t}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Date</label>
@@ -585,7 +735,11 @@ export function TreatmentPlans({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Price</label>
-                <input type="text" value={newPhase.price} onChange={(e) => setNewPhase(p => ({ ...p, price: e.target.value }))} placeholder="$400" className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+                <CurrencyInput 
+                  value={newPhase.price}
+                  onChange={(val) => setNewPhase(p => ({ ...p, price: val }))}
+                  className="h-10"
+                />
               </div>
             </div>
             <div className="space-y-1.5">

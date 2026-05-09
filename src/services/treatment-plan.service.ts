@@ -22,6 +22,8 @@ export class TreatmentPlanService {
         create: (data.phases || []).map((ph: any, i: number) => ({
           tenant: { connect: { id: tenantId } },
           serviceName: ph.name,
+          service: ph.serviceId ? { connect: { id: ph.serviceId } } : undefined,
+          toothList: ph.toothList?.join(',') || null,
           step: i + 1,
           status: ph.status || 'PLANNED',
           price: parseFloat(ph.price?.toString().replace(/[^0-9.]/g, "")) || 0,
@@ -47,6 +49,8 @@ export class TreatmentPlanService {
     return this.repository.createItem(tenantId, {
       plan: { connect: { id: planId } },
       serviceName: phaseData.name,
+      service: phaseData.serviceId ? { connect: { id: phaseData.serviceId } } : undefined,
+      toothList: phaseData.toothList?.join(',') || null,
       step: step,
       status: phaseData.status || 'PLANNED',
       price: parseFloat(phaseData.price?.toString().replace(/[^0-9.]/g, "")) || 0,

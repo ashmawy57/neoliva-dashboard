@@ -6,468 +6,245 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RefreshCw, Stethoscope, Image as ImageIcon, PenTool, X, Info, Save, Trash2, FileText, Camera, AlertTriangle, Edit3, Check } from "lucide-react";
-import { updateToothCondition, uploadToothPhoto, deleteToothPhoto, updatePatientNotes } from "@/app/actions/patients";
+import { 
+  RefreshCw, 
+  Stethoscope, 
+  Image as ImageIcon, 
+  PenTool, 
+  Trash2, 
+  FileText, 
+  Camera, 
+  AlertTriangle, 
+  Edit3, 
+  Check,
+  Save,
+  Plus,
+  Info as InfoIcon
+} from "lucide-react";
+import { 
+  updateToothCondition, 
+  uploadToothPhoto, 
+  deleteToothPhoto, 
+  updatePatientNotes 
+} from "@/app/actions/patients";
 
-type ToothCondition = "healthy" | "caries" | "filled" | "extracted" | "crown";
-type ToothType = "permanent" | "primary";
-type SurfaceColor = string | null;
-type SurfaceKey = "buccal" | "lingual" | "distal" | "mesial" | "occlusal";
-
-interface ToothSurfaces {
-  buccal: SurfaceColor;
-  lingual: SurfaceColor;
-  distal: SurfaceColor;
-  mesial: SurfaceColor;
-  occlusal: SurfaceColor;
-}
-
-interface ClinicalFinding {
-  id: string;
-  tooth: number;
-  date: string;
-  note: string;
-  type: "finding" | "parameter";
-}
-
-interface ToothPhoto {
-  id: string;
-  tooth: number;
-  name: string;
-  date: string;
-  size: string;
-  url: string;
-}
-
-interface ToothMeta {
-  surfaces: ToothSurfaces;
-  toothType: ToothType;
-  findings: ClinicalFinding[];
-}
-
-const emptySurfaces = (): ToothSurfaces => ({
-  buccal: null, lingual: null, distal: null, mesial: null, occlusal: null,
-});
-
-const defaultMeta = (): ToothMeta => ({
-  surfaces: emptySurfaces(),
-  toothType: 'permanent',
-  findings: [],
-});
-
-function parseToothMeta(notesJson?: string | null): ToothMeta {
-  try {
-    if (!notesJson) return defaultMeta();
-    const parsed = JSON.parse(notesJson);
-    // Only treat as metadata if it has our expected shape
-    if (typeof parsed === 'object' && ('surfaces' in parsed || 'toothType' in parsed || 'findings' in parsed)) {
-      return {
-        surfaces: { ...emptySurfaces(), ...(parsed.surfaces ?? {}) },
-        toothType: parsed.toothType ?? 'permanent',
-        findings: Array.isArray(parsed.findings) ? parsed.findings : [],
-      };
-    }
-    return defaultMeta();
-  } catch {
-    return defaultMeta();
-  }
-}
-
-const TOOTH_CONDITIONS: Record<ToothCondition, { color: string; label: string; tooltip: string }> = {
-  healthy: { color: "bg-white border-gray-300", label: "Healthy", tooltip: "Healthy Tooth" },
-  caries: { color: "bg-red-500 border-red-600", label: "Caries", tooltip: "Dental Caries" },
-  filled: { color: "bg-blue-400 border-blue-500", label: "Filled", tooltip: "Restoration / Filling" },
-  extracted: { color: "bg-gray-800 border-gray-900", label: "Extracted", tooltip: "Missing or Extracted" },
-  crown: { color: "bg-amber-400 border-amber-500", label: "Crown", tooltip: "Crown or Veneer" },
-};
-
-const SURFACE_COLORS = [
-  { label: "N", tw: "bg-[#e5e5cb]", hex: null, description: "Normal / Clear" },
-  { label: "Caries", tw: "bg-[#ef4444]", hex: "#ef4444", description: "Dental Caries" },
-  { label: "Filling (Amalgam)", tw: "bg-[#1d4ed8]", hex: "#1d4ed8", description: "Amalgam Filling", pattern: true },
-  { label: "Filling (Composite)", tw: "bg-[#3b82f6]", hex: "#3b82f6", description: "Composite Filling" },
-  { label: "Fracture", tw: "bg-[#86efac]", hex: "#86efac", description: "Tooth Fracture" },
-  { label: "Sealant", tw: "bg-[#c026d3]", hex: "#c026d3", description: "Pit & Fissure Sealant" },
-  { label: "Abrasion", tw: "bg-[#22c55e]", hex: "#22c55e", description: "Abrasion" },
-  { label: "Erosion", tw: "bg-[#ea580c]", hex: "#ea580c", description: "Erosion" },
-  { label: "Attrition", tw: "bg-[#eab308]", hex: "#eab308", description: "Attrition" },
-];
-
-const topTeeth = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
-const bottomTeeth = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
-
-const SURFACE_LABELS: Record<SurfaceKey, string> = {
-  buccal: "Buccal/Labial",
-  lingual: "Lingual/Palatal",
-  distal: "Distal",
-  mesial: "Mesial",
-  occlusal: "Occlusal/Incisal",
-};
-
-// Static tiny SVG for the grid
-const ToothSurfacesSvg = ({ className, surfaces }: { className?: string; surfaces?: ToothSurfaces }) => (
-  <svg viewBox="0 0 100 100" className={className} stroke="currentColor" strokeWidth="6" fill="none">
-    <circle cx="50" cy="50" r="46" fill={surfaces?.buccal || "none"} />
-    <circle cx="50" cy="50" r="18" fill={surfaces?.occlusal || "none"} />
-    <path d="M 18,18 L 37,37 M 82,18 L 63,37 M 18,82 L 37,63 M 82,82 L 63,63" />
-  </svg>
-);
-
-// Large Interactive SVG for the modal
-const InteractiveSurfacesSvg = ({ onClickWedge, surfaces }: { onClickWedge?: (wedge: SurfaceKey) => void; surfaces: ToothSurfaces }) => {
-  return (
-    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm relative z-0">
-      <path d="M 50 4 A 46 46 0 0 1 82.5 17.5 L 63 37 A 18 18 0 0 0 50 32 A 18 18 0 0 0 37 37 L 17.5 17.5 A 46 46 0 0 1 50 4 Z" fill={surfaces.buccal || "white"} stroke="#d1d5db" strokeWidth="2.5" className="hover:opacity-80 cursor-pointer transition-all" onClick={() => onClickWedge && onClickWedge('buccal')} />
-      <path d="M 50 96 A 46 46 0 0 0 82.5 82.5 L 63 63 A 18 18 0 0 1 50 68 A 18 18 0 0 1 37 63 L 17.5 82.5 A 46 46 0 0 0 50 96 Z" fill={surfaces.lingual || "white"} stroke="#d1d5db" strokeWidth="2.5" className="hover:opacity-80 cursor-pointer transition-all" onClick={() => onClickWedge && onClickWedge('lingual')} />
-      <path d="M 4 50 A 46 46 0 0 1 17.5 17.5 L 37 37 A 18 18 0 0 0 32 50 A 18 18 0 0 0 37 63 L 17.5 82.5 A 46 46 0 0 1 4 50 Z" fill={surfaces.distal || "white"} stroke="#d1d5db" strokeWidth="2.5" className="hover:opacity-80 cursor-pointer transition-all" onClick={() => onClickWedge && onClickWedge('distal')} />
-      <path d="M 96 50 A 46 46 0 0 0 82.5 17.5 L 63 37 A 18 18 0 0 1 68 50 A 18 18 0 0 1 63 63 L 82.5 82.5 A 46 46 0 0 0 96 50 Z" fill={surfaces.mesial || "white"} stroke="#d1d5db" strokeWidth="2.5" className="hover:opacity-80 cursor-pointer transition-all" onClick={() => onClickWedge && onClickWedge('mesial')} />
-      <circle cx="50" cy="50" r="18" fill={surfaces.occlusal || "white"} stroke="#d1d5db" strokeWidth="2.5" className="hover:opacity-80 cursor-pointer transition-all" onClick={() => onClickWedge && onClickWedge('occlusal')} />
-
-      {/* Triangles/Markers inner UI */}
-      <polygon points="50,22 47,26 53,26" fill="#6b7280" className="pointer-events-none" />
-      <polygon points="50,78 47,74 53,74" fill="#6b7280" className="pointer-events-none" />
-      <polygon points="22,50 26,47 26,53" fill="#6b7280" className="pointer-events-none" />
-      <polygon points="78,50 74,47 74,53" fill="#6b7280" className="pointer-events-none" />
-      <polygon points="50,47 47,51 53,51" fill="#6b7280" className="pointer-events-none" />
-    </svg>
-  );
-}
-
-// Surfaces Popover Menu component
-const SurfacesPopover = ({ tooth, surfaces, onSurfaceChange }: { tooth: number; surfaces: ToothSurfaces; onSurfaceChange: (tooth: number, surface: SurfaceKey, color: SurfaceColor) => void }) => {
-  const [activeWedge, setActiveWedge] = useState<SurfaceKey | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  const handleColorPick = (surface: SurfaceKey, hex: SurfaceColor) => {
-    onSurfaceChange(tooth, surface, hex);
-    setActiveWedge(null);
-  };
-
-  const hasAnySurface = Object.values(surfaces).some(s => s !== null);
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger className="focus:outline-none bg-transparent border-0 p-0.5 m-0 w-full flex justify-center group hover:bg-gray-100 rounded-lg transition-colors cursor-pointer">
-         <div className="rounded-full flex items-center justify-center p-[2px]">
-            <ToothSurfacesSvg className={`w-[20px] h-[20px] transition-colors ${hasAnySurface ? "text-blue-500" : "text-gray-400 group-hover:text-blue-500"}`} surfaces={surfaces} />
-         </div>
-      </PopoverTrigger>
-      <PopoverContent className="w-[340px] p-4 rounded-3xl shadow-2xl border-gray-100 flex flex-col gap-4 bg-white relative z-[100]">
-         <Button 
-           className="w-full bg-[#ffb74d] hover:bg-[#ffa726] text-white font-bold rounded-2xl shadow-sm border border-[#ffa726] h-11 text-[16px]"
-           onClick={() => setIsOpen(false)}
-         >
-           Submit and close
-         </Button>
-
-         <div className="text-center py-1">
-           <p className="text-[28px] leading-tight font-bold text-gray-800">{tooth}</p>
-           <p className="text-[17px] text-gray-600">Tooth surfaces</p>
-         </div>
-
-         <div className="relative w-full aspect-square flex items-center justify-center p-3 bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden">
-           {/* Section Labels */}
-           <span className="absolute top-4 text-sm font-semibold text-gray-600 z-0">Buccal/Labial</span>
-           <span className="absolute bottom-4 text-sm text-center font-semibold text-gray-600 z-0 flex flex-col items-center">
-             Lingual/Palatal
-             <span className="text-[12px] text-gray-500 font-medium mt-0.5 whitespace-nowrap">© Occlusal/Incisal</span>
-           </span>
-           <span className="absolute left-3 top-1/2 -translate-y-1/2 -rotate-90 text-sm font-semibold text-gray-600 z-0">Distal</span>
-           <span className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-sm font-semibold text-gray-600 z-0">Mesial</span>
-
-           {/* Interactive SVG */}
-           <div className="w-[68%] h-[68%] relative z-10 hover:opacity-90">
-             <InteractiveSurfacesSvg onClickWedge={setActiveWedge} surfaces={surfaces} />
-           </div>
-
-           {/* Color Picker Dropdown that appears on top */}
-           {activeWedge && (
-             <div className="absolute inset-x-0 inset-y-0 flex items-center justify-center bg-white/70 backdrop-blur-[2px] z-[99] transition-all rounded-3xl">
-               <div className="bg-white border shadow-2xl rounded-2xl p-2 w-[200px] max-h-full flex flex-col gap-1 overflow-y-auto animate-in fade-in zoom-in-95 relative z-[100]">
-                 <button className="absolute top-1 right-2 text-gray-400 hover:text-gray-900 text-lg leading-none p-1" onClick={() => setActiveWedge(null)}>×</button>
-                 <p className="text-[11px] text-gray-500 font-bold mb-1.5 pt-1 uppercase text-center border-b pb-1 truncate px-4">{SURFACE_LABELS[activeWedge]}</p>
-                 <div className="flex flex-col gap-0.5">
-                   {SURFACE_COLORS.map((c, i) => (
-                      <button 
-                        key={i} 
-                        className={`flex items-center gap-3 p-1.5 hover:bg-gray-100 rounded-lg w-full text-left transition-colors ${surfaces[activeWedge] === c.hex ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
-                        onClick={() => handleColorPick(activeWedge, c.hex)}
-                      >
-                        {c.hex === null ? 
-                          <div className={`w-7 h-7 rounded-[4px] flex items-center justify-center font-black text-sm border border-gray-300 shadow-sm ${c.tw}`}>N</div> : 
-                          <div className={`w-7 h-7 rounded-[4px] shadow-sm border border-black/10 relative overflow-hidden ${c.tw}`}>
-                            {c.pattern && (
-                              <div className="absolute inset-0 right-0 left-0" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.7) 2px, rgba(255,255,255,0.7) 4px)' }} />
-                            )}
-                          </div>
-                        }
-                        <span className="text-xs font-medium text-gray-700">{c.label}</span>
-                      </button>
-                   ))}
-                 </div>
-               </div>
-             </div>
-           )}
-         </div>
-
-         {/* Active surface indicators */}
-         {hasAnySurface && (
-           <div className="flex flex-wrap gap-1.5 px-1">
-             {(Object.entries(surfaces) as [SurfaceKey, SurfaceColor][]).filter(([, v]) => v).map(([k, v]) => (
-               <div key={k} className="flex items-center gap-1.5 bg-gray-50 rounded-full px-2.5 py-1 border border-gray-200">
-                 <div className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: v || undefined }} />
-                 <span className="text-[10px] font-semibold text-gray-600 uppercase">{k}</span>
-                 <button className="text-gray-400 hover:text-red-500 ml-0.5" onClick={() => onSurfaceChange(tooth, k, null)}>
-                   <X className="w-2.5 h-2.5" />
-                 </button>
-               </div>
-             ))}
-           </div>
-         )}
-
-         <Button 
-           className="w-full bg-[#4facfe] hover:bg-[#00f2fe] text-white font-bold rounded-2xl shadow-sm border-0 h-11 text-[15px] flex items-center justify-center gap-2 mt-1"
-           onClick={() => {
-             setIsOpen(false);
-           }}
-         >
-           <PenTool className="w-4 h-4 text-white" /> Color code interpretation
-         </Button>
-      </PopoverContent>
-    </Popover>
-  )
-}
+import { 
+  ToothCondition as ToothCondType, 
+  ToothType, 
+  SurfaceColor, 
+  SurfaceKey, 
+  ToothSurfaces, 
+  ClinicalFinding, 
+  ToothPhoto, 
+  ToothMeta,
+  emptySurfaces,
+  defaultMeta,
+  parseToothMeta,
+  TOOTH_CONDITIONS,
+  SURFACE_COLORS,
+  SURFACE_LABELS,
+  DentalGrid,
+  ToothVisual,
+  ToothCell,
+  SurfacesPopover
+} from "@/components/shared/dental";
+import { cn } from "@/lib/utils";
 
 export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
   const [isPending, startTransition] = useTransition();
-  const [noteSaving, startNoteSave] = useTransition();
-  // Guards against useEffect resetting state during an active save
+  const [isUpdating, setIsUpdating] = useState(false);
   const isUpdatingRef = useRef(false);
 
-  // ── Tooth conditions (condition + surfaces + toothType + findings packed as JSON in notes) ──
-  const [teeth, setTeeth] = useState<Record<number, ToothCondition>>(() => {
-    const mapping: Record<number, ToothCondition> = {};
-    (patient?.toothConditions ?? []).forEach((c: any) => {
-      mapping[c.toothNumber] = c.condition as ToothCondition;
-    });
-    return mapping;
-  });
-
-  const [toothMeta, setToothMeta] = useState<Record<number, ToothMeta>>(() => {
-    const map: Record<number, ToothMeta> = {};
-    (patient?.toothConditions ?? []).forEach((c: any) => {
-      map[c.toothNumber] = parseToothMeta(c.notes);
-    });
-    return map;
-  });
-
-  // ── Photos from PatientDocument (type = TOOTH_PHOTO_<number>) ──
-  const buildPhotos = (docs: any[]): ToothPhoto[] =>
-    (docs ?? [])
-      .filter((d: any) => d.type?.startsWith('TOOTH_PHOTO_'))
-      .map((d: any) => ({
-        id: d.id,
-        tooth: parseInt(d.type.replace('TOOTH_PHOTO_', '')) || 0,
-        name: d.name.replace(/^tooth-\d+-/, ''),
-        date: d.uploadDate
-          ? new Date(d.uploadDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-          : '—',
-        size: '—',
-        url: d.fileUrl,
-      }));
-
-  const [photos, setPhotos] = useState<ToothPhoto[]>(() =>
-    buildPhotos(patient?.patientDocuments ?? [])
-  );
-
-  // ── Doctor's chart note ──
-  const [chartNote, setChartNote] = useState<string>(patient?.notes || '');
+  // Core Chart State
+  const [toothConditions, setToothConditions] = useState<Record<number, ToothCondType>>({});
+  const [toothMeta, setToothMeta] = useState<Record<number, ToothMeta>>({});
+  const [photos, setPhotos] = useState<ToothPhoto[]>([]);
+  
+  // Note State
+  const [chartNote, setChartNote] = useState("");
   const [isEditingNote, setIsEditingNote] = useState(false);
+  const [isSavingNote, startNoteSave] = useTransition();
 
-  // Dialogs state
+  // Dialog States
   const [findingsDialog, setFindingsDialog] = useState<number | null>(null);
   const [photosDialog, setPhotosDialog] = useState<number | null>(null);
   const [extractionDialog, setExtractionDialog] = useState<number | null>(null);
   const [colorCodeDialog, setColorCodeDialog] = useState(false);
-  const [newFinding, setNewFinding] = useState('');
-  const [findingType, setFindingType] = useState<'finding' | 'parameter'>('finding');
+
+  // Finding/Parameter form state
+  const [findingType, setFindingType] = useState<"finding" | "parameter">("finding");
+  const [newFinding, setNewFinding] = useState("");
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // Sync ALL state when patient prop refreshes (skip during active mutations)
+  // 1. Initialize State from Patient Data
   useEffect(() => {
     if (!patient || isUpdatingRef.current) return;
-    const condMap: Record<number, ToothCondition> = {};
-    const metaMap: Record<number, ToothMeta> = {};
-    (patient.toothConditions ?? []).forEach((c: any) => {
-      condMap[c.toothNumber] = c.condition as ToothCondition;
-      metaMap[c.toothNumber] = parseToothMeta(c.notes);
+
+    // Map Tooth Conditions
+    const conditions: Record<number, ToothCondType> = {};
+    const meta: Record<number, ToothMeta> = {};
+    
+    (patient.toothConditions || []).forEach((c: any) => {
+      // FIX BUG #1: Use toothNumber (camelCase) instead of tooth_number (snake_case from DB)
+      const tNum = c.toothNumber; 
+      if (tNum) {
+        conditions[tNum] = c.condition as ToothCondType;
+        meta[tNum] = parseToothMeta(c.notes);
+      }
     });
-    setTeeth(condMap);
-    setToothMeta(metaMap);
-    setPhotos(buildPhotos(patient.patientDocuments ?? []));
-    setChartNote(patient.notes || '');
+
+    setToothConditions(conditions);
+    setToothMeta(meta);
+    setChartNote(patient.notes || "");
+
+    // Map Photos (PatientDocuments with specific type)
+    const toothPhotos: ToothPhoto[] = (patient.patient_documents || [])
+      .filter((doc: any) => doc.type?.startsWith("TOOTH_PHOTO_"))
+      .map((doc: any) => {
+        const tooth = parseInt(doc.type.split("_").pop() || "0");
+        return {
+          id: doc.id,
+          tooth,
+          url: doc.fileUrl,
+          name: doc.name,
+          date: new Date(doc.uploadDate || doc.createdAt).toLocaleDateString(),
+          size: "Live"
+        };
+      });
+    setPhotos(toothPhotos);
   }, [patient]);
 
-  // ── Unified save: writes condition + full metadata JSON atomically ──
-  const saveTooth = async (
-    tooth: number,
-    conditionOverride?: ToothCondition,
-    metaOverride?: Partial<ToothMeta>
-  ) => {
-    const condition = conditionOverride ?? (teeth[tooth] || 'healthy');
-    const currentMeta = toothMeta[tooth] ?? defaultMeta();
-    const finalMeta = metaOverride ? { ...currentMeta, ...metaOverride } : currentMeta;
-    const result = await updateToothCondition(patient.id, tooth, condition, JSON.stringify(finalMeta));
-    if (!result?.success) {
-      console.error('Failed to save tooth data:', result?.error);
+  // 2. Persistence Handlers
+  const currentCondition = (tooth: number) => toothConditions[tooth] || "healthy";
+  const currentMeta = (tooth: number) => toothMeta[tooth] || defaultMeta();
+
+  const persistChange = async (tooth: number, condition: ToothCondType, meta: ToothMeta) => {
+    isUpdatingRef.current = true;
+    setIsUpdating(true);
+    
+    try {
+      const result = await updateToothCondition(
+        patient.id, 
+        tooth, 
+        condition, 
+        JSON.stringify(meta)
+      );
+      
+      if (result.success) {
+        onRefresh?.();
+      }
+    } finally {
+      setIsUpdating(false);
+      isUpdatingRef.current = false;
     }
-    isUpdatingRef.current = false;
-    onRefresh?.();
   };
 
-  // ── Condition ──
-  const handleConditionChange = (tooth: number, cond: ToothCondition) => {
-    isUpdatingRef.current = true;
-    setTeeth(prev => ({ ...prev, [tooth]: cond }));
-    startTransition(() => saveTooth(tooth, cond));
+  const handleConditionChange = (tooth: number, cond: ToothCondType) => {
+    const prevCond = currentCondition(tooth);
+    if (prevCond === cond) return;
+
+    setToothConditions(prev => ({ ...prev, [tooth]: cond }));
+    persistChange(tooth, cond, currentMeta(tooth));
   };
 
-  // ── Surface ──
-  const handleSurfaceChange = (tooth: number, surface: SurfaceKey, color: SurfaceColor) => {
-    isUpdatingRef.current = true;
-    const currentMeta = toothMeta[tooth] ?? defaultMeta();
-    const newSurfaces = { ...currentMeta.surfaces, [surface]: color };
-    setToothMeta(prev => ({
-      ...prev,
-      [tooth]: { ...(prev[tooth] ?? defaultMeta()), surfaces: newSurfaces },
-    }));
-    startTransition(() => saveTooth(tooth, undefined, { surfaces: newSurfaces }));
-  };
-
-  // ── Tooth Type (Primary / Permanent) ──
   const handleToggleToothType = (tooth: number) => {
-    isUpdatingRef.current = true;
-    const currentMeta = toothMeta[tooth] ?? defaultMeta();
-    const newType: ToothType = currentMeta.toothType === 'primary' ? 'permanent' : 'primary';
-    setToothMeta(prev => ({
-      ...prev,
-      [tooth]: { ...(prev[tooth] ?? defaultMeta()), toothType: newType },
-    }));
-    startTransition(() => saveTooth(tooth, undefined, { toothType: newType }));
+    const meta = currentMeta(tooth);
+    const newType: ToothType = meta.toothType === 'permanent' ? 'primary' : 'permanent';
+    const newMeta = { ...meta, toothType: newType };
+    
+    setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
+    persistChange(tooth, currentCondition(tooth), newMeta);
   };
 
-  // ── Clinical Findings ──
+  const handleSurfaceChange = (tooth: number, surface: SurfaceKey, color: SurfaceColor) => {
+    const meta = currentMeta(tooth);
+    const newMeta = {
+      ...meta,
+      surfaces: { ...meta.surfaces, [surface]: color }
+    };
+    
+    setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
+    persistChange(tooth, currentCondition(tooth), newMeta);
+  };
+
   const handleAddFinding = (tooth: number) => {
     if (!newFinding.trim()) return;
-    isUpdatingRef.current = true;
-    const f: ClinicalFinding = {
-      id: `f-${Date.now()}`,
-      tooth,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-      note: newFinding.trim(),
+    
+    const meta = currentMeta(tooth);
+    const finding: ClinicalFinding = {
+      id: Math.random().toString(36).substring(7),
       type: findingType,
+      note: newFinding.trim(),
+      date: new Date().toLocaleDateString()
     };
-    const currentMeta = toothMeta[tooth] ?? defaultMeta();
-    const newFindings = [f, ...currentMeta.findings];
-    setToothMeta(prev => ({
-      ...prev,
-      [tooth]: { ...(prev[tooth] ?? defaultMeta()), findings: newFindings },
-    }));
-    setNewFinding('');
-    startTransition(() => saveTooth(tooth, undefined, { findings: newFindings }));
+    
+    const newMeta = {
+      ...meta,
+      findings: [finding, ...meta.findings]
+    };
+    
+    setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
+    setNewFinding("");
+    persistChange(tooth, currentCondition(tooth), newMeta);
   };
 
-  const handleDeleteFinding = (tooth: number, findingId: string) => {
-    isUpdatingRef.current = true;
-    const currentMeta = toothMeta[tooth] ?? defaultMeta();
-    const newFindings = currentMeta.findings.filter(f => f.id !== findingId);
-    setToothMeta(prev => ({
-      ...prev,
-      [tooth]: { ...(prev[tooth] ?? defaultMeta()), findings: newFindings },
-    }));
-    startTransition(() => saveTooth(tooth, undefined, { findings: newFindings }));
+  const handleDeleteFinding = (tooth: number, id: string) => {
+    const meta = currentMeta(tooth);
+    const newMeta = {
+      ...meta,
+      findings: meta.findings.filter(f => f.id !== id)
+    };
+    
+    setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
+    persistChange(tooth, currentCondition(tooth), newMeta);
   };
 
-  // ── Photos ──
-  const handleAddPhoto = (tooth: number) => {
+  const handleExtraction = (tooth: number) => {
+    handleConditionChange(tooth, "extracted");
+    setExtractionDialog(null);
+  };
+
+  const handleAddPhoto = async (tooth: number) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
       if (!file) return;
+
       setPhotoUploading(true);
       setPhotoError(null);
+      
       const formData = new FormData();
       formData.append('file', file);
-      const result = await uploadToothPhoto(patient.id, tooth, formData);
+
+      const res = await uploadToothPhoto(patient.id, tooth, formData);
       setPhotoUploading(false);
-      if (result?.success && result.document) {
-        const newPhoto: ToothPhoto = {
-          id: (result.document as any).id,
-          tooth,
-          name: file.name,
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-          url: (result.document as any).fileUrl,
-        };
-        setPhotos(prev => [newPhoto, ...prev]);
+      
+      if (res.success) {
+        onRefresh?.();
       } else {
-        setPhotoError(result?.error || 'Upload failed. Ensure the "patient-photos" bucket exists in Supabase Storage.');
+        setPhotoError(res.error || "Failed to upload photo");
       }
     };
     input.click();
   };
 
-  const handleDeletePhoto = async (documentId: string, fileUrl: string) => {
-    setPhotos(prev => prev.filter(p => p.id !== documentId));
-    await deleteToothPhoto(patient.id, documentId, fileUrl);
+  const handleDeletePhoto = async (id: string, url: string) => {
+    const res = await deleteToothPhoto(patient.id, id, url);
+    if (res.success) {
+      onRefresh?.();
+    }
   };
 
-  const handleExtraction = (tooth: number) => {
-    handleConditionChange(tooth, 'extracted');
-    setExtractionDialog(null);
-  };
-
-  const currentCondition = (tooth: number) => teeth[tooth] || 'healthy';
-  const getToothType = (tooth: number): ToothType => toothMeta[tooth]?.toothType ?? 'permanent';
-  const getToothSurfaces = (tooth: number): ToothSurfaces => toothMeta[tooth]?.surfaces ?? emptySurfaces();
-
-
-
-  // SVG for teeth with double roots (Molars)
-  const MolarSvg = ({ className, fill, stroke }: { className?: string, fill: string, stroke: string }) => (
-    <svg viewBox="0 0 24 32" className={className} fill={fill} stroke={stroke} strokeWidth="1.5">
-      <path d="M 7 2 C 3 2 2 6 3 11 C 4 16 4.5 19 6 28 C 7 32 10 28 11 20 C 12 17 12 17 13 20 C 14 28 17 32 18 28 C 19.5 19 20 16 21 11 C 22 6 21 2 17 2 C 14 2 13 5 12 5 C 11 5 10 2 7 2 Z" />
-    </svg>
-  );
-
-  // SVG for teeth with single root (Incisors, Canines, Premolars)
-  const IncisorSvg = ({ className, fill, stroke }: { className?: string, fill: string, stroke: string }) => (
-    <svg viewBox="0 0 24 32" className={className} fill={fill} stroke={stroke} strokeWidth="1.5">
-      <path d="M 7 2 C 3 2 4 8 5 13 C 6 18 9 27 10 30 C 11 32 13 32 14 30 C 15 27 18 18 19 13 C 20 8 21 2 17 2 C 14 2 13 4 12 4 C 11 4 10 2 7 2 Z" />
-    </svg>
-  );
-
-  // Primary (baby) tooth SVG — smaller, rounder
-  const PrimaryToothSvg = ({ className, fill, stroke }: { className?: string, fill: string, stroke: string }) => (
-    <svg viewBox="0 0 24 32" className={className} fill={fill} stroke={stroke} strokeWidth="1.5">
-      <path d="M 8 4 C 4 4 4 9 5 14 C 6 19 9 25 11 28 C 11.5 29 12.5 29 13 28 C 15 25 18 19 19 14 C 20 9 20 4 16 4 C 14 4 13 6 12 6 C 11 6 10 4 8 4 Z" />
-    </svg>
-  );
-
-  const isMolar = (tooth: number) => {
-    const lastDigit = tooth % 10;
-    return lastDigit >= 6 && lastDigit <= 8;
-  };
-
-  const renderToothColumn = (tooth: number, isTop: boolean) => {
+  const renderTooth = (tooth: number, isTop: boolean) => {
     const cond = currentCondition(tooth);
-    const type = getToothType(tooth);
-    const surfaces = getToothSurfaces(tooth);
+    const meta = currentMeta(tooth);
+    const type = meta.toothType;
+    const surfaces = meta.surfaces;
 
-    const getFillAndStroke = (c: ToothCondition) => {
+    const getFillAndStroke = (c: ToothCondType) => {
       switch (c) {
         case "healthy": return { fill: "#ffffff", stroke: "#94a3b8" };
         case "caries": return { fill: "#ef4444", stroke: "#b91c1c" };
@@ -479,36 +256,38 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     };
 
     const { fill, stroke } = getFillAndStroke(cond);
-    const ToothComponent = type === "primary" ? PrimaryToothSvg : (isMolar(tooth) ? MolarSvg : IncisorSvg);
 
     return (
-      <div key={tooth} className="flex flex-col items-center gap-1.5 w-full">
-        {isTop && (
-          <span className={`text-[11px] font-bold text-center w-full ${type === "primary" ? "text-purple-600" : "text-gray-700"}`}>
-            {tooth}
-            {type === "primary" && <span className="text-[8px] block text-purple-400">1°</span>}
-          </span>
-        )}
-        
-        {/* Separate Popover for Surfaces */}
-        {!isTop && <SurfacesPopover tooth={tooth} surfaces={surfaces} onSurfaceChange={handleSurfaceChange} />}
-        
-        {/* Main Tooth status Popover */}
+      <ToothCell
+        key={tooth}
+        toothId={tooth}
+        isTop={isTop}
+        toothType={type}
+        fill={fill}
+        stroke={stroke}
+        isExtracted={cond === "extracted"}
+        extraContent={
+          <SurfacesPopover 
+            tooth={tooth} 
+            surfaces={surfaces} 
+            onSurfaceChange={handleSurfaceChange} 
+          />
+        }
+      >
         <Popover>
-          <PopoverTrigger className="cursor-pointer group flex items-center justify-center focus:outline-none bg-transparent border-0 p-1 w-full hover:bg-gray-100 rounded-xl transition-colors">
-            <div className="relative w-8 h-12 flex items-center justify-center transition-transform duration-200 group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md mx-auto">
-              <ToothComponent 
-                className={`w-full h-full ${isTop ? "rotate-180" : ""} ${cond === "extracted" ? "opacity-30" : ""}`} 
-                fill={fill} 
-                stroke={stroke} 
-              />
-              {cond === "extracted" && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-gray-400 font-bold text-2xl leading-none">×</span>
-                </div>
-              )}
-            </div>
+          <PopoverTrigger render={<button className="cursor-pointer group flex items-center justify-center focus:outline-none bg-transparent border-0 p-1 w-full hover:bg-gray-100 rounded-xl transition-colors" />}>
+            <ToothVisual
+              toothId={tooth}
+              isTop={isTop}
+              toothType={type}
+              fill={fill}
+              stroke={stroke}
+              isExtracted={cond === "extracted"}
+              className="group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md mx-auto"
+            />
+            {isUpdating && <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-xl"><RefreshCw className="w-4 h-4 animate-spin text-blue-500" /></div>}
           </PopoverTrigger>
+
           <PopoverContent className="w-80 p-4 rounded-2xl shadow-xl border-gray-100 flex flex-col gap-4">
             <div className="text-center pb-3 border-b border-gray-100">
                <p className="text-lg font-bold text-gray-900">Tooth #{tooth}</p>
@@ -523,12 +302,13 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                 <button
                   key={key}
                   title={val.tooltip}
-                  onClick={() => handleConditionChange(tooth, key as ToothCondition)}
-                  className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                  onClick={() => handleConditionChange(tooth, key as ToothCondType)}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-2 rounded-lg transition-all",
                     key === cond ? 'bg-white shadow-sm ring-1 ring-gray-200' : 'hover:bg-gray-100/50'
-                  }`}
+                  )}
                 >
-                  <div className={`w-4 h-4 rounded-full border ${val.color}`} />
+                  <div className={cn("w-4 h-4 rounded-full border", val.color)} />
                 </button>
               ))}
             </div>
@@ -565,8 +345,8 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                 className="w-full justify-start text-xs rounded-xl bg-gray-100/80 hover:bg-gray-200 text-gray-700 h-10"
               >
                 <Stethoscope className="w-4 h-4 mr-2.5 text-gray-500" /> Clinical findings & Parameters
-                {(toothMeta[tooth]?.findings?.length ?? 0) > 0 && (
-                  <Badge className="ml-auto bg-blue-100 text-blue-700 text-[10px] px-1.5">{toothMeta[tooth].findings.length}</Badge>
+                {(meta.findings?.length ?? 0) > 0 && (
+                  <Badge className="ml-auto bg-blue-100 text-blue-700 text-[10px] px-1.5">{meta.findings.length}</Badge>
                 )}
               </Button>
               <Button 
@@ -582,17 +362,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
             </div>
           </PopoverContent>
         </Popover>
-
-        {/* Separate Popover for Surfaces */}
-        {isTop && <SurfacesPopover tooth={tooth} surfaces={surfaces} onSurfaceChange={handleSurfaceChange} />}
-        
-        {!isTop && (
-          <span className={`text-[11px] font-bold text-center w-full ${type === "primary" ? "text-purple-600" : "text-gray-700"}`}>
-            {tooth}
-            {type === "primary" && <span className="text-[8px] block text-purple-400">1°</span>}
-          </span>
-        )}
-      </div>
+      </ToothCell>
     );
   };
 
@@ -603,7 +373,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
           <h3 className="text-lg font-bold text-gray-900">Adult Odontogram (FDI)</h3>
           <p className="text-sm text-gray-500">Interactive 32-tooth chart for mapping conditions.</p>
         </div>
-        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm cursor-help" onClick={() => setColorCodeDialog(true)}>
           {Object.entries(TOOTH_CONDITIONS).map(([key, val]) => (
             <div key={key} className="flex items-center gap-1.5">
               <span className={`w-3 h-3 rounded-full border ${val.color}`} />
@@ -612,49 +382,74 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
               </span>
             </div>
           ))}
+          <div className="w-px h-4 bg-gray-200 mx-1" />
+          <InfoIcon className="w-4 h-4 text-gray-400" />
         </div>
       </div>
 
-      <Card className="border-0 shadow-sm bg-white">
-        <CardContent className="p-8">
-          <div className="flex flex-col items-center gap-10 w-full max-w-5xl mx-auto bg-gray-50/50 rounded-[2rem] p-6 sm:p-10 border border-gray-100 shadow-inner">
-            {/* Top Teeth Row */}
-            <div className="flex justify-center gap-4 sm:gap-8 w-full relative">
-              <div className="grid grid-cols-8 gap-1 w-full justify-items-center">
-                {topTeeth.slice(0, 8).map(t => renderToothColumn(t, true))}
-              </div>
-              <div className="w-0.5 bg-gray-300 rounded-full shrink-0" />
-              <div className="grid grid-cols-8 gap-1 w-full justify-items-center">
-                {topTeeth.slice(8, 16).map(t => renderToothColumn(t, true))}
+      <Card className="border-0 shadow-sm bg-white overflow-hidden">
+        <CardContent className="p-8 relative">
+          {isUpdating && (
+            <div className="absolute inset-0 z-10 bg-white/40 backdrop-blur-[1px] flex items-center justify-center">
+              <div className="bg-white px-4 py-2 rounded-full shadow-lg border border-gray-100 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                <span className="text-xs font-bold text-gray-600">Updating Chart...</span>
               </div>
             </div>
-            
-            {/* Horizontal Maxillary/Mandibular Spacer */}
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent my-2" />
-
-            {/* Bottom Teeth Row */}
-            <div className="flex justify-center gap-4 sm:gap-8 w-full relative">
-              <div className="grid grid-cols-8 gap-1 w-full justify-items-center">
-                {bottomTeeth.slice(0, 8).map(t => renderToothColumn(t, false))}
-              </div>
-              <div className="w-0.5 bg-gray-300 rounded-full shrink-0" />
-              <div className="grid grid-cols-8 gap-1 w-full justify-items-center">
-                {bottomTeeth.slice(8, 16).map(t => renderToothColumn(t, false))}
-              </div>
-            </div>
-          </div>
+          )}
+          <DentalGrid renderTooth={renderTooth} />
         </CardContent>
       </Card>
-      
-      {/* Recent Notes or History */}
-      <div className="bg-blue-50/50 rounded-2xl p-5 border border-blue-100/50 flex gap-4">
-        <div className="w-1.5 h-auto bg-blue-500 rounded-full" />
-        <div>
-          <h4 className="text-sm font-semibold text-blue-900 mb-1.5">Doctor's Note</h4>
-          <p className="text-sm text-blue-800 leading-relaxed">
-            Patient reported sensitivity in tooth #16. Cavity confirmed via X-Ray. Scheduled for filling next visit. Tooth #47 crown is intact and stable.
-          </p>
+
+      {/* Doctor's Chart Note */}
+      <div className="mt-6 rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-500" /> Doctor&apos;s Chart Note
+          </h3>
+          {!isEditingNote ? (
+            <button
+              onClick={() => setIsEditingNote(true)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setChartNote(patient?.notes || ''); setIsEditingNote(false); }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  startNoteSave(async () => {
+                    await updatePatientNotes(patient.id, chartNote);
+                    setIsEditingNote(false);
+                    onRefresh?.();
+                  });
+                }}
+                disabled={isSavingNote}
+                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSavingNote ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+              </button>
+            </div>
+          )}
         </div>
+        {isEditingNote ? (
+          <textarea
+            value={chartNote}
+            onChange={e => setChartNote(e.target.value)}
+            placeholder="Add clinical notes about this patient's dental chart…"
+            className="w-full h-28 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+          />
+        ) : (
+          <p className="text-sm text-gray-600 min-h-[2.5rem] whitespace-pre-wrap leading-relaxed">
+            {chartNote || <span className="text-gray-400 italic">No notes recorded. Click Edit to add a note.</span>}
+          </p>
+        )}
       </div>
 
       {/* ==================== DIALOGS ==================== */}
@@ -668,18 +463,23 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-            {/* Add new finding */}
             <div className="space-y-3">
               <div className="flex gap-2">
                 <button
                   onClick={() => setFindingType("finding")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${findingType === "finding" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                    findingType === "finding" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
                 >
                   Finding
                 </button>
                 <button
                   onClick={() => setFindingType("parameter")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${findingType === "parameter" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                    findingType === "parameter" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
                 >
                   Parameter
                 </button>
@@ -692,20 +492,23 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
               />
               <Button 
                 onClick={() => findingsDialog && handleAddFinding(findingsDialog)}
-                disabled={!newFinding.trim()}
+                disabled={!newFinding.trim() || isUpdating}
                 className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 text-sm font-semibold w-full shadow-md shadow-blue-500/20"
               >
-                <Save className="w-4 h-4 mr-2" /> Save Finding
+                {isUpdating ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />} 
+                Add to Chart
               </Button>
             </div>
 
-            {/* Existing findings */}
             <div className="space-y-3 pt-2">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Previous Findings</p>
-              {(findingsDialog !== null ? (toothMeta[findingsDialog]?.findings ?? []) : []).length > 0 ? (
-                (toothMeta[findingsDialog!]?.findings ?? []).map(f => (
+              {findingsDialog !== null && (currentMeta(findingsDialog).findings ?? []).length > 0 ? (
+                currentMeta(findingsDialog!).findings.map(f => (
                   <div key={f.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50/50 flex gap-3 group">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${f.type === 'finding' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                      f.type === 'finding' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
+                    )}>
                       {f.type === 'finding' ? <FileText className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -714,7 +517,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                     </div>
                     <button
                       onClick={() => findingsDialog !== null && handleDeleteFinding(findingsDialog, f.id)}
-                      disabled={isPending}
+                      disabled={isUpdating}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 disabled:opacity-30"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -725,7 +528,6 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                 <p className="text-sm text-gray-400 text-center py-4">No findings recorded yet</p>
               )}
             </div>
-
           </div>
         </DialogContent>
       </Dialog>
@@ -760,7 +562,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
                     </a>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                      <p className="text-[10px] text-gray-400">{p.date} · {p.size}</p>
+                      <p className="text-[10px] text-gray-400">{p.date}</p>
                     </div>
                     <button
                       onClick={() => handleDeletePhoto(p.id, p.url)}
@@ -815,78 +617,22 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
         <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl">
           <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50 m-0">
             <DialogTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <PenTool className="w-5 h-5 text-blue-600" /> Color Code Interpretation
+              <PenTool className="w-5 h-5 text-blue-600" /> Condition Key
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-3">
-            {SURFACE_COLORS.map((c, i) => (
-              <div key={i} className="flex items-center gap-4 p-2.5 rounded-xl border border-gray-100 bg-gray-50/30">
-                <div className={`w-8 h-8 rounded-lg shadow-sm border border-black/10 flex-shrink-0 relative overflow-hidden ${c.tw}`}>
-                  {c.pattern && (
-                    <div className="absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.7) 2px, rgba(255,255,255,0.7) 4px)' }} />
-                  )}
-                  {c.hex === null && <span className="flex items-center justify-center w-full h-full text-xs font-black text-gray-600">N</span>}
-                </div>
+            {Object.entries(TOOTH_CONDITIONS).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-4 p-2.5 rounded-xl border border-gray-100 bg-gray-50/30">
+                <div className={cn("w-8 h-8 rounded-lg shadow-sm border border-black/10 flex-shrink-0", val.color)} />
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{c.label}</p>
-                  <p className="text-xs text-gray-500">{c.description}</p>
+                  <p className="text-sm font-semibold text-gray-800">{val.label}</p>
+                  <p className="text-xs text-gray-500">{val.tooltip}</p>
                 </div>
               </div>
             ))}
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Doctor's Chart Note */}
-      <div className="mt-6 rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-blue-500" /> Doctor&apos;s Chart Note
-          </h3>
-          {!isEditingNote ? (
-            <button
-              onClick={() => setIsEditingNote(true)}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              <Edit3 className="w-3.5 h-3.5" /> Edit
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setChartNote(patient?.notes || ''); setIsEditingNote(false); }}
-                className="text-xs text-gray-400 hover:text-gray-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  startNoteSave(async () => {
-                    await updatePatientNotes(patient.id, chartNote);
-                    setIsEditingNote(false);
-                    onRefresh?.();
-                  });
-                }}
-                disabled={noteSaving}
-                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {noteSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
-              </button>
-            </div>
-          )}
-        </div>
-        {isEditingNote ? (
-          <textarea
-            value={chartNote}
-            onChange={e => setChartNote(e.target.value)}
-            placeholder="Add clinical notes about this patient's dental chart…"
-            className="w-full h-28 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
-          />
-        ) : (
-          <p className="text-sm text-gray-600 min-h-[2.5rem] whitespace-pre-wrap">
-            {chartNote || <span className="text-gray-400 italic">No notes recorded. Click Edit to add a note.</span>}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

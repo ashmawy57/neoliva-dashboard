@@ -2,21 +2,22 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trash2, RotateCw, CheckSquare, Square, Loader2 } from "lucide-react";
 import { updatePeriodontalMeasurement, clearPeriodontalMeasurements } from "@/app/actions/patients";
-
-const topTeeth = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
-const bottomTeeth = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+import { 
+  DentalGrid, 
+  ToothCell, 
+  ToothVisual,
+  isMolar
+} from "@/components/shared/dental";
+import { cn } from "@/lib/utils";
 
 const parameters = [
   "Suppuration", "Mobility", "Probing depth",
   "Clinical attach. level", "Gingival margin + probing depth", "Mucogingival junction",
   "Furcation", "Bleeding", "Gingival margin"
 ];
-
-
 
 export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
   const [isPending, startTransition] = useTransition();
@@ -51,8 +52,6 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   };
 
   // Sync state when patient prop changes
-  // Skip-once pattern: if a save is in-flight, consume the guard and skip this render.
-  // The next natural patient change (e.g. navigation) will sync correctly.
   useEffect(() => {
     if (!patient) return;
     if (isUpdatingRef.current) {
@@ -96,10 +95,6 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
     const measurement = data[tooth]?.[param];
     if (!measurement) return;
 
-    // isUpdatingRef = true → the skip-once guard in useEffect prevents the
-    // router.refresh() below from immediately overwriting local state.
-    // When the component remounts after a tab switch it reads the REFRESHED
-    // parent patient state which now contains the saved measurement.
     isUpdatingRef.current = true;
     startTransition(async () => {
       await updatePeriodontalMeasurement(patient.id, {
@@ -110,8 +105,6 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
         singleValue: measurement.single ?? null,
         date: new Date().toISOString()
       });
-      // Must call onRefresh so parent patient.periodontalMeasurements updates.
-      // Without this, tab remounts re-initialize from stale parent state.
       onRefresh?.();
     });
   };
@@ -123,34 +116,14 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
      return `${pd[side][0].toString().padStart(2, '0')}-${pd[side][1].toString().padStart(2, '0')}-${pd[side][2].toString().padStart(2, '0')}`;
   };
   
-  // SVGs for teeth
-  const MolarSvg = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 32" className={className} fill="white" stroke="black" strokeWidth="1">
-      <path d="M 7 2 C 3 2 2 6 3 11 C 4 16 4.5 19 6 28 C 7 32 10 28 11 20 C 12 17 12 17 13 20 C 14 28 17 32 18 28 C 19.5 19 20 16 21 11 C 22 6 21 2 17 2 C 14 2 13 5 12 5 C 11 5 10 2 7 2 Z" />
-    </svg>
-  );
-
-  const IncisorSvg = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 32" className={className} fill="white" stroke="black" strokeWidth="1">
-      <path d="M 7 2 C 3 2 4 8 5 13 C 6 18 9 27 10 30 C 11 32 13 32 14 30 C 15 27 18 18 19 13 C 20 8 21 2 17 2 C 14 2 13 4 12 4 C 11 4 10 2 7 2 Z" />
-    </svg>
-  );
-
-  const isMolar = (tooth: number) => {
-    const lastDigit = tooth % 10;
-    return lastDigit >= 6 && lastDigit <= 8;
-  };
-
   const renderValueTable = (tooth: number, param: string) => {
-    // 0..13 scrolling list mockup
     const values = param === "Suppuration" || param === "Bleeding" ? [0, 1] : Array.from({length: 14}, (_, i) => i);
     
     return (
       <PopoverContent className="w-[340px] p-0 rounded-2xl shadow-2xl border-gray-100 overflow-hidden bg-[#e0e0e0]">
-        {/* Header equivalent */}
         <div className="flex justify-between items-center p-2 bg-white">
            <div className="w-10 h-12 bg-blue-500 rounded-xl flex flex-col items-center justify-center text-white font-bold p-1">
-              <IncisorSvg className="w-4 h-6 rotate-180" />
+              <ToothVisual toothId={tooth-1} isTop={true} className="w-4 h-6 rotate-180" stroke="white" fill="transparent" />
               <span className="text-[10px] leading-none mt-1">{tooth - 1}</span>
            </div>
            
@@ -167,19 +140,18 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
 
            <div className="w-10 h-12 bg-blue-500 rounded-xl flex flex-col items-center justify-center text-white font-bold p-1">
               <span className="text-[10px] leading-none mb-1">{tooth + 1}</span>
-              <IncisorSvg className="w-4 h-6" />
+              <ToothVisual toothId={tooth+1} isTop={false} className="w-4 h-6" stroke="white" fill="transparent" />
            </div>
         </div>
 
         <div className="text-center py-2">
-           <p className="text-lg font-bold text-gray-800 flex items-center justify-center gap-1">
-             <IncisorSvg className="w-4 h-6 stroke-gray-500" />
+           <div className="text-lg font-bold text-gray-800 flex items-center justify-center gap-1">
+             <ToothVisual toothId={tooth} isTop={false} className="w-4 h-6 opacity-50" stroke="#6b7280" fill="transparent" />
              #{tooth} {param} {param !== "Suppuration" && "(mm)"}
-           </p>
+           </div>
         </div>
 
         <div className="flex w-full px-2 gap-1 pb-2 h-72">
-           {/* Buccal/Labial */}
            <div className="flex-1 bg-[#800000] rounded-xl flex flex-col overflow-hidden text-center text-white font-semibold">
               <div className="p-1 pb-0 text-sm">Buccal/Labial</div>
               <div className="flex text-[10px] border-b border-white/20 pb-1">
@@ -203,7 +175,6 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
               </div>
            </div>
 
-           {/* Lingual/Palatal */}
            <div className="flex-1 bg-[#0000cd] rounded-xl flex flex-col overflow-hidden text-center text-white font-semibold">
               <div className="p-1 pb-0 text-sm">Lingual/Palatal</div>
               <div className="flex text-[10px] border-b border-white/20 pb-1">
@@ -260,10 +231,10 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
         </div>
         
         <div className="text-center py-4">
-           <p className="text-lg font-bold text-gray-800">
-             <IncisorSvg className="w-4 h-6 inline mr-1 stroke-gray-500" />
+           <div className="text-lg font-bold text-gray-800 flex items-center justify-center gap-1">
+             <ToothVisual toothId={tooth} isTop={false} className="w-4 h-6 opacity-50" stroke="#6b7280" fill="transparent" />
              #{tooth} {param}
-           </p>
+           </div>
         </div>
 
         <div className="flex flex-col items-center gap-2 pb-6 px-4">
@@ -287,41 +258,43 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   };
 
   const renderTooth = (tooth: number, isTop: boolean) => {
-    const ToothComponent = isMolar(tooth) ? MolarSvg : IncisorSvg;
-    
     return (
       <Popover key={tooth} open={openPopover === tooth} onOpenChange={(open) => setOpenPopover(open ? tooth : null)}>
-        <PopoverTrigger className="flex flex-col items-center cursor-pointer group focus:outline-none w-full border border-transparent hover:bg-white/30 rounded-lg p-0.5 transition-colors">
-          {/* Numbers for Top teeth sit above the root */}
-          {isTop && <span className="text-[12px] font-bold text-[#8D6E63] w-full text-center pb-1">{tooth}</span>}
-          
-          <div className="relative w-10 h-[60px] flex items-center justify-center bg-transparent">
-             <ToothComponent 
-               className={`w-full h-full ${isTop ? "rotate-180" : ""} drop-shadow-sm`} 
-             />
-             {/* The gumline (blue line) overlay */}
-             <div className={`absolute left-0 right-0 h-px bg-[#0000cd] z-10 ${isTop ? "bottom-4" : "top-4"}`} />
-             <div className={`absolute left-0 right-0 h-[4px] bg-[#0000cd] rounded-full w-1 mx-auto z-10 ${isTop ? "bottom-[14px]" : "top-[14px]"}`} />
-          </div>
+        <PopoverTrigger render={<div className="focus:outline-none" />}>
+          <ToothCell
+            toothId={tooth}
+            isTop={isTop}
+            className="group"
+            label={String(tooth)}
 
-          <div className="flex flex-col gap-0.5 items-center justify-center py-2 h-16 text-center w-full transition-opacity">
-             <div className={`text-[#800000] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200 ${showBuccal ? 'opacity-100' : 'opacity-0'}`}>
-                 {getParmValStr(tooth, activeParam, 'buccal')}
-             </div>
-             <div className={`text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200 ${showLingual ? 'opacity-100' : 'opacity-0'}`}>
-                 {getParmValStr(tooth, activeParam, 'lingual')}
-             </div>
-             <div className="h-4 flex items-center justify-center w-full">
-               <div className="w-[80%] h-[2px] border-b-[1.5px] border-dashed border-[#0000cd]" />
-             </div>
-          </div>
-
-          {/* Numbers for Bottom teeth sit below the root (wait, root is facing down for bottom?) */}
-          {/* Top: Root UP, Crown DOWN. Bottom: Crown UP, Root DOWN */}
-          {!isTop && <span className="text-[12px] font-bold text-[#8D6E63] w-full text-center pt-1">{tooth}</span>}
+              extraContent={
+                <div className="flex flex-col gap-0.5 items-center justify-center py-2 h-16 text-center w-full transition-opacity">
+                   <div className={cn("text-[#800000] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showBuccal ? 'opacity-100' : 'opacity-0')}>
+                       {getParmValStr(tooth, activeParam, 'buccal')}
+                   </div>
+                   <div className={cn("text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showLingual ? 'opacity-100' : 'opacity-0')}>
+                       {getParmValStr(tooth, activeParam, 'lingual')}
+                   </div>
+                   <div className="h-4 flex items-center justify-center w-full">
+                     <div className="w-[80%] h-[2px] border-b-[1.5px] border-dashed border-[#0000cd]" />
+                   </div>
+                </div>
+              }
+            >
+              <div className="relative w-10 h-[60px] flex items-center justify-center bg-transparent cursor-pointer hover:bg-white/30 rounded-lg transition-colors">
+                 <ToothVisual 
+                    toothId={tooth}
+                    isTop={isTop}
+                    className="w-full h-full"
+                    fill="white"
+                    stroke="black"
+                 />
+                 <div className={`absolute left-0 right-0 h-px bg-[#0000cd] z-10 ${isTop ? "bottom-4" : "top-4"}`} />
+                 <div className={`absolute left-0 right-0 h-[4px] bg-[#0000cd] rounded-full w-1 mx-auto z-10 ${isTop ? "bottom-[14px]" : "top-[14px]"}`} />
+              </div>
+            </ToothCell>
         </PopoverTrigger>
         
-        {/* Single-value params: Mobility (0-4) and Furcation (0-3) */}
         {(activeParam === "Mobility" || activeParam === "Furcation") ? renderSingleValueDropdown(tooth, activeParam) : renderValueTable(tooth, activeParam)}
       </Popover>
     )
@@ -329,7 +302,6 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
 
   return (
     <div className="w-full bg-[#f5f5f5] rounded-3xl overflow-hidden border border-gray-200 animate-fade-in-up">
-      {/* Top Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-center py-2 text-lg">
         Periodontics
       </div>
@@ -358,14 +330,16 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
           </Button>
         </div>
 
-        {/* Parameters Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {parameters.map(p => (
             <Button
               key={p}
               variant="outline"
               onClick={() => setActiveParam(p)}
-              className={`rounded-full border-2 text-xs font-semibold h-9 ${p === activeParam ? "bg-blue-600 text-white border-blue-600" : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"}`}
+              className={cn(
+                "rounded-full border-2 text-xs font-semibold h-9",
+                p === activeParam ? "bg-blue-600 text-white border-blue-600" : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200"
+              )}
             >
               {p}
             </Button>
@@ -373,12 +347,10 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
         </div>
       </div>
 
-      {/* Main Chart Area */}
       <div className="flex h-auto w-full">
-        {/* Sidebar Tools */}
         <div className="w-20 bg-[#dbe2ea] border-r border-gray-300 flex flex-col items-center gap-6 py-6 shrink-0 z-20">
            <Button onClick={() => setIsRotated(!isRotated)} className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-2 rounded-2xl h-12 w-12 shadow-sm flex flex-col items-center justify-center">
-             <RotateCw className={`w-5 h-5 mb-0.5 transition-transform duration-300 ${isRotated ? 'rotate-90' : ''}`} />
+             <RotateCw className={cn("w-5 h-5 mb-0.5 transition-transform duration-300", isRotated ? 'rotate-90' : '')} />
              <span className="text-[9px] font-bold">90°</span>
            </Button>
 
@@ -397,36 +369,12 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
            </div>
         </div>
 
-        {/* Scrollable grid area */}
-        <div className="flex-1 overflow-x-auto bg-blue-50/50">
-           <div className={`min-w-[800px] p-6 pt-8 pb-10 flex flex-col items-center justify-center gap-6 relative transition-transform duration-500 origin-center ${isRotated ? 'rotate-90' : 'rotate-0'}`}>
-              {/* Top View */}
-              <div className="flex w-full justify-center relative">
-                 <div className="w-full absolute top-[62px] border-t-[1.5px] border-[#0000cd] z-0" /> {/* main line */}
-                 <div className="grid grid-cols-8 gap-1.5 w-full justify-items-center">
-                    {topTeeth.slice(0, 8).map(t => renderTooth(t, true))}
-                 </div>
-                 <div className="w-px bg-black opacity-30 mx-2 shrink-0 z-10" />
-                 <div className="grid grid-cols-8 gap-1.5 w-full justify-items-center">
-                    {topTeeth.slice(8, 16).map(t => renderTooth(t, true))}
-                 </div>
-              </div>
-
-              {/* Middle horizontal spacing divider */}
-              <div className="w-full h-8" />
-
-              {/* Bottom View */}
-              <div className="flex w-full justify-center relative">
-                 <div className="grid grid-cols-8 gap-1.5 w-full justify-items-center">
-                    {bottomTeeth.slice(0, 8).map(t => renderTooth(t, false))}
-                 </div>
-                 <div className="w-px bg-black opacity-30 mx-2 shrink-0 z-10" />
-                 <div className="grid grid-cols-8 gap-1.5 w-full justify-items-center">
-                    {bottomTeeth.slice(8, 16).map(t => renderTooth(t, false))}
-                 </div>
-                 <div className="w-full absolute top-[62px] border-t-[1.5px] border-[#0000cd] z-0" /> {/* main line */}
-              </div>
-           </div>
+        <div className="flex-1 overflow-x-auto bg-blue-50/50 p-6 pt-8 pb-10 flex items-center justify-center">
+            <DentalGrid 
+              renderTooth={renderTooth} 
+              className={cn("bg-transparent border-0 shadow-none p-0 max-w-none transition-transform duration-500 origin-center", isRotated ? 'rotate-90' : 'rotate-0')}
+              showQuadrants={false}
+            />
         </div>
       </div>
     </div>

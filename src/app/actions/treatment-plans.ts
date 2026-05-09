@@ -18,26 +18,22 @@ export async function getTreatmentPlans(patientId: string) {
           id: item.id,
           step: item.step || 1,
           name: item.serviceName,
+          serviceId: item.serviceId,
+          toothList: item.toothList ? item.toothList.split(',') : [],
           status: item.status || 'Planned',
           date: item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'TBD',
-          price: `$${Number(item.price).toLocaleString()}`,
+          price: Number(item.price) || 0,
           notes: item.notes || ''
         }));
 
-      const completed = phases.filter((p: any) => p.status === 'Completed').length;
-      const progress = phases.length > 0 ? Math.round((completed / phases.length) * 100) : 0;
-      
-      const cost = phases.reduce((sum: number, p: any) => {
-        const num = parseFloat(p.price.replace(/[^0-9.]/g, ""));
-        return sum + (isNaN(num) ? 0 : num);
-      }, 0);
+      const totalCost = phases.reduce((sum: number, p: any) => sum + p.price, 0);
 
       return {
         id: plan.id,
         title: plan.title,
         status: plan.status || 'Active',
-        progress,
-        cost: `$${cost.toLocaleString()}`,
+        progress: 0, // Will be calculated in the component
+        cost: totalCost,
         created: plan.createdAt ? new Date(plan.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—',
         notes: plan.notes || '',
         phases

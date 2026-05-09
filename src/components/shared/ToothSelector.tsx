@@ -1,0 +1,118 @@
+'use client';
+
+import React, { useEffect } from 'react';
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { X, Grid2X2 } from "lucide-react";
+import { 
+  DentalGrid,
+  ToothCell,
+  useDentalSelection
+} from "./dental";
+
+interface ToothSelectorProps {
+  selectedTeeth: string[];
+  onChange: (teeth: string[]) => void;
+  className?: string;
+}
+
+export function ToothSelector({
+  selectedTeeth: initialSelected = [],
+  onChange,
+  className
+}: ToothSelectorProps) {
+  
+  const { 
+    selectedTeeth, 
+    toggleTooth, 
+    toggleQuadrant, 
+    clearSelection,
+    setSelectedTeeth 
+  } = useDentalSelection({ 
+    initialSelected, 
+    onChange 
+  });
+
+  // Keep internal state in sync with external prop if it changes externally
+  useEffect(() => {
+    if (JSON.stringify(initialSelected) !== JSON.stringify(selectedTeeth)) {
+      setSelectedTeeth(initialSelected);
+    }
+  }, [initialSelected, setSelectedTeeth, selectedTeeth]);
+
+  const renderTooth = (id: number, isTop: boolean) => {
+    const toothId = String(id);
+    const isSelected = selectedTeeth.includes(toothId);
+    
+    return (
+      <ToothCell
+        key={id}
+        toothId={id}
+        isTop={isTop}
+        isSelected={isSelected}
+        fill={isSelected ? "currentColor" : "none"}
+        stroke="currentColor"
+        onClick={() => toggleTooth(toothId)}
+        buttonClassName={cn(
+          isSelected ? "text-primary" : "text-muted-foreground/40"
+        )}
+      />
+    );
+  };
+
+  return (
+    <div className={cn("space-y-6 p-6 border rounded-2xl bg-white shadow-sm", className)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Grid2X2 className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">Tooth Selection</h4>
+            <p className="text-[11px] text-muted-foreground">Select one or more teeth or quadrants</p>
+          </div>
+        </div>
+        {selectedTeeth.length > 0 && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={clearSelection}
+            className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 rounded-full"
+          >
+            Clear Selection ({selectedTeeth.length})
+          </Button>
+        )}
+      </div>
+
+      <DentalGrid 
+        renderTooth={renderTooth} 
+        onQuadrantClick={toggleQuadrant}
+      />
+
+      {selectedTeeth.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Selected Teeth</span>
+          <div className="flex flex-wrap gap-1.5">
+            {selectedTeeth.map(tooth => (
+              <Badge 
+                key={tooth} 
+                variant="secondary" 
+                className="pl-2 pr-1 py-1 gap-1 text-[11px] bg-primary/5 text-primary border-primary/20 rounded-lg"
+              >
+                Tooth {tooth}
+                <button 
+                  type="button" 
+                  onClick={() => toggleTooth(tooth)}
+                  className="hover:bg-primary/20 rounded-md p-0.5 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
