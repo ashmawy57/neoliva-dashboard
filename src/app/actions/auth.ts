@@ -56,11 +56,15 @@ export async function signupWithInvite(formData: FormData) {
 
   const supabase = await createClient();
 
+  // Use the production URL from env, fallback to localhost for dev
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
   // Sign up in Supabase
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${siteUrl}/auth/callback`,
       data: {
         email_confirm: true // In a real app, you'd want email confirmation
       }

@@ -16,10 +16,16 @@ export async function createClinicRequest(formData: FormData) {
 
   const supabase = await createClient();
   
+  // Use the production URL from env, fallback to localhost for dev
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
   // 1. Create Supabase User
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/callback`,
+    }
   });
 
   if (authError || !authData.user) {
