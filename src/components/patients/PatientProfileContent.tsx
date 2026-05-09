@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Phone, Mail, Calendar as CalendarIcon, MapPin, Activity as ActivityIcon,
-  FileText, Heart, Stethoscope, ArrowLeft, Image as ImageIcon, Pill, LayoutDashboard, ClipboardList, Smile, Printer, Loader2
+  FileText, Heart, Stethoscope, ArrowLeft, Image as ImageIcon, Pill, LayoutDashboard, ClipboardList, Smile
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,44 +19,16 @@ import { PatientDocuments } from "@/components/patients/PatientDocuments";
 import { OralExam } from "@/components/patients/OralExam";
 import { MedicalHistory } from "@/components/patients/MedicalHistory";
 import { VisitHistory } from "@/components/patients/VisitHistory";
-import { updateInvoiceStatus } from "@/app/actions/patients";
+import { BillingList } from "@/components/patients/billing/BillingList";
 
 export function PatientProfileContent({ patient: initialPatient }: { patient: any }) {
   const router = useRouter();
-  const [showInvoices, setShowInvoices] = useState(false);
   const [patient, setPatient] = useState(initialPatient);
-  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
 
   // Sync local patient state when server re-fetches after router.refresh()
   useEffect(() => {
     setPatient(initialPatient);
   }, [initialPatient]);
-
-  const handlePayInvoice = async (invoiceId: string) => {
-    setPayingInvoiceId(invoiceId);
-    try {
-      const result = await updateInvoiceStatus(invoiceId, 'Paid', patient.id);
-      if (result.success) {
-        setPatient((prev: any) => {
-          const invoiceToUpdate = prev.invoiceHistory?.find((i: any) => i.id === invoiceId);
-          return {
-            ...prev,
-            invoiceHistory: prev.invoiceHistory?.map((inv: any) => 
-              inv.id === invoiceId ? { ...inv, status: 'Paid' } : inv
-            ),
-            outstanding: Math.max(0, prev.outstanding - (invoiceToUpdate?.amount || 0))
-          };
-        });
-      } else {
-        alert("Failed to pay invoice.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred while paying the invoice.");
-    } finally {
-      setPayingInvoiceId(null);
-    }
-  };
 
   const refreshData = () => {
     // In a server component world, we use router.refresh() to update data
@@ -196,7 +168,6 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
 
             <TabsContent value="history" className="mt-6">
               <VisitHistory visits={visits} patientId={patient.id} />
-
             </TabsContent>
 
             <TabsContent value="medicalHistory" className="mt-6 animate-fade-in-up">
@@ -220,7 +191,7 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
             </TabsContent>
 
             <TabsContent value="prescriptions" className="mt-6">
-              <Prescriptions patientId={patient.id} initialData={patient.prescriptions} onRefresh={refreshData} />
+              <Prescriptions patientId={patient.id} initialData={patient.prescriptions} patientName={patient.name} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="documents" className="mt-6">
@@ -228,153 +199,13 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
             </TabsContent>
 
             <TabsContent value="billing" className="mt-6">
-              <Card className="border-0 shadow-sm">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between p-5 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl border border-red-100 mb-6">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Total Outstanding Balance</p>
-                      <p className="text-3xl font-bold text-red-600 mt-1">${Number(patient.outstanding ?? 0).toFixed(2)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{(patient.invoiceHistory ?? []).length} invoice{(patient.invoiceHistory ?? []).length !== 1 ? "s" : ""} pending payment</p>
-                    </div>
-                    <Button 
-                       variant="outline" 
-                       onClick={() => setShowInvoices(!showInvoices)}
-                       className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 transition-colors"
-                    >
-                      {showInvoices ? "Hide Invoices" : "View Invoices"}
-                    </Button>
-                  </div>
-
-                  {showInvoices && (
-                     <div className="space-y-4 animate-fade-in-up">
-                       <h3 className="font-semibold text-gray-900 border-b border-gray-100 pb-2">Pending Invoices</h3>
-                       {(patient.invoiceHistory ?? []).length > 0 ? (
-                       <div className="grid gap-3">
-                         {(patient.invoiceHistory ?? []).map((inv: any) => (
-                           <div key={inv.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 border border-gray-100 rounded-xl bg-white shadow-sm hover:border-blue-100 transition-colors">
-                             <div>
-                               <div className="flex flex-wrap items-center gap-2 mb-1">
-                                 <p className="font-bold text-gray-900">{inv.id}</p>
-                                 <Badge variant="outline" className={inv.status === "Overdue" ? "bg-red-50 text-red-600 border-red-200" : "bg-orange-50 text-orange-600 border-orange-200"}>{inv.status}</Badge>
-                               </div>
-                               <p className="text-sm text-gray-500">{inv.treatment} · {inv.date}</p>
-                             </div>
-                             <div className="mt-3 sm:mt-0 flex flex-wrap items-center gap-3">
-                               <p className="font-bold text-xl text-gray-900 mr-2">{inv.amount}</p>
-                               <Button 
-                                 size="sm" 
-                                 variant="outline" 
-                                 className="rounded-lg shadow-sm border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                 onClick={() => {
-                                  const printWindow = window.open('', '_blank');
-                                  if (!printWindow) return;
-                                  
-                                  const htmlContent = `
-                                    <html>
-                                      <head>
-                                        <title>Invoice ${inv.id}</title>
-                                        <style>
-                                          body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 40px; }
-                                          .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0, 0, 0, 0.05); font-size: 16px; line-height: 24px; border-radius: 8px; }
-                                          table { width: 100%; line-height: inherit; text-align: left; border-collapse: collapse; }
-                                          table td { padding: 5px; vertical-align: top; }
-                                          table tr td:nth-child(2) { text-align: right; }
-                                          table tr.top table td { padding-bottom: 20px; }
-                                          table tr.top table td.title { font-size: 38px; line-height: 45px; color: #2563eb; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; }
-                                          table tr.information table td { padding-bottom: 40px; }
-                                          table tr.heading td { background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: bold; padding: 12px; }
-                                          table tr.details td { padding-bottom: 20px; }
-                                          table tr.item td { border-bottom: 1px solid #f1f5f9; padding: 12px; }
-                                          table tr.item.last td { border-bottom: none; }
-                                          table tr.total td:nth-child(2) { border-top: 2px solid #e2e8f0; font-weight: bold; font-size: 20px; padding-top: 15px;}
-                                          .status { margin-top: 20px; padding: 10px 15px; background: ${inv.status === 'Overdue' ? '#fef2f2' : '#fff7ed'}; color: ${inv.status === 'Overdue' ? '#ef4444' : '#f97316'}; display: inline-block; border-radius: 6px; font-weight: bold; font-size: 14px; border: 1px solid ${inv.status === 'Overdue' ? '#fecaca' : '#fed7aa'}; }
-                                          @media print { .invoice-box { box-shadow: none; border: 0; padding: 0; } }
-                                        </style>
-                                      </head>
-                                      <body>
-                                        <div class="invoice-box">
-                                          <table cellpadding="0" cellspacing="0">
-                                            <tr class="top">
-                                              <td colspan="2">
-                                                <table><tr>
-                                                  <td class="title">SmileCare</td>
-                                                  <td style="color: #64748b;">
-                                                    <strong>INVOICE #:</strong> ${inv.id}<br /> 
-                                                    <strong>Date:</strong> ${inv.date}<br /> 
-                                                    <strong>Due Date:</strong> Upon Receipt
-                                                  </td>
-                                                </tr></table>
-                                              </td>
-                                            </tr>
-                                            <tr class="information">
-                                              <td colspan="2">
-                                                <table><tr>
-                                                  <td style="color: #64748b;"><strong>CLINIC INFO</strong><br />SmileCare Dental Clinic<br /> 123 Main Street<br /> New York, NY 10001<br />+1 800-SMILE-99</td>
-                                                  <td style="color: #64748b;"><strong>BILL TO</strong><br />${patient.name}<br /> ${patient.email}<br /> ${patient.phone}<br />${(patient.address ?? '').split('\n')[0]}</td>
-                                                </tr></table>
-                                              </td>
-                                            </tr>
-                                            <tr class="heading">
-                                              <td>Treatment / Description</td>
-                                              <td>Amount</td>
-                                            </tr>
-                                            <tr class="item last">
-                                              <td><strong>${inv.treatment}</strong><br /><span style="font-size: 13px; color: #94a3b8;">Provided by Dr. Sarah Smith</span></td>
-                                              <td style="font-weight: 500;">${inv.amount}</td>
-                                            </tr>
-                                            <tr class="total">
-                                              <td></td>
-                                              <td>Total: <span style="color: #2563eb;">${inv.amount}</span></td>
-                                            </tr>
-                                          </table>
-                                          <div class="status">Payment Status: ${inv.status}</div>
-                                          
-                                          <div style="margin-top: 50px; text-align: center; color: #94a3b8; font-size: 13px; border-top: 1px dashed #e2e8f0; padding-top: 20px;">
-                                            Thank you for trusting SmileCare with your dental health.<br/>
-                                            For any questions regarding this invoice, please contact billing@smilecare.com.
-                                          </div>
-                                        </div>
-                                        <script>
-                                          window.onload = function() { 
-                                            setTimeout(function() { 
-                                              window.print();
-                                            }, 500); 
-                                          }
-                                        </script>
-                                      </body>
-                                    </html>
-                                  `;
-                                  printWindow.document.write(htmlContent);
-                                  printWindow.document.close();
-                                 }}
-                               >
-                                 <Printer className="w-4 h-4" /> Print
-                               </Button>
-                               {inv.status !== 'Paid' && (
-                                 <Button 
-                                   size="sm" 
-                                   className="bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm text-white font-medium px-4"
-                                   onClick={() => handlePayInvoice(inv.id)}
-                                   disabled={payingInvoiceId === inv.id}
-                                 >
-                                   {payingInvoiceId === inv.id ? (
-                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                   ) : (
-                                     "Pay Now"
-                                   )}
-                                 </Button>
-                               )}
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                       ) : (
-                         <p className="text-sm text-gray-400 text-center py-6">No pending invoices — all payments are up to date! ✅</p>
-                       )}
-                     </div>
-                  )}
-                </CardContent>
-              </Card>
+              <BillingList 
+                patientId={patient.id} 
+                patientName={patient.name} 
+                invoiceHistory={patient.invoiceHistory} 
+                outstanding={patient.outstanding}
+                onRefresh={refreshData}
+              />
             </TabsContent>
           </Tabs>
         </div>

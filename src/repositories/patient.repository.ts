@@ -213,12 +213,88 @@ export class PatientRepository {
 
   async createDocument(tenantId: string, patientId: string, data: any) {
     return prisma.patientDocument.create({
-      data: { ...data, patientId, tenantId }
+      data: { 
+        name: data.name,
+        type: data.type,
+        fileUrl: data.fileUrl,
+        category: data.category || "other",
+        uploadDate: data.uploadDate || new Date(),
+        patientId, 
+        tenantId 
+      }
     });
   }
 
   async deleteDocument(tenantId: string, id: string) {
     return prisma.patientDocument.delete({
+      where: { id, tenantId }
+    });
+  }
+
+  async createInvoice(tenantId: string, patientId: string, data: any) {
+    return prisma.invoice.create({
+      data: {
+        patientId,
+        tenantId,
+        amount: data.amount,
+        treatment: data.treatment,
+        dueDate: data.dueDate,
+        status: data.status || 'PENDING',
+        items: {
+          create: data.items.map((item: any) => ({
+            name: item.name,
+            amount: item.amount,
+            tenantId
+          }))
+        }
+      },
+      include: {
+        items: true
+      }
+    });
+  }
+
+  async addPayment(tenantId: string, invoiceId: string, data: any) {
+    return prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          invoiceId,
+          tenantId,
+          amount: data.amount,
+          method: data.method,
+          notes: data.notes,
+          date: data.date || new Date()
+        }
+      });
+
+      // Update invoice status
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId },
+        include: { payments: true }
+      });
+
+      if (invoice) {
+        const totalPaid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
+        
+        if (totalPaid >= Number(invoice.amount)) {
+          newStatus = 'PAID';
+        } else if (totalPaid > 0) {
+          newStatus = 'PARTIAL';
+        }
+
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: { status: newStatus }
+        });
+      }
+
+      return payment;
+    });
+  }
+
+  async deleteInvoice(tenantId: string, id: string) {
+    return prisma.invoice.delete({
       where: { id, tenantId }
     });
   }

@@ -77,7 +77,13 @@ export class PatientService {
     const [core, clinical] = await Promise.all([
       patientRepository.findById(tenantId, id, {
         appointments: true,
-        invoices: true,
+        invoices: {
+          include: {
+            items: true,
+            payments: true
+          },
+          orderBy: { createdAt: 'desc' }
+        },
         visitRecords: true,
         patientDocuments: true,
       }),
@@ -150,9 +156,10 @@ export class PatientService {
         .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
       const invoices = data.invoices || []
-      const outstanding = invoices
-        .filter((i: any) => i.status === 'Unpaid' || i.status === 'Pending' || i.status === 'Overdue')
-        .reduce((sum: number, inv: any) => sum + Number(inv.amount), 0)
+      const totalOutstanding = invoices.reduce((sum: number, inv: any) => {
+        const totalPaid = (inv.payments || []).reduce((pSum: number, p: any) => pSum + Number(p.amount), 0)
+        return sum + (Number(inv.amount) - totalPaid)
+      }, 0)
 
       // Helper for initials
       const getInitials = (name: string) => {
@@ -225,7 +232,7 @@ export class PatientService {
         avatar,
         color: data.colorGradient || colors[colorIndex],
         registeredSince: data.createdAt ? new Date(data.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
-        outstanding,
+        outstanding: totalOutstanding,
         bloodGroup: data.bloodGroup || '',
         smokingStatus: data.smokingStatus || 'Never',
         alcoholUse: data.alcoholUse || 'None',
@@ -240,13 +247,22 @@ export class PatientService {
         periodontalMeasurements: data.periodontalMeasurements || [],
         oralConditions: data.oralConditions || [],
         visitHistory,
-        invoiceHistory: invoices.map((i: any) => ({
-          id: i.id,
-          amount: i.amount,
-          status: i.status,
-          treatment: i.treatment || '—',
-          date: i.createdAt ? new Date(i.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
-        })),
+        invoiceHistory: invoices.map((i: any) => {
+          const paidAmount = (i.payments || []).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+          return {
+            id: i.id,
+            displayId: i.displayId,
+            amount: Number(i.amount),
+            paidAmount: paidAmount,
+            remainingAmount: Number(i.amount) - paidAmount,
+            status: i.status,
+            dueDate: i.dueDate ? new Date(i.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
+            treatment: i.treatment || '—',
+            date: i.createdAt ? new Date(i.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
+            items: i.items || [],
+            payments: i.payments || []
+          }
+        }),
         patient_documents: data.patientDocuments || [],
         prescriptions: data.prescriptions || []
       }
@@ -342,6 +358,18 @@ export class PatientService {
 
   async updateInvoiceStatus(tenantId: string, id: string, status: string) {
     return patientRepository.updateInvoice(tenantId, id, { status });
+  }
+
+  async createInvoice(tenantId: string, patientId: string, data: any) {
+    return patientRepository.createInvoice(tenantId, patientId, data);
+  }
+
+  async addPayment(tenantId: string, invoiceId: string, data: any) {
+    return patientRepository.addPayment(tenantId, invoiceId, data);
+  }
+
+  async deleteInvoice(tenantId: string, id: string) {
+    return patientRepository.deleteInvoice(tenantId, id);
   }
 }
 

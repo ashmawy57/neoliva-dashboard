@@ -1,58 +1,56 @@
 'use server'
 
-import { revalidatePath } from 'next/cache';
-import { BillingService } from "@/services/billing.service";
+import { PatientService } from "@/services/patient.service"
+import { resolveTenantContext } from "@/lib/tenant-context"
+import { revalidatePath } from 'next/cache'
 
-const billingService = new BillingService();
+const patientService = new PatientService()
 
-export async function getInvoices() {
+export async function createInvoice(patientId: string, invoiceData: {
+  amount: number;
+  treatment: string;
+  dueDate?: Date;
+  items: { name: string; amount: number }[];
+}) {
+  const tenantId = await resolveTenantContext()
   try {
-    return await billingService.getInvoicesList();
-  } catch (error) {
-    console.error('Error fetching invoices:', error);
-    return [];
-  }
-}
-
-export async function getBillingStats() {
-  try {
-    return await billingService.getBillingStats();
-  } catch (error) {
-    console.error('Error fetching billing stats:', error);
-    return { totalRevenue: 0, pendingAmount: 0, overdueAmount: 0 };
-  }
-}
-
-export async function createInvoice(data: any) {
-  try {
-    await billingService.createInvoice(data);
-    revalidatePath('/billing');
-    return { success: true };
-  } catch (error) {
-    console.error('Error creating invoice:', error);
-    throw new Error('Failed to create invoice');
-  }
-}
-
-export async function markInvoiceAsPaid(id: string) {
-  try {
-    await billingService.markAsPaid(id);
-    revalidatePath('/billing');
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating invoice:', error);
-    throw new Error('Failed to update invoice');
-  }
-}
-
-export async function generateInvoiceFromAppointment(appointmentId: string, amount: number) {
-  try {
-    await billingService.createInvoiceFromAppointment(appointmentId, amount);
-    revalidatePath('/billing');
-    revalidatePath('/appointments');
-    return { success: true };
+    const data = await patientService.createInvoice(tenantId, patientId, {
+      ...invoiceData,
+      status: 'PENDING'
+    })
+    revalidatePath(`/patients/${patientId}`)
+    return { success: true, data }
   } catch (error: any) {
-    console.error('Error generating invoice:', error);
-    return { success: false, error: error.message || 'Failed to generate invoice' };
+    console.error("Error creating invoice:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function addPayment(patientId: string, invoiceId: string, paymentData: {
+  amount: number;
+  method: string;
+  notes?: string;
+  date?: Date;
+}) {
+  const tenantId = await resolveTenantContext()
+  try {
+    const data = await patientService.addPayment(tenantId, invoiceId, paymentData)
+    revalidatePath(`/patients/${patientId}`)
+    return { success: true, data }
+  } catch (error: any) {
+    console.error("Error adding payment:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function deleteInvoice(patientId: string, invoiceId: string) {
+  const tenantId = await resolveTenantContext()
+  try {
+    await patientService.deleteInvoice(tenantId, invoiceId)
+    revalidatePath(`/patients/${patientId}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error("Error deleting invoice:", error)
+    return { success: false, error: error.message }
   }
 }

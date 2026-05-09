@@ -43,6 +43,8 @@ model Tenant {
   toothConditions         ToothCondition[]
   treatmentPlanItems      TreatmentPlanItem[]
   treatmentPlans          TreatmentPlan[]
+  invoiceItems            InvoiceItem[]
+  payments                Payment[]
   visitRecords            VisitRecord[]
 
   @@index([createdAt])
@@ -219,11 +221,43 @@ model Invoice {
   appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
   patient       Patient        @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items         InvoiceItem[]
+  payments      Payment[]
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
   @@index([tenantId, createdAt])
   @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  name        String
+  amount      Decimal  @db.Decimal
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenantId    String   @map("tenant_id") @db.Uuid
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  amount      Decimal  @db.Decimal
+  method      String
+  notes       String?
+  date        DateTime @default(now()) @db.Date
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenantId    String   @map("tenant_id") @db.Uuid
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tenantId, invoiceId])
+  @@map("payments")
 }
 
 model Expense {
@@ -548,6 +582,7 @@ model PatientDocument {
   name       String
   type       String
   fileUrl    String    @map("file_url")
+  category   String?   @default("other")
   uploadDate DateTime? @default(now()) @map("upload_date") @db.Timestamptz(6)
   tenantId   String    @map("tenant_id") @db.Uuid
   patient    Patient   @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -615,6 +650,7 @@ enum AppointmentStatus {
 
 enum InvoiceStatus {
   PAID
+  PARTIAL
   PENDING
   OVERDUE
 

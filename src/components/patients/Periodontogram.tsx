@@ -260,7 +260,7 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   const renderTooth = (tooth: number, isTop: boolean) => {
     return (
       <Popover key={tooth} open={openPopover === tooth} onOpenChange={(open) => setOpenPopover(open ? tooth : null)}>
-        <PopoverTrigger render={<div className="focus:outline-none" />}>
+        <PopoverTrigger render={<button className="focus:outline-none bg-transparent border-0 p-0 m-0 w-full text-left" />}>
           <ToothCell
             toothId={tooth}
             isTop={isTop}
