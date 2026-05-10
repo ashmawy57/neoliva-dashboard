@@ -18,37 +18,7 @@ function getInitials(name: string) {
 
 export async function getPatients() {
   const tenantId = await resolveTenantContext();
-  const data = await patientService.getAllPatients(tenantId);
-
-  return data.map((patient: any) => {
-    const appts = patient.appointments || []
-    const nextAppt = appts
-      .filter((a: any) => a.date && new Date(a.date) > new Date() && a.status !== 'Cancelled')
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-
-    const lastVisit = appts
-      .filter((a: any) => a.date && new Date(a.date) < new Date() && a.status === 'Completed')
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-
-    return {
-      id: patient.id,
-      displayId: patient.displayId,
-      name: patient.name,
-      email: patient.email || '—',
-      phone: patient.phone || '—',
-      gender: patient.gender,
-      lastVisit: lastVisit ? new Date(lastVisit.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No visits',
-      nextAppt: nextAppt ? new Date(nextAppt.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not scheduled',
-      status: patient.status || 'Active',
-      visits: appts.filter((a: any) => a.status === 'Completed').length,
-      avatar: patient.avatarInitials || getInitials(patient.name),
-      color: patient.colorGradient || 'from-blue-500 to-indigo-600',
-      registeredSince: patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
-      outstanding: (patient.invoices || [])
-        .filter((i: any) => i.status === 'Unpaid' || i.status === 'Pending')
-        .reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
-    }
-  })
+  return patientService.getPatientsList(tenantId);
 }
 
 export async function createPatient(formData: FormData) {
@@ -161,118 +131,7 @@ export async function deletePatient(id: string) {
 export async function getPatientById(id: string) {
   if (!id) return null;
   const tenantId = await resolveTenantContext();
-
-  try {
-    const data = await patientService.getPatientById(tenantId, id);
-    if (!data) return null;
-
-    const age = data.dob ? Math.floor((new Date().getTime() - new Date(data.dob).getTime()) / 31557600000) : null
-    
-    const appointments = data.appointments || []
-    const pastAppts = appointments
-      .filter((a: any) => a.date && new Date(a.date) < new Date() && a.status === 'Completed')
-      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-    const futureAppts = appointments
-      .filter((a: any) => a.date && new Date(a.date) > new Date() && a.status !== 'Cancelled')
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-    const invoices = data.invoices || []
-    const outstanding = invoices
-      .filter((i: any) => i.status === 'Unpaid' || i.status === 'Pending' || i.status === 'Overdue')
-      .reduce((sum: number, inv: any) => sum + Number(inv.amount), 0)
-
-    const avatar = data.avatarInitials || getInitials(data.name)
-
-    const colors = [
-      'from-blue-500 to-cyan-500',
-      'from-purple-500 to-pink-500',
-      'from-amber-500 to-orange-500',
-      'from-emerald-500 to-teal-500',
-      'from-indigo-500 to-violet-500',
-      'from-rose-500 to-red-500'
-    ];
-    const colorIndex = (data.name || '').length % colors.length;
-
-    const visitHistory = [
-      ...(data.visitRecords || []).map((vr: any) => ({
-        id: vr.id,
-        date: vr.date ? new Date(vr.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-        time: '',
-        status: 'Completed',
-        treatment: vr.treatment,
-        doctor: vr.doctor,
-        notes: vr.notes || '',
-        tooth: vr.tooth || '',
-        isClinicalRecord: true
-      })),
-      ...appointments.map((a: any) => ({
-        id: a.id,
-        date: a.date ? new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-        time: a.time || '—',
-        status: a.status,
-        treatment: a.treatment || '—',
-        notes: a.notes || "No notes",
-        isClinicalRecord: false
-      }))
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    return {
-      id: data.id,
-      displayId: data.displayId,
-      name: data.name,
-      phone: data.phone || '—',
-      phone2: data.phone2 || '—',
-      email: data.email || '—',
-      dob: data.dob ? `${new Date(data.dob).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${age} years)` : '—',
-      address: data.address || '—',
-      city: data.city || '—',
-      postCode: data.postCode || '—',
-      maritalStatus: data.maritalStatus || '—',
-      occupation: data.occupation || '—',
-      insurance: data.insurance || '—',
-      ssn: data.ssn || '—',
-      idNumber: data.idNumber || '—',
-      medicalAlert: data.medicalAlert || 'None',
-      referredBy: data.referredBy || 'Direct',
-      notes: data.notes || 'No notes',
-      isDeceased: data.isDeceased || false,
-      isSigned: data.isSigned || false,
-      lastVisit: pastAppts.length > 0 ? new Date(pastAppts[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-      nextAppt: futureAppts.length > 0 ? new Date(futureAppts[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-      status: data.status || 'Active',
-      avatar,
-      color: data.colorGradient || colors[colorIndex],
-      registeredSince: data.createdAt ? new Date(data.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
-      outstanding,
-      bloodGroup: data.bloodGroup || '',
-      smokingStatus: data.smokingStatus || 'Never',
-      alcoholUse: data.alcoholUse || 'None',
-      generalMedicalNotes: data.medicalNotes || '',
-      allergies: data.patientAllergies || [],
-      conditions: data.medicalConditions || [],
-      medications: data.patientMedications || [],
-      surgeries: data.patientSurgeries || [],
-      familyHistory: data.patientFamilyHistory || [],
-      oralTissueFindings: data.oralTissueFindings || [],
-      toothConditions: data.toothConditions || [],
-      periodontalMeasurements: data.periodontalMeasurements || [],
-      oralConditions: data.oralConditions || [],
-      visitHistory,
-      invoiceHistory: invoices.map((i: any) => ({
-        id: i.id,
-        amount: i.amount,
-        status: i.status,
-        treatment: i.treatment || '—',
-        date: i.createdAt ? new Date(i.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
-      })),
-      patient_documents: data.patientDocuments || [],
-      prescriptions: data.prescriptions || []
-    }
-  } catch (error) {
-    console.error('Error fetching patient by id:', error);
-    return null;
-  }
+  return patientService.getPatientProfile(tenantId, id);
 }
 
 export async function updateOralCondition(patientId: string, name: string, active: boolean) {

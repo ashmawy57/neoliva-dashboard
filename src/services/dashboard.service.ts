@@ -1,10 +1,10 @@
 import { InventoryRepository } from "@/repositories/inventory.repository";
-import { InvoiceRepository } from "@/repositories/invoice.repository";
+import { BillingRepository } from "@/repositories/billing.repository";
 import { AppointmentRepository } from "@/repositories/appointment.repository";
 
 export class DashboardService {
   private inventoryRepo = new InventoryRepository();
-  private invoiceRepo = new InvoiceRepository();
+  private billingRepo = new BillingRepository();
   private appointmentRepo = new AppointmentRepository();
 
   async getDashboardData(tenantId: string) {
@@ -12,12 +12,10 @@ export class DashboardService {
     const inventoryData = await this.inventoryRepo.findMany(tenantId);
     const lowInventoryCount = inventoryData.filter(item => item.quantity <= item.minLevel).length;
 
-    // 2. Pending payments
-    const invoiceData = await this.invoiceRepo.findMany(tenantId);
-    const pendingPayments = invoiceData
-      .filter(inv => inv.status !== "PAID")
-      .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    const overdueCount = invoiceData.filter(inv => inv.status === "OVERDUE").length;
+    // 2. Financial Stats
+    const billingStats = await this.billingRepo.getFinancialStats(tenantId);
+    const pendingPayments = billingStats.pendingAmount;
+    const overdueCount = billingStats.overdueCount;
 
     // 3. Appointments for today
     const today = new Date();

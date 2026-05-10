@@ -1,7 +1,7 @@
 import { BillingRepository } from "@/repositories/billing.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { prisma } from "@/lib/prisma";
-import { InvoiceStatus } from "@prisma/client";
+import { InvoiceStatus, Prisma } from "@prisma/client";
 
 const billingRepository = new BillingRepository();
 
@@ -51,28 +51,77 @@ export class BillingService {
   }
 
   /**
-   * Create new invoice
+   * Create new invoice with optional items
    */
-  async createInvoice(data: {
-    patientId: string;
+  async createInvoice(patientId: string, data: {
     amount: number;
-    dueDate: Date;
+    dueDate?: Date;
     description?: string;
+    status?: string;
+    items?: any[];
   }) {
     const tenantId = await resolveTenantContext();
-    return await billingRepository.create({
-      ...data,
-      tenantId,
-      status: 'PENDING'
+    const { items, ...rest } = data;
+
+    return await billingRepository.create(tenantId, {
+      ...rest,
+      displayId: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
+      amount: data.amount,
+      status: (data.status as any) || 'PENDING',
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      patient: { connect: { id: patientId } },
+      items: items ? {
+        create: items.map((item: any) => ({
+          name: item.name,
+          amount: item.amount,
+          tenant: { connect: { id: tenantId } }
+        }))
+      } : undefined
     });
   }
 
   /**
-   * Mark an invoice as paid
+   * Records a payment
+   */
+  async recordPayment(invoiceId: string, data: {
+    amount: number;
+    method: string;
+    notes?: string;
+    date?: Date;
+  }) {
+    const tenantId = await resolveTenantContext();
+    return await billingRepository.recordPayment(tenantId, invoiceId, data);
+  }
+
+  /**
+   * Updates an existing invoice
+   */
+  async updateInvoice(invoiceId: string, updates: any) {
+    const tenantId = await resolveTenantContext();
+    const { patientId, ...rest } = updates;
+
+    return await billingRepository.update(tenantId, invoiceId, {
+      ...rest,
+      ...(updates.dueDate ? { dueDate: new Date(updates.dueDate) } : {}),
+      ...(patientId ? { patient: { connect: { id: patientId } } } : {}),
+      updatedAt: new Date()
+    });
+  }
+
+  /**
+   * Deletes an invoice
+   */
+  async deleteInvoice(invoiceId: string) {
+    const tenantId = await resolveTenantContext();
+    return await billingRepository.delete(tenantId, invoiceId);
+  }
+
+  /**
+   * Mark an invoice as paid (convenience method)
    */
   async markAsPaid(id: string) {
     const tenantId = await resolveTenantContext();
-    return await billingRepository.update(id, tenantId, {
+    return await billingRepository.update(tenantId, id, {
       status: 'PAID'
     });
   }
@@ -96,10 +145,10 @@ export class BillingService {
     if (existing) throw new Error("Invoice already exists for this appointment");
 
     // 3. Create invoice
-    return await billingRepository.create({
-      tenantId,
+    return await billingRepository.create(tenantId, {
       patientId: appointment.patientId,
       appointmentId: appointment.id,
+      displayId: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
       amount: amount,
       status: 'PENDING',
       treatment: appointment.treatment || 'Dental Service',

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Receipt, Loader2, DollarSign, Calendar as CalendarIcon, User, Activity as ActivityIcon } from "lucide-react";
-import { createInvoice } from "@/app/actions/invoices";
+import { createInvoice } from "@/app/actions/billing";
 import { getPatients } from "@/app/actions/patients";
 import { getServices } from "@/app/actions/services";
 import { toast } from "sonner";
@@ -61,8 +61,7 @@ export function NewInvoiceDialog() {
 
     setLoading(true);
     try {
-      await createInvoice({
-        patientId: selectedPatientId,
+      await createInvoice(selectedPatientId, {
         amount: parseFloat(amount),
         status,
         dueDate: dueDate || undefined,
