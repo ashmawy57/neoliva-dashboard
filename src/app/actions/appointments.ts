@@ -6,21 +6,21 @@ import { resolveTenantContext } from "@/lib/tenant-context";
 
 const appointmentService = new AppointmentService();
 
-export async function getAppointments() {
+export async function getAppointmentsData() {
   try {
-    return await appointmentService.getAppointmentsList();
+    return await appointmentService.getAppointmentsData();
   } catch (error) {
-    console.error('Error fetching appointments:', error);
-    return [];
+    console.error('Error fetching appointments data:', error);
+    return { list: [], stats: { totalToday: 0, completed: 0, inProgress: 0, cancelled: 0 } };
   }
 }
 
-export async function getAppointmentStats() {
+export async function getAppointmentFormData() {
   try {
-    return await appointmentService.getAppointmentStats();
+    return await appointmentService.getAppointmentFormData();
   } catch (error) {
-    console.error('Error fetching appointment stats:', error);
-    return { totalToday: 0, completed: 0, inProgress: 0, cancelled: 0 };
+    console.error('Error fetching appointment form data:', error);
+    return { patients: [], doctors: [], services: [] };
   }
 }
 

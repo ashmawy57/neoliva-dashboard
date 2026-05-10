@@ -4,15 +4,17 @@ import {
   CalendarDays, Clock, 
   CheckCircle2, XCircle
 } from "lucide-react";
-import { getAppointments, getAppointmentStats } from "@/app/actions/appointments";
+import { getAppointmentsData, getAppointmentFormData } from "@/app/actions/appointments";
 import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDialog";
 import { AppointmentsView } from "@/components/appointments/AppointmentsView";
 
 export default async function AppointmentsPage() {
-  const [appointmentsList, statsData] = await Promise.all([
-    getAppointments(),
-    getAppointmentStats()
+  const [data, formData] = await Promise.all([
+    getAppointmentsData(),
+    getAppointmentFormData()
   ]);
+
+  const { list, stats: statsData } = data;
 
   const stats = [
     { label: "Total Today", value: statsData.totalToday.toString(), icon: CalendarDays, accent: "text-blue-600 bg-blue-50" },
@@ -28,7 +30,11 @@ export default async function AppointmentsPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Appointments</h1>
           <p className="text-sm text-gray-500 mt-1">Manage and track all clinic appointments</p>
         </div>
-        <NewAppointmentDialog />
+        <NewAppointmentDialog 
+          patients={formData.patients} 
+          doctors={formData.doctors} 
+          services={formData.services} 
+        />
       </div>
 
       {/* Stats Row */}
@@ -48,7 +54,7 @@ export default async function AppointmentsPage() {
         ))}
       </div>
 
-      <AppointmentsView initialAppointments={appointmentsList} />
+      <AppointmentsView initialAppointments={list} />
     </div>
   );
 }

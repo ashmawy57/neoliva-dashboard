@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, ExternalLink } from "lucide-react";
+import { Search, ExternalLink, Trash2 } from "lucide-react";
+import { deletePatient } from "@/app/actions/patients";
+import { toast } from "sonner";
 
 interface PatientTableProps {
   initialPatients: any[];
@@ -15,6 +17,7 @@ interface PatientTableProps {
 
 export function PatientsTable({ initialPatients }: PatientTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const filtered = initialPatients.filter(
     (p) =>
@@ -23,6 +26,26 @@ export function PatientsTable({ initialPatients }: PatientTableProps) {
       (p.displayId ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete patient ${name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(id);
+    try {
+      const result = await deletePatient(id);
+      if (result.success) {
+        toast.success("Patient deleted successfully");
+      } else {
+        toast.error(result.error || "Failed to delete patient");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   return (
     <>
@@ -46,7 +69,7 @@ export function PatientsTable({ initialPatients }: PatientTableProps) {
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Appointment</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Visits</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
-              <TableHead className="w-[80px]"></TableHead>
+              <TableHead className="text-right pr-6">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -61,7 +84,7 @@ export function PatientsTable({ initialPatients }: PatientTableProps) {
                 <TableRow key={patient.id} className="table-row-hover group">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${patient.color} flex items-center justify-center text-white font-bold text-[10px] shadow-sm`}>
+                      <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${patient.color || 'from-blue-500 to-indigo-600'} flex items-center justify-center text-white font-bold text-[10px] shadow-sm`}>
                         {patient.avatar}
                       </div>
                       <div>
@@ -87,12 +110,23 @@ export function PatientsTable({ initialPatients }: PatientTableProps) {
                       {patient.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <Link href={`/patients/${patient.id}`}>
-                      <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs">
-                        View <ExternalLink className="ml-1.5 w-3 h-3" />
+                  <TableCell className="text-right pr-6">
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link href={`/patients/${patient.id}`}>
+                        <Button variant="ghost" size="sm" className="rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs h-8 px-2">
+                          View <ExternalLink className="ml-1.5 w-3 h-3" />
+                        </Button>
+                      </Link>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDelete(patient.id, patient.name)}
+                        disabled={isDeleting === patient.id}
+                        className="rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs h-8 px-2"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                    </Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
