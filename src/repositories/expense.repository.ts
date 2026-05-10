@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Expense, Prisma } from "@prisma/client";
 
 export class ExpenseRepository {

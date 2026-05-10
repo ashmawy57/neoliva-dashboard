@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { StaffRole } from "@prisma/client";
 
 export type Permission = 

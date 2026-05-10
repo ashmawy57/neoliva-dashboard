@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { LabOrder, Prisma } from "@prisma/client";
 
 export class LabOrderRepository {

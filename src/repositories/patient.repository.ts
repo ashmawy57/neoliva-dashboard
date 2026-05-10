@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Patient, Prisma } from "@prisma/client";
 
 export class PatientRepository {
@@ -92,13 +92,13 @@ export class PatientRepository {
     });
   }
 
-  async upsertToothCondition(tenantId: string, patientId: string, toothNumber: number, condition: string, notes: string) {
+  async upsertToothCondition(tenantId: string, patientId: string, toothNumber: number, condition: string, isMissing: boolean, notes: string) {
     return prisma.toothCondition.upsert({
       where: {
         tenantId_patientId_toothNumber: { tenantId, patientId, toothNumber }
       },
-      update: { condition, notes, updatedAt: new Date() },
-      create: { patientId, toothNumber, condition, notes, tenantId }
+      update: { condition, isMissing, notes, updatedAt: new Date() },
+      create: { patientId, toothNumber, condition, isMissing, notes, tenantId }
     });
   }
 
@@ -241,7 +241,7 @@ export class PatientRepository {
         dueDate: data.dueDate,
         status: data.status || 'PENDING',
         items: {
-          create: data.items.map((item: any) => ({
+          create: data.items.map((item: Prisma.InvoiceItemCreateWithoutInvoiceInput) => ({
             name: item.name,
             amount: item.amount,
             tenantId
@@ -256,38 +256,65 @@ export class PatientRepository {
 
   async addPayment(tenantId: string, invoiceId: string, data: any) {
     return prisma.$transaction(async (tx) => {
+      // 1. Fetch invoice with strict tenant isolation and necessary fields
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId },
+        select: {
+          id: true,
+          amount: true,
+          paidAmount: true,
+          status: true
+        }
+      });
+
+      if (!invoice) {
+        throw new Error("Invoice not found or unauthorized access.");
+      }
+
+      if (invoice.status === "PAID") {
+        throw new Error("This invoice is already fully paid.");
+      }
+
+      const totalAmount = Number(invoice.amount);
+      const currentPaid = Number(invoice.paidAmount);
+      const remainingBalance = totalAmount - currentPaid;
+
+      // 2. Validate payment amount
+      if (data.amount > (remainingBalance + 0.001)) {
+        throw new Error(`Payment amount exceeds the remaining balance ($${remainingBalance.toFixed(2)}).`);
+      }
+
+      // 3. Create the Payment record
       const payment = await tx.payment.create({
         data: {
           invoiceId,
-          tenantId,
           amount: data.amount,
           method: data.method,
           notes: data.notes,
-          date: data.date || new Date()
+          date: data.date || new Date(),
+          tenantId
         }
       });
 
-      // Update invoice status
-      const invoice = await tx.invoice.findFirst({
-        where: { id: invoiceId, tenantId },
-        include: { payments: true }
-      });
-
-      if (invoice) {
-        const totalPaid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
-        let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
-        
-        if (totalPaid >= Number(invoice.amount)) {
-          newStatus = 'PAID';
-        } else if (totalPaid > 0) {
-          newStatus = 'PARTIAL';
-        }
-
-        await tx.invoice.update({
-          where: { id: invoiceId },
-          data: { status: newStatus }
-        });
+      // 4. Calculate new state
+      const newPaidAmount = currentPaid + Number(data.amount);
+      let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
+      
+      if (newPaidAmount >= totalAmount - 0.001) {
+        newStatus = 'PAID';
+      } else if (newPaidAmount > 0) {
+        newStatus = 'PARTIAL';
       }
+
+      // 5. Update the Invoice record
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { 
+          paidAmount: newPaidAmount,
+          status: newStatus,
+          updatedAt: new Date()
+        }
+      });
 
       return payment;
     });

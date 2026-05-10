@@ -209,6 +209,7 @@ model Invoice {
   displayId String?        @unique @map("display_id")
   patientId String         @map("patient_id") @db.Uuid
   amount    Decimal        @db.Decimal
+  paidAmount Decimal       @default(0) @map("paid_amount") @db.Decimal
   date      DateTime?      @db.Date
   method    String?
   createdAt DateTime?      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -504,6 +505,7 @@ model ToothCondition {
   patientId   String    @map("patient_id") @db.Uuid
   toothNumber Int       @map("tooth_number")
   condition   String
+  isMissing   Boolean   @default(false) @map("is_missing")
   notes       String?
   createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)

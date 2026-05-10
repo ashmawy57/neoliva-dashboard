@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
 export class BillingRepository {
@@ -28,6 +28,7 @@ export class BillingRepository {
       where: { tenantId },
       select: {
         amount: true,
+        paidAmount: true,
         status: true,
         dueDate: true
       }
@@ -36,15 +37,11 @@ export class BillingRepository {
     const now = new Date();
 
     return {
-      totalRevenue: invoices
-        .filter(i => i.status === 'PAID')
-        .reduce((sum, i) => sum + Number(i.amount), 0),
-      pendingAmount: invoices
-        .filter(i => i.status === 'PENDING')
-        .reduce((sum, i) => sum + Number(i.amount), 0),
+      totalRevenue: invoices.reduce((sum, i) => sum + Number(i.paidAmount), 0),
+      pendingAmount: invoices.reduce((sum, i) => sum + (Number(i.amount) - Number(i.paidAmount)), 0),
       overdueAmount: invoices
-        .filter(i => i.status === 'PENDING' && i.dueDate && new Date(i.dueDate) < now)
-        .reduce((sum, i) => sum + Number(i.amount), 0)
+        .filter(i => i.status !== 'PAID' && i.dueDate && new Date(i.dueDate) < now)
+        .reduce((sum, i) => sum + (Number(i.amount) - Number(i.paidAmount)), 0)
     };
   }
 

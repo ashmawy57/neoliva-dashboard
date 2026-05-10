@@ -2,7 +2,7 @@
 
 import { InventoryService } from "@/services/inventory.service";
 import { revalidatePath } from "next/cache";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant-context";
 
 const inventoryService = new InventoryService();

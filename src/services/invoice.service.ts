@@ -13,8 +13,8 @@ export class InvoiceService {
     });
   }
 
-  async createInvoice(tenantId: string, data: any) {
-    const { patientId, ...rest } = data;
+  async createInvoice(tenantId: string, patientId: string, data: any) {
+    const { items, ...rest } = data;
     
     return this.repository.create(tenantId, {
       ...rest,
@@ -22,7 +22,14 @@ export class InvoiceService {
       amount: data.amount,
       status: (data.status as any) || 'PENDING',
       dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      patient: { connect: { id: patientId } }
+      patient: { connect: { id: patientId } },
+      items: items ? {
+        create: items.map((item: any) => ({
+          name: item.name,
+          amount: item.amount,
+          tenant: { connect: { id: tenantId } }
+        }))
+      } : undefined
     });
   }
 

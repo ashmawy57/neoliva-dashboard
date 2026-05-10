@@ -329,10 +329,10 @@ export async function deleteVisitRecord(patientId: string, visitId: string) {
   }
 }
 
-export async function updateToothCondition(patientId: string, toothNumber: number, condition: string, notes: string) {
+export async function updateToothCondition(patientId: string, toothNumber: number, condition: string, isMissing: boolean, notes: string) {
   const tenantId = await resolveTenantContext();
   try {
-    await patientService.updateToothCondition(tenantId, patientId, toothNumber, condition, notes);
+    await patientService.updateToothCondition(tenantId, patientId, toothNumber, condition, isMissing, notes);
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
   } catch (error: any) {

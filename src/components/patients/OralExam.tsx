@@ -78,8 +78,12 @@ const ALL_CONDITIONS_LIBRARY = [
 export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () => void }) {
   const [isPending, startTransition] = useTransition();
   // ============ STATE ============
-  const [tissues, setTissues] = useState<TissueItem[]>([]);
-  const [conditions, setConditions] = useState<OralCondition[]>([]);
+  const [tissues, setTissues] = useState<TissueItem[]>(() => [
+    "Lips", "Buccal Mucosa", "Tongue", "Floor of Mouth", "Palate", "Gingiva",
+    "Salivary Glands", "Occlusion", "Pharynx"
+  ].map(name => ({ name, status: "healthy", notes: "" })));
+  
+  const [conditions, setConditions] = useState<OralCondition[]>(DEFAULT_CONDITIONS);
   const [otherNotes, setOtherNotes] = useState("");
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
@@ -88,18 +92,25 @@ export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () 
   // Use a ref to track if we're currently updating to avoid useEffect stomping on local state
   const isUpdatingRef = useRef(false);
 
-  // Sync state when patient prop changes (Fixes the "disappearing data" bug)
+  // ============ SYNC STATE WITH PROPS ============
   useEffect(() => {
-    if (!patient || isUpdatingRef.current) return;
+    // If we are currently in a transition, skip this effect to avoid flickering
+    // and overwriting local optimistic updates.
+    if (isPending) return;
+    if (!patient) return;
 
-    // Tissue Findings
+    // Soft Tissue findings
+    const existingTissues = patient.oralTissueFindings || [];
     const defaultNames = [
       "Lips", "Buccal Mucosa", "Tongue", "Floor of Mouth", "Palate", "Gingiva",
       "Salivary Glands", "Occlusion", "Pharynx"
     ];
-    const existingTissues = patient.oralTissueFindings || [];
+    
     setTissues(defaultNames.map(name => {
-      const found = existingTissues.find((e: any) => e.name === name);
+      // Use case-insensitive and trimmed search for robustness
+      const found = existingTissues.find((e: any) => 
+        e.name.trim().toLowerCase() === name.trim().toLowerCase()
+      );
       return { 
         name, 
         status: (found?.status as TissueStatus) || "healthy", 
@@ -110,47 +121,49 @@ export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () 
     // Oral Conditions
     const conds = patient.oralConditions || [];
     setConditions(conds.length > 0 ? conds.map((c: any) => ({
-      id: c.id, name: c.name, active: c.active
+      id: c.id, 
+      name: c.name, 
+      active: c.active ?? true 
     })) : DEFAULT_CONDITIONS);
 
     // Diagnoses
     const visits = patient.visitHistory || [];
-    setDiagnoses(visits.filter((v: any) => v.isClinicalRecord || v.treatment !== '—').map((v: any) => ({
+    setDiagnoses(visits.filter((v: any) => v.isClinicalRecord || (v.treatment && v.treatment !== '—')).map((v: any) => ({
       id: v.id,
       date: v.date,
-      chiefComplaint: v.chiefComplaint || v.notes?.split('\n')[0] || "",
+      chiefComplaint: v.chiefComplaint || "Routine Checkup",
       diagnosis: v.treatment || v.diagnosis || v.type,
-      severity: "moderate" as const,
+      severity: v.severity || "mild",
       notes: v.notes || ""
     })));
 
-    // Prescriptions
+    // Prescriptions - Fixed field names to match Prisma schema (createdAt, items, medicationName)
     const pxs = patient.prescriptions || [];
     setPrescriptions(pxs.map((p: any) => ({
       id: p.id,
-      date: p.created_at ? new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "",
-      medication: p.prescription_items?.[0]?.medication_name || "Unknown",
-      dosage: p.prescription_items?.[0]?.dosage || "",
-      frequency: p.prescription_items?.[0]?.frequency || "",
-      duration: p.prescription_items?.[0]?.duration || "",
+      date: p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "",
+      medication: p.items?.[0]?.medicationName || "Unknown",
+      dosage: p.items?.[0]?.dosage || "",
+      frequency: p.items?.[0]?.frequency || "",
+      duration: p.items?.[0]?.duration || "",
       notes: p.notes || ""
     })));
 
     setOtherNotes(patient.notes || "");
-  }, [patient]);
+  }, [patient, isPending]);
+
 
   // ============ HANDLERS ============
   const handleTissueStatusChange = (index: number, status: TissueStatus) => {
     const tissue = tissues[index];
     setTissues(prev => prev.map((t, i) => i === index ? { ...t, status } : t));
     
-    isUpdatingRef.current = true;
     startTransition(async () => {
       try {
         await updateOralTissue(patient.id, tissue.name, status, tissue.notes || "");
         onRefresh?.();
-      } finally {
-        isUpdatingRef.current = false;
+      } catch (error) {
+        console.error("Failed to update tissue status:", error);
       }
     });
   };
@@ -177,13 +190,12 @@ export function OralExam({ patient, onRefresh }: { patient: any; onRefresh?: () 
     setTissues(prev => prev.map((t, i) => i === index ? { ...t, notes } : t));
     setTissueDialog(null);
 
-    isUpdatingRef.current = true;
     startTransition(async () => {
       try {
         await updateOralTissue(patient.id, tissue.name, tissue.status, notes);
         onRefresh?.();
-      } finally {
-        isUpdatingRef.current = false;
+      } catch (error) {
+        console.error("Failed to update tissue notes:", error);
       }
     });
   };

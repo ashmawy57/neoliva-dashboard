@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { addPayment } from "@/app/actions/billing";
+import { recordPayment } from "@/app/actions/billing";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -60,12 +60,13 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
     const toastId = toast.loading("Recording payment...");
 
     try {
-      const result = await addPayment(patientId, invoice.id, {
-        amount: Number(amount),
-        method,
-        notes,
-        date: new Date(date)
-      });
+      const result = await recordPayment(
+        invoice.id, 
+        Number(amount), 
+        method, 
+        notes, 
+        new Date(date)
+      );
 
       if (result.success) {
         toast.success("Payment recorded successfully", { id: toastId });
@@ -105,7 +106,7 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
           </div>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh]">
           <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
             <div>
               <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Total Remaining</p>

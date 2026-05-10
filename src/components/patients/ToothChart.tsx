@@ -57,6 +57,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
 
   // Core Chart State
   const [toothConditions, setToothConditions] = useState<Record<number, ToothCondType>>({});
+  const [missingTeeth, setMissingTeeth] = useState<Record<number, boolean>>({});
   const [toothMeta, setToothMeta] = useState<Record<number, ToothMeta>>({});
   const [photos, setPhotos] = useState<ToothPhoto[]>([]);
   
@@ -83,6 +84,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
 
     // Map Tooth Conditions
     const conditions: Record<number, ToothCondType> = {};
+    const missing: Record<number, boolean> = {};
     const meta: Record<number, ToothMeta> = {};
     
     (patient.toothConditions || []).forEach((c: any) => {
@@ -90,11 +92,13 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
       const tNum = c.toothNumber; 
       if (tNum) {
         conditions[tNum] = c.condition as ToothCondType;
+        missing[tNum] = c.isMissing || false;
         meta[tNum] = parseToothMeta(c.notes);
       }
     });
 
     setToothConditions(conditions);
+    setMissingTeeth(missing);
     setToothMeta(meta);
     setChartNote(patient.notes || "");
 
@@ -117,9 +121,10 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
 
   // 2. Persistence Handlers
   const currentCondition = (tooth: number) => toothConditions[tooth] || "healthy";
+  const currentIsMissing = (tooth: number) => missingTeeth[tooth] || false;
   const currentMeta = (tooth: number) => toothMeta[tooth] || defaultMeta();
 
-  const persistChange = async (tooth: number, condition: ToothCondType, meta: ToothMeta) => {
+  const persistChange = async (tooth: number, condition: ToothCondType, isMissing: boolean, meta: ToothMeta) => {
     isUpdatingRef.current = true;
     setIsUpdating(true);
     
@@ -128,6 +133,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
         patient.id, 
         tooth, 
         condition, 
+        isMissing,
         JSON.stringify(meta)
       );
       
@@ -145,7 +151,13 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     if (prevCond === cond) return;
 
     setToothConditions(prev => ({ ...prev, [tooth]: cond }));
-    persistChange(tooth, cond, currentMeta(tooth));
+    persistChange(tooth, cond, currentIsMissing(tooth), currentMeta(tooth));
+  };
+
+  const handleToggleMissing = (tooth: number) => {
+    const newVal = !currentIsMissing(tooth);
+    setMissingTeeth(prev => ({ ...prev, [tooth]: newVal }));
+    persistChange(tooth, currentCondition(tooth), newVal, currentMeta(tooth));
   };
 
   const handleToggleToothType = (tooth: number) => {
@@ -154,7 +166,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     const newMeta = { ...meta, toothType: newType };
     
     setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
-    persistChange(tooth, currentCondition(tooth), newMeta);
+    persistChange(tooth, currentCondition(tooth), currentIsMissing(tooth), newMeta);
   };
 
   const handleSurfaceChange = (tooth: number, surface: SurfaceKey, color: SurfaceColor) => {
@@ -165,7 +177,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     };
     
     setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
-    persistChange(tooth, currentCondition(tooth), newMeta);
+    persistChange(tooth, currentCondition(tooth), currentIsMissing(tooth), newMeta);
   };
 
   const handleAddFinding = (tooth: number) => {
@@ -186,7 +198,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     
     setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
     setNewFinding("");
-    persistChange(tooth, currentCondition(tooth), newMeta);
+    persistChange(tooth, currentCondition(tooth), currentIsMissing(tooth), newMeta);
   };
 
   const handleDeleteFinding = (tooth: number, id: string) => {
@@ -197,11 +209,11 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     };
     
     setToothMeta(prev => ({ ...prev, [tooth]: newMeta }));
-    persistChange(tooth, currentCondition(tooth), newMeta);
+    persistChange(tooth, currentCondition(tooth), currentIsMissing(tooth), newMeta);
   };
 
   const handleExtraction = (tooth: number) => {
-    handleConditionChange(tooth, "extracted");
+    handleToggleMissing(tooth);
     setExtractionDialog(null);
   };
 
@@ -240,6 +252,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
 
   const renderTooth = (tooth: number, isTop: boolean) => {
     const cond = currentCondition(tooth);
+    const isMissing = currentIsMissing(tooth);
     const meta = currentMeta(tooth);
     const type = meta.toothType;
     const surfaces = meta.surfaces;
@@ -265,7 +278,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
         toothType={type}
         fill={fill}
         stroke={stroke}
-        isExtracted={cond === "extracted"}
+        isExtracted={isMissing}
         extraContent={
           <SurfacesPopover 
             tooth={tooth} 
@@ -282,7 +295,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
               toothType={type}
               fill={fill}
               stroke={stroke}
-              isExtracted={cond === "extracted"}
+              isExtracted={isMissing}
               className="group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md mx-auto"
             />
             {isUpdating && <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-xl"><RefreshCw className="w-4 h-4 animate-spin text-blue-500" /></div>}
@@ -314,13 +327,17 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button 
-                 variant="outline" 
-                 onClick={() => handleConditionChange(tooth, 'extracted')}
-                 className="h-auto py-2.5 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl text-gray-700 border-gray-200 hover:bg-gray-50"
-              >
-                 <span className="text-gray-400 text-lg font-black leading-none mb-0.5">X</span> Mark as missing
-              </Button>
+               <Button 
+                  variant="outline" 
+                  onClick={() => handleToggleMissing(tooth)}
+                  className={cn(
+                    "h-auto py-2.5 flex items-center justify-center gap-2 text-xs font-semibold rounded-xl border-gray-200 transition-all",
+                    isMissing ? "bg-gray-800 text-white hover:bg-gray-900 border-gray-900" : "text-gray-700 hover:bg-gray-50"
+                  )}
+               >
+                  <span className={cn("text-lg font-black leading-none mb-0.5", isMissing ? "text-white" : "text-gray-400")}>X</span> 
+                  {isMissing ? "Unmark missing" : "Mark as missing"}
+               </Button>
               <Button 
                  variant="outline" 
                  onClick={() => setExtractionDialog(tooth)}

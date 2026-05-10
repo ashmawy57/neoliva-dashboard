@@ -1,6 +1,6 @@
 import { BillingRepository } from "@/repositories/billing.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
 
 const billingRepository = new BillingRepository();

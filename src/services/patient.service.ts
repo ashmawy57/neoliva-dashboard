@@ -1,3 +1,4 @@
+import "server-only";
 import { PatientRepository } from "@/repositories/patient.repository";
 import { Patient, Prisma } from "@prisma/client";
 
@@ -16,12 +17,14 @@ export class PatientService {
           }
         },
         invoices: {
-          select: {
-            id: true,
-            amount: true,
-            status: true,
-            createdAt: true
-          }
+          include: {
+            payments: {
+              select: {
+                amount: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -64,8 +67,10 @@ export class PatientService {
         color: patient.colorGradient || 'from-blue-500 to-indigo-600',
         registeredSince: patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
         outstanding: (patient.invoices || [])
-          .filter((i: any) => i.status === 'Unpaid' || i.status === 'Pending')
-          .reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
+          .reduce((sum: number, i: any) => {
+            const paid = Number(i.paidAmount || 0);
+            return sum + (Number(i.amount) - paid);
+          }, 0)
       }
     });
   }
@@ -107,11 +112,15 @@ export class PatientService {
 
     if (!core) return null;
 
-    // Merge both results — core fields take priority for patient scalars
+    // Merge results carefully:
+    // 1. Start with core fields (scalars like name, id, etc.)
+    // 2. Add clinical fields if they exist
+    // 3. Ensure relational arrays are defaulted to empty arrays to prevent frontend crashes
     return {
-      ...clinical,
-      ...core,
-      // Merge relational arrays from both queries
+      ...clinical, // Relations like oralTissueFindings, etc.
+      ...core,     // Core scalars and other relations like appointments
+      
+      // Explicitly ensure clinical relations are preserved and defaulted
       patientAllergies: clinical?.patientAllergies ?? [],
       medicalConditions: clinical?.medicalConditions ?? [],
       patientMedications: clinical?.patientMedications ?? [],
@@ -122,6 +131,12 @@ export class PatientService {
       periodontalMeasurements: clinical?.periodontalMeasurements ?? [],
       prescriptions: clinical?.prescriptions ?? [],
       oralConditions: clinical?.oralConditions ?? [],
+      
+      // Ensure core relations are preserved and defaulted
+      appointments: core?.appointments ?? [],
+      invoices: core?.invoices ?? [],
+      visitRecords: core?.visitRecords ?? [],
+      patientDocuments: core?.patientDocuments ?? [],
     };
   }
 
@@ -157,7 +172,7 @@ export class PatientService {
 
       const invoices = data.invoices || []
       const totalOutstanding = invoices.reduce((sum: number, inv: any) => {
-        const totalPaid = (inv.payments || []).reduce((pSum: number, p: any) => pSum + Number(p.amount), 0)
+        const totalPaid = Number(inv.paidAmount || 0);
         return sum + (Number(inv.amount) - totalPaid)
       }, 0)
 
@@ -205,7 +220,7 @@ export class PatientService {
         }))
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      return {
+      const result = {
         id: data.id,
         displayId: data.displayId,
         name: data.name,
@@ -237,35 +252,53 @@ export class PatientService {
         smokingStatus: data.smokingStatus || 'Never',
         alcoholUse: data.alcoholUse || 'None',
         generalMedicalNotes: data.medicalNotes || '',
-        allergies: data.patientAllergies || [],
-        conditions: data.medicalConditions || [],
-        medications: data.patientMedications || [],
-        surgeries: data.patientSurgeries || [],
-        familyHistory: data.patientFamilyHistory || [],
-        oralTissueFindings: data.oralTissueFindings || [],
-        toothConditions: data.toothConditions || [],
-        periodontalMeasurements: data.periodontalMeasurements || [],
-        oralConditions: data.oralConditions || [],
+        allergies: (data.patientAllergies || []).map((a: any) => ({ ...a })),
+        conditions: (data.medicalConditions || []).map((c: any) => ({ ...c })),
+        medications: (data.patientMedications || []).map((m: any) => ({ ...m })),
+        surgeries: (data.patientSurgeries || []).map((s: any) => ({ ...s })),
+        familyHistory: (data.patientFamilyHistory || []).map((fh: any) => ({ ...fh })),
+        oralTissueFindings: (data.oralTissueFindings || []).map((ot: any) => ({ ...ot })),
+        toothConditions: (data.toothConditions || []).map((tc: any) => ({ ...tc })),
+        periodontalMeasurements: (data.periodontalMeasurements || []).map((pm: any) => ({ ...pm })),
+        oralConditions: (data.oralConditions || []).map((oc: any) => ({ ...oc })),
         visitHistory,
         invoiceHistory: invoices.map((i: any) => {
-          const paidAmount = (i.payments || []).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+          const paidAmount = Number(i.paidAmount || 0)
           return {
             id: i.id,
             displayId: i.displayId,
             amount: Number(i.amount),
-            paidAmount: paidAmount,
-            remainingAmount: Number(i.amount) - paidAmount,
+            paidAmount: Number(paidAmount),
+            remainingAmount: Number(i.amount) - Number(paidAmount),
             status: i.status,
             dueDate: i.dueDate ? new Date(i.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
             treatment: i.treatment || '—',
             date: i.createdAt ? new Date(i.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-            items: i.items || [],
-            payments: i.payments || []
+            items: (i.items || []).map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              amount: Number(item.amount),
+              createdAt: item.createdAt
+            })),
+            payments: (i.payments || []).map((p: any) => ({
+              id: p.id,
+              amount: Number(p.amount),
+              date: p.date,
+              method: p.method,
+              createdAt: p.createdAt
+            }))
           }
         }),
-        patient_documents: data.patientDocuments || [],
-        prescriptions: data.prescriptions || []
-      }
+        patient_documents: (data.patientDocuments || []).map((doc: any) => ({ ...doc })),
+        prescriptions: (data.prescriptions || []).map((rx: any) => ({
+          ...rx,
+          items: (rx.items || []).map((item: any) => ({ ...item }))
+        }))
+      };
+
+      // CRITICAL: Final serialization pass to ensure 100% plain object compatibility with Client Components.
+      // This strips any hidden Prisma symbols, internal properties, or remaining Decimal objects.
+      return JSON.parse(JSON.stringify(result));
     } catch (error) {
       console.error('Error fetching patient profile:', error);
       return null;
@@ -288,8 +321,8 @@ export class PatientService {
     return patientRepository.deleteVisitRecord(tenantId, id);
   }
 
-  async updateToothCondition(tenantId: string, patientId: string, toothNumber: number, condition: string, notes: string) {
-    return patientRepository.upsertToothCondition(tenantId, patientId, toothNumber, condition, notes);
+  async updateToothCondition(tenantId: string, patientId: string, toothNumber: number, condition: string, isMissing: boolean, notes: string) {
+    return patientRepository.upsertToothCondition(tenantId, patientId, toothNumber, condition, isMissing, notes);
   }
 
   async updatePeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
