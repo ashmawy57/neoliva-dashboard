@@ -83,11 +83,16 @@ export class AppointmentService {
    */
   async getAppointmentFormData() {
     const tenantId = await resolveTenantContext();
-    const [patients, doctors, services] = await Promise.all([
+    const [patients, doctors, servicesRaw] = await Promise.all([
       prisma.patient.findMany({ where: { tenantId }, select: { id: true, name: true, phone: true } }),
       prisma.staff.findMany({ where: { tenantId, role: 'DOCTOR' }, select: { id: true, name: true } }),
       prisma.service.findMany({ where: { tenantId }, select: { id: true, name: true, duration: true, price: true } })
     ]);
+
+    const services = servicesRaw.map(s => ({
+      ...s,
+      price: s.price ? Number(s.price) : 0
+    }));
 
     return {
       patients,

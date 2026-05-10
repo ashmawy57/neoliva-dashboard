@@ -153,11 +153,11 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
-                        <DropdownMenuTrigger>
+                        <DropdownMenuTrigger render={
                           <Button variant="ghost" size="icon" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg hover:bg-gray-100 flex items-center justify-center cursor-pointer border-0 bg-transparent">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
-                        </DropdownMenuTrigger>
+                        } />
                         <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-100 border p-1">
                           <DropdownMenuItem onClick={() => setEditingApt(apt)} className="text-sm rounded-lg font-medium text-gray-700 focus:bg-blue-50 focus:text-blue-700 cursor-pointer">
                             Edit Status

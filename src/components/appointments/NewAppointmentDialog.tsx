@@ -104,13 +104,13 @@ export function NewAppointmentDialog({ patients, doctors, services }: NewAppoint
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger render={
         <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-6 h-10 md:h-12 rounded-xl md:rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 border-0 cursor-pointer">
           <Plus className="w-4 h-4 md:w-5 md:h-5" />
           <span className="hidden sm:inline">New Appointment</span>
           <span className="sm:hidden">New</span>
         </Button>
-      </DialogTrigger>
+      } />
       <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-2xl md:rounded-3xl">
         <DialogHeader className="px-6 md:px-8 py-4 md:py-6 border-b border-gray-100 bg-gray-50 flex flex-row items-center justify-between m-0">
           <DialogTitle className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-3">
