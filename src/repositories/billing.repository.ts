@@ -8,6 +8,7 @@ export class BillingRepository {
   async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
+    where?: Prisma.InvoiceWhereInput;
     include?: Prisma.InvoiceInclude;
     orderBy?: Prisma.InvoiceOrderByWithRelationInput;
   }) {

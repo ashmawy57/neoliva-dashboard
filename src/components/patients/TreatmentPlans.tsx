@@ -623,10 +623,11 @@ export function TreatmentPlans({
                         "Select Teeth"
                       )}
                     </PopoverTrigger>
-                    <PopoverContent className="w-[350px] p-4 rounded-2xl shadow-xl" align="end">
+                    <PopoverContent className="w-[500px] p-4 rounded-2xl shadow-xl" align="end">
                       <div className="space-y-3">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Affected Teeth</p>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2">Select Affected Teeth</p>
                         <ToothSelector 
+                          className="border-0 bg-transparent shadow-none p-0"
                           selectedTeeth={inlinePhase.toothList}
                           onChange={(teeth) => setInlinePhase(p => ({ ...p, toothList: teeth }))}
                         />
@@ -713,6 +714,7 @@ export function TreatmentPlans({
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Teeth Selection</label>
               <div className="p-3 rounded-xl border border-gray-100 bg-gray-50/50">
                 <ToothSelector 
+                  className="border-0 bg-transparent shadow-none p-0"
                   selectedTeeth={newPhase.toothList || []}
                   onChange={(teeth) => setNewPhase(p => ({ ...p, toothList: teeth }))}
                 />

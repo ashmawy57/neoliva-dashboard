@@ -34,12 +34,7 @@ export function ToothSelector({
     onChange 
   });
 
-  // Keep internal state in sync with external prop if it changes externally
-  useEffect(() => {
-    if (JSON.stringify(initialSelected) !== JSON.stringify(selectedTeeth)) {
-      setSelectedTeeth(initialSelected);
-    }
-  }, [initialSelected, setSelectedTeeth, selectedTeeth]);
+
 
   const renderTooth = (id: number, isTop: boolean) => {
     const toothId = String(id);
@@ -62,7 +57,7 @@ export function ToothSelector({
   };
 
   return (
-    <div className={cn("space-y-6 p-6 border rounded-2xl bg-white shadow-sm", className)}>
+    <div className={cn("space-y-4 p-4 border rounded-2xl bg-white shadow-sm", className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-primary/10 rounded-lg">
