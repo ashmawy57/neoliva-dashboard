@@ -6,182 +6,236 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Calendar as CalendarIcon, Beaker, Truck, FileText } from "lucide-react";
+import { 
+  Plus, 
+  Beaker, 
+  Truck, 
+  FileText, 
+  User, 
+  Stethoscope,
+  Calendar as CalendarIcon,
+  Tag,
+  DollarSign
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { createLabOrderAction } from "@/app/actions/lab-orders";
+import { toast } from "sonner";
 
-export function NewLabOrderDialog() {
+interface NewLabOrderDialogProps {
+  patients: any[];
+}
+
+export function NewLabOrderDialog({ patients }: NewLabOrderDialogProps) {
   const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form State
-  const [labName, setLabName] = useState("");
-  const [patient, setPatient] = useState("");
-  const [item, setItem] = useState("");
-  const [sentDate, setSentDate] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [cost, setCost] = useState("");
-  const [status, setStatus] = useState("Pending");
+  const [formData, setFormData] = useState({
+    patientId: "",
+    labName: "",
+    itemType: "",
+    toothNumber: "",
+    cost: "",
+    dueDate: "",
+    notes: ""
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.patientId || !formData.labName || !formData.itemType) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await createLabOrderAction({
+        ...formData,
+        cost: formData.cost ? Number(formData.cost) : 0
+      });
+
+      if (res.success) {
+        toast.success("Lab order created successfully!");
+        setOpen(false);
+        setFormData({
+          patientId: "",
+          labName: "",
+          itemType: "",
+          toothNumber: "",
+          cost: "",
+          dueDate: "",
+          notes: ""
+        });
+      } else {
+        toast.error(res.error || "Failed to create lab order");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-500/25 rounded-xl h-10 px-5 text-sm font-medium border-0 cursor-pointer">
-        <Plus className="mr-2 h-4 w-4" /> New Order
-      </DialogTrigger>
+      <DialogTrigger render={
+        <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 h-12 rounded-2xl shadow-lg shadow-purple-500/20 transition-all flex items-center gap-2 border-0 cursor-pointer">
+          <Plus className="w-5 h-5" /> New Order
+        </Button>
+      } />
       
-      <DialogContent className="sm:max-w-md md:max-w-xl p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl">
-        <DialogHeader className="bg-white px-6 py-4 flex flex-row items-center justify-between border-b shrink-0 m-0 space-y-0">
-          <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-3">
-            <span className="bg-purple-100 p-2 rounded-xl">
-              <Beaker className="h-5 w-5 text-purple-600" />
-            </span>
-            Create New Lab Order
+      <DialogContent className="sm:max-w-md md:max-w-xl p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-3xl">
+        <DialogHeader className="bg-gray-50 px-8 py-6 flex flex-row items-center justify-between border-b shrink-0 m-0 space-y-0">
+          <DialogTitle className="text-2xl font-bold text-gray-800 flex items-center gap-4">
+            <div className="bg-purple-600 p-3 rounded-2xl text-white shadow-lg shadow-purple-500/30">
+              <Beaker className="h-6 w-6" />
+            </div>
+            Create Lab Order
           </DialogTitle>
         </DialogHeader>
 
-        <form 
-          onSubmit={(e) => { e.preventDefault(); setOpen(false); }} 
-          className="flex-1 flex flex-col overflow-hidden max-h-[85vh]"
-        >
-          <div className="flex-1 overflow-y-auto w-full p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col">
+          <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             
-            {/* Context/Info Box */}
-            <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-xl flex items-start gap-3">
-              <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+            {/* Info Box */}
+            <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
                 <FileText className="w-4 h-4" />
               </div>
-              <p className="text-sm text-purple-800 font-medium leading-relaxed">
-                Fill in the details to submit a new lab order. Make sure to specify the accurate timelines and laboratory name.
+              <p className="text-sm text-blue-800 font-medium leading-relaxed">
+                Ensure all technical specifications (shade, material, prep details) are included in the notes for the technician.
               </p>
             </div>
 
             {/* Patient Selection */}
             <div className="space-y-2">
-              <Label className="text-sm font-semibold text-gray-700">Patient</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  placeholder="Search patient by name or ID..." 
-                  value={patient}
-                  onChange={(e) => setPatient(e.target.value)}
-                  className="pl-10 bg-white border-gray-200 focus-visible:ring-purple-500 rounded-xl shadow-sm h-11" 
-                />
-              </div>
-            </div>
-
-            {/* Lab & Item Details */}
-            <div className="grid sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-gray-700">Laboratory</Label>
-                <div className="relative">
-                  <Truck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input 
-                    placeholder="e.g. Elite Dental Labs" 
-                    value={labName}
-                    onChange={(e) => setLabName(e.target.value)}
-                    className="pl-10 bg-white border-gray-200 focus-visible:ring-purple-500 rounded-xl shadow-sm h-11" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-gray-700">Item Details</Label>
-                <Input 
-                  placeholder="e.g. PFM Crown (Tooth #16)" 
-                  value={item}
-                  onChange={(e) => setItem(e.target.value)}
-                  className="bg-white border-gray-200 focus-visible:ring-purple-500 rounded-xl shadow-sm h-11" 
-                />
-              </div>
-            </div>
-
-            {/* Timelines */}
-            <div className="grid sm:grid-cols-2 gap-5 p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-500">Date Sent</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                    <CalendarIcon className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <Input 
-                    type="date"
-                    value={sentDate}
-                    onChange={(e) => setSentDate(e.target.value)}
-                    className="pl-10 bg-gray-50 border-gray-200 focus-visible:ring-purple-500 rounded-lg shadow-sm h-10" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-500">Date Due</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                    <CalendarIcon className="h-4 w-4 text-amber-500" />
-                  </div>
-                  <Input 
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="pl-10 bg-amber-50/50 border-amber-200 focus-visible:ring-amber-500 rounded-lg shadow-sm h-10 font-medium text-amber-800" 
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Cost & Status */}
-            <div className="grid sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-gray-700">Estimated Cost ($)</Label>
-                <Input 
-                  type="number"
-                  min="0"
-                  placeholder="0.00" 
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  className="bg-white border-gray-200 focus-visible:ring-purple-500 rounded-xl shadow-sm h-11 font-mono font-semibold text-gray-800" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-gray-700">Initial Status</Label>
-                <div className="flex bg-gray-100/80 rounded-xl overflow-hidden border border-gray-100 p-1">
-                  {["Pending", "Sent", "In Progress"].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStatus(s)}
-                      className={`flex-1 rounded-lg font-semibold text-[11px] uppercase tracking-wider h-9 transition-all duration-300 ${
-                        status === s 
-                          ? "bg-purple-600 text-white shadow-md ring-1 ring-black/5" 
-                          : "text-gray-500 hover:text-gray-800 hover:bg-white"
-                      }`}
-                    >
-                      {s}
-                    </button>
+              <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <User className="w-4 h-4" /> Patient Selection
+              </Label>
+              <Select 
+                value={formData.patientId} 
+                onValueChange={(val) => setFormData({ ...formData, patientId: val })}
+              >
+                <SelectTrigger className="h-12 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50">
+                  <SelectValue placeholder="Select patient..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl border-gray-100 shadow-2xl p-1">
+                  {patients.map(p => (
+                    <SelectItem key={p.id} value={p.id} className="rounded-xl my-0.5">
+                      {p.name} <span className="text-[10px] text-gray-400 ml-2">#{p.displayId}</span>
+                    </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Lab Name */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Truck className="w-4 h-4" /> Laboratory Name
+                </Label>
+                <Input 
+                  placeholder="e.g. Elite Dental Labs" 
+                  value={formData.labName}
+                  onChange={(e) => setFormData({ ...formData, labName: e.target.value })}
+                  className="h-12 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50" 
+                />
+              </div>
+
+              {/* Item Type */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Tag className="w-4 h-4" /> Item Type
+                </Label>
+                <Input 
+                  placeholder="e.g. Zirconia Crown" 
+                  value={formData.itemType}
+                  onChange={(e) => setFormData({ ...formData, itemType: e.target.value })}
+                  className="h-12 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50" 
+                />
+              </div>
+
+              {/* Tooth Number */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4" /> Tooth # (Optional)
+                </Label>
+                <Input 
+                  placeholder="e.g. 16, 24, or All" 
+                  value={formData.toothNumber}
+                  onChange={(e) => setFormData({ ...formData, toothNumber: e.target.value })}
+                  className="h-12 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50" 
+                />
+              </div>
+
+              {/* Cost */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" /> Estimated Cost
+                </Label>
+                <div className="relative">
+                  <Input 
+                    type="number"
+                    placeholder="0.00" 
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                    className="h-12 pl-10 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50 font-bold" 
+                  />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</div>
                 </div>
               </div>
+            </div>
+
+            {/* Due Date */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4" /> Expected Return Date
+              </Label>
+              <Input 
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                className="h-12 border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-amber-50/30 font-bold text-amber-900" 
+              />
             </div>
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label className="text-sm font-semibold text-gray-700">Additional Instructions</Label>
+              <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Additional Instructions</Label>
               <Textarea 
-                placeholder="Include shade, material specifics, or special requests for the lab..." 
-                className="bg-white border-gray-200 focus-visible:ring-purple-500 rounded-xl shadow-sm min-h-[80px] resize-none text-sm" 
+                placeholder="Include shade (e.g. A2), material specifics, or special requests..." 
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="min-h-[100px] border-gray-200 focus:ring-purple-500/20 rounded-2xl bg-gray-50/50 resize-none p-4" 
               />
             </div>
 
           </div>
           
-          <DialogFooter className="bg-white px-6 py-4 border-t flex gap-3 shrink-0 w-full sm:justify-between items-center sm:flex-row flex-col-reverse">
+          <DialogFooter className="bg-gray-50 px-8 py-6 border-t flex gap-4 sm:justify-end">
             <Button 
               type="button" 
               variant="outline" 
               onClick={() => setOpen(false)}
-              className="px-6 rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50 h-11 shadow-sm font-medium w-full sm:w-auto"
+              className="h-12 px-6 rounded-2xl border-gray-200 font-semibold hover:bg-white cursor-pointer"
+              disabled={isSubmitting}
             >
               DISCARD
             </Button>
             <Button 
               type="submit" 
-              className="px-8 min-w-[160px] rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 h-11 font-semibold w-full sm:w-auto"
+              className="h-12 px-10 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-lg shadow-purple-500/25 cursor-pointer"
+              disabled={isSubmitting}
             >
-              SUBMIT ORDER
+              {isSubmitting ? "Submitting..." : "SUBMIT ORDER"}
             </Button>
           </DialogFooter>
         </form>

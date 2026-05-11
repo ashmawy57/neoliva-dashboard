@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { LabOrder, Prisma } from "@prisma/client";
+import { LabOrder, LabOrderStatus, Prisma } from "@prisma/client";
 
 export class LabOrderRepository {
   async findMany(tenantId: string, params?: {
@@ -7,12 +7,23 @@ export class LabOrderRepository {
     take?: number;
     include?: Prisma.LabOrderInclude;
     orderBy?: Prisma.LabOrderOrderByWithRelationInput;
-  }): Promise<LabOrder[]> {
+    where?: Prisma.LabOrderWhereInput;
+  }): Promise<any[]> {
     return prisma.labOrder.findMany({
       ...params,
       where: {
+        ...params?.where,
         tenantId,
       },
+      include: {
+        patient: {
+          select: {
+            name: true,
+            displayId: true
+          }
+        },
+        ...params?.include
+      }
     });
   }
 
@@ -22,14 +33,18 @@ export class LabOrderRepository {
         id,
         tenantId,
       },
+      include: {
+        patient: true,
+        appointment: true
+      }
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.LabOrderCreateInput, 'tenant'>): Promise<LabOrder> {
+  async create(tenantId: string, data: any): Promise<LabOrder> {
     return prisma.labOrder.create({
       data: {
         ...data,
-        tenant: { connect: { id: tenantId } },
+        tenantId,
       },
     });
   }
@@ -44,6 +59,24 @@ export class LabOrderRepository {
     });
   }
 
+  async updateStatus(tenantId: string, id: string, status: LabOrderStatus): Promise<LabOrder> {
+    const updateData: any = { status };
+    
+    if (status === 'SENT') {
+      updateData.sentAt = new Date();
+    } else if (status === 'RECEIVED') {
+      updateData.receivedAt = new Date();
+    }
+
+    return prisma.labOrder.update({
+      where: {
+        id,
+        tenantId,
+      },
+      data: updateData,
+    });
+  }
+
   async delete(tenantId: string, id: string): Promise<LabOrder> {
     return prisma.labOrder.delete({
       where: {
@@ -51,5 +84,31 @@ export class LabOrderRepository {
         tenantId,
       },
     });
+  }
+
+  async getStats(tenantId: string) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfWeek = new Date();
+    endOfWeek.setDate(now.getDate() + 7);
+
+    const orders = await prisma.labOrder.findMany({
+      where: { tenantId },
+      select: {
+        status: true,
+        cost: true,
+        dueDate: true,
+        createdAt: true
+      }
+    });
+
+    return {
+      activeCases: orders.filter(o => ['SENT', 'IN_PROGRESS'].includes(o.status)).length,
+      dueThisWeek: orders.filter(o => o.dueDate && o.dueDate >= now && o.dueDate <= endOfWeek).length,
+      received: orders.filter(o => o.status === 'RECEIVED').length,
+      monthlyCost: orders
+        .filter(o => o.createdAt && o.createdAt >= startOfMonth)
+        .reduce((sum, o) => sum + Number(o.cost || 0), 0)
+    };
   }
 }

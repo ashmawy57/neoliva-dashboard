@@ -175,6 +175,7 @@ model Appointment {
   service   Service?           @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   invoice   Invoice?
+  labOrders LabOrder[]
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
@@ -324,20 +325,27 @@ model ServiceInventoryUsage {
 model LabOrder {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayId       String?         @unique @map("display_id")
+  tenantId        String          @map("tenant_id") @db.Uuid
   patientId       String          @map("patient_id") @db.Uuid
-  itemDescription String          @map("item_description")
+  appointmentId   String?         @map("appointment_id") @db.Uuid
+  
   labName         String          @map("lab_name")
-  sendDate        DateTime        @map("send_date") @db.Date
-  returnDate      DateTime?       @map("return_date") @db.Date
-  expectedReturnDate DateTime? @map("expected_return_date") @db.Date
+  itemType        String          @map("item_type")
+  toothNumber     String?         @map("tooth_number")
+  status          LabOrderStatus @default(PENDING)
+  
+  sentAt          DateTime?       @map("sent_at") @db.Timestamptz(6)
+  dueDate         DateTime?       @map("due_date") @db.Date
+  receivedAt      DateTime?       @map("received_at") @db.Timestamptz(6)
+  
   cost            Decimal?        @db.Decimal
   notes           String?
   createdAt       DateTime?       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime?       @default(now()) @map("updated_at") @db.Timestamptz(6)
-  tenantId        String          @map("tenant_id") @db.Uuid
-  status          LabOrderStatus? @default(SENT)
+
   patient         Patient         @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointment     Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
@@ -669,10 +677,12 @@ enum ExpenseStatus {
 }
 
 enum LabOrderStatus {
+  PENDING
   SENT
   IN_PROGRESS
   RECEIVED
   DELIVERED
+  CANCELLED
 
   @@map("lab_order_status")
 }

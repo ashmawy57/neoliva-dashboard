@@ -1,52 +1,104 @@
 export const dynamic = 'force-dynamic';
+
 import { Card, CardContent } from "@/components/ui/card";
-import { Truck, AlertCircle, CheckCircle } from "lucide-react";
+import { Truck, AlertCircle, CheckCircle, DollarSign, Clock, Beaker } from "lucide-react";
 import { NewLabOrderDialog } from "@/components/lab-orders/NewLabOrderDialog";
 import { LabOrdersTable } from "@/components/lab-orders/LabOrdersTable";
-import { getLabOrders } from "@/app/actions/lab_orders";
+import { LabOrderService } from "@/services/lab-order.service";
+import { PatientService } from "@/services/patient.service";
+import { resolveTenantContext } from "@/lib/tenant-context";
+
+const labOrderService = new LabOrderService();
+const patientService = new PatientService();
 
 export default async function LabOrdersPage() {
-  const labOrders = await getLabOrders();
+  const tenantId = await resolveTenantContext();
+  
+  // Fetch data in parallel
+  const [labOrders, stats, patients] = await Promise.all([
+    labOrderService.getLabOrdersList(),
+    labOrderService.getLabOrdersStats(),
+    patientService.getAllPatients(tenantId)
+  ]);
 
-  const totalActive = labOrders.filter(o => o.status === "IN_PROGRESS" || o.status === "SENT").length;
-  const dueThisWeek = labOrders.filter(o => o.status === "IN_PROGRESS" || o.status === "SENT").length; 
-  const received = labOrders.filter(o => o.status === "RECEIVED").length;
-  const totalCost = labOrders.reduce((acc, curr) => acc + (curr.cost || 0), 0);
-
-  const stats = [
-    { label: "Total Active Cases", value: totalActive.toString(), icon: Truck, color: "text-blue-600", bg: "bg-blue-100" },
-    { label: "Due This Week", value: dueThisWeek.toString(), icon: AlertCircle, color: "text-amber-600", bg: "bg-amber-100" },
-    { label: "Received (To Deliver)", value: received.toString(), icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-100" },
-    { label: "Total Monthly Cost", value: `$${totalCost.toLocaleString(undefined, { minimumFractionDigits: 0 })}`, icon: Truck, color: "text-purple-600", bg: "bg-purple-100" },
+  const statCards = [
+    { 
+      label: "Active Cases", 
+      value: stats.activeCases.toString(), 
+      icon: Clock, 
+      color: "text-blue-600", 
+      bg: "bg-blue-50",
+      description: "Sent or In Progress"
+    },
+    { 
+      label: "Due This Week", 
+      value: stats.dueThisWeek.toString(), 
+      icon: AlertCircle, 
+      color: "text-amber-600", 
+      bg: "bg-amber-50",
+      description: "Requiring attention"
+    },
+    { 
+      label: "Received", 
+      value: stats.received.toString(), 
+      icon: CheckCircle, 
+      color: "text-emerald-600", 
+      bg: "bg-emerald-50",
+      description: "Ready for delivery"
+    },
+    { 
+      label: "Monthly Cost", 
+      value: `$${stats.monthlyCost.toLocaleString()}`, 
+      icon: DollarSign, 
+      color: "text-purple-600", 
+      bg: "bg-purple-50",
+      description: "Current month spend"
+    },
   ];
 
   return (
-    <div className="p-6 md:p-8 space-y-6 animate-fade-in-up">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lab Orders</h1>
-          <p className="text-gray-500 mt-1">Track external laboratory cases, crowns, and prosthetics.</p>
+    <div className="p-6 md:p-8 space-y-8 animate-fade-in pb-20">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 flex items-center gap-3">
+            <Beaker className="w-10 h-10 text-purple-600" />
+            Lab Orders
+          </h1>
+          <p className="text-gray-500 font-medium">Manage and track external laboratory work for prosthetics and orthodontics.</p>
         </div>
-        <NewLabOrderDialog />
+        <NewLabOrderDialog patients={patients} />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="border-0 shadow-sm relative overflow-hidden">
+      {/* Stats Section */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {statCards.map((stat, i) => (
+          <Card key={i} className="border-0 shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden bg-white/50 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg} ${stat.color}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform duration-500`}>
                   <stat.icon className="w-6 h-6" />
                 </div>
+                <div className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Live Update</div>
               </div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{stat.label}</p>
-              <h2 className={`text-2xl font-bold ${i === 3 ? "text-gray-900" : stat.color}`}>{stat.value}</h2>
+              <div className="space-y-1">
+                <h2 className="text-3xl font-black text-gray-900 tracking-tight">{stat.value}</h2>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{stat.label}</p>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-4 font-medium italic">{stat.description}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <LabOrdersTable initialOrders={labOrders} />
+      {/* Main Table Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Truck className="w-5 h-5 text-purple-500" />
+          <h2 className="text-lg font-bold text-gray-800">Order Management</h2>
+        </div>
+        <LabOrdersTable initialOrders={labOrders} />
+      </div>
     </div>
   );
 }
