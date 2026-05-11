@@ -15,11 +15,8 @@ export class ServiceService {
 
     console.log(`[ServiceService] Found ${services.length} services`);
     
-    // Convert Decimal to number for serialization to Client Components
-    return services.map(s => ({
-      ...s,
-      price: Number(s.price)
-    }));
+    // Ensure plain objects for Next.js Client Components
+    return services.map(s => this.serializeService(s));
   }
 
   async createService(data: {
@@ -28,6 +25,7 @@ export class ServiceService {
     price: number;
     duration: number;
     description?: string;
+    popular?: boolean;
   }) {
     const tenantId = await resolveTenantContext();
     console.log(`[ServiceService] Creating service for tenant ${tenantId}:`, data);
@@ -37,7 +35,8 @@ export class ServiceService {
       category: data.category,
       price: data.price,
       duration: data.duration,
-      description: data.description
+      description: data.description,
+      popular: data.popular
     });
 
     return this.serializeService(result);
@@ -49,6 +48,7 @@ export class ServiceService {
     price: number;
     duration: number;
     description: string;
+    popular: boolean;
   }>) {
     const tenantId = await resolveTenantContext();
     console.log(`[ServiceService] Updating service ${id} for tenant ${tenantId}:`, data);
@@ -70,9 +70,20 @@ export class ServiceService {
 
   private serializeService(s: any) {
     if (!s) return null;
+    
+    // Convert to plain object and handle Decimal/Date types
     return {
-      ...s,
-      price: s.price ? Number(s.price) : 0
+      id: s.id,
+      tenantId: s.tenantId,
+      name: s.name,
+      description: s.description,
+      price: s.price ? Number(s.price) : 0,
+      duration: s.duration,
+      category: s.category,
+      isActive: s.isActive,
+      popular: s.popular,
+      createdAt: s.createdAt ? s.createdAt.toISOString() : null,
+      updatedAt: s.updatedAt ? s.updatedAt.toISOString() : null,
     };
   }
 }

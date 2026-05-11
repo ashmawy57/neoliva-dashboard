@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Pill, Calendar, User, Printer, Trash2, Copy, MoreVertical, ChevronRight, FileText, Download, Loader2, Plus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,17 +35,24 @@ interface Prescription {
 export function PrescriptionList({ 
   patientId, 
   prescriptions: initialPrescriptions,
-  patientName 
+  patientName,
+  onRefresh
 }: { 
   patientId: string
   prescriptions: any[]
   patientName: string
+  onRefresh?: () => void
 }) {
 
   const [prescriptions, setPrescriptions] = useState(initialPrescriptions)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [printingId, setPrintingId] = useState<string | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
+
+  // Sync state with props when initialPrescriptions changes
+  useEffect(() => {
+    setPrescriptions(initialPrescriptions)
+  }, [initialPrescriptions])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this prescription?')) return
@@ -197,7 +204,14 @@ export function PrescriptionList({
         patientId={patientId} 
         open={isFormOpen} 
         onOpenChange={setIsFormOpen}
-        onSuccess={() => window.location.reload()} // Simplified refresh
+        onSuccess={() => {
+          if (onRefresh) {
+            onRefresh()
+          } else {
+            window.location.reload()
+          }
+          setIsFormOpen(false)
+        }}
       />
 
       {/* Print Modal */}

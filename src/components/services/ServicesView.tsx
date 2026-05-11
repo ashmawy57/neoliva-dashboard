@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { deleteServiceAction } from "@/app/actions/services";
+import { EditServiceDialog } from "./EditServiceDialog";
 import { toast } from "sonner";
 import { $Enums } from "@prisma/client";
 type ServiceCategory = $Enums.ServiceCategory;
@@ -53,6 +54,8 @@ const categoryIcons: Record<ServiceCategory, string> = {
 export function ServicesView({ initialServices }: ServicesViewProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<ServiceCategory | "ALL">("ALL");
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const filteredServices = initialServices.filter(service => {
     const matchesSearch = service.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -75,6 +78,11 @@ export function ServicesView({ initialServices }: ServicesViewProps) {
       toast.error("An unexpected error occurred");
     }
   }
+
+  const handleEditClick = (service: Service) => {
+    setEditingService(service);
+    setIsEditDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -152,7 +160,10 @@ export function ServicesView({ initialServices }: ServicesViewProps) {
                     </Button>
                   } />
                   <DropdownMenuContent align="end" className="rounded-xl border-gray-100 shadow-xl">
-                    <DropdownMenuItem className="text-gray-600 focus:text-indigo-600 cursor-pointer rounded-lg">
+                    <DropdownMenuItem 
+                      className="text-gray-600 focus:text-indigo-600 cursor-pointer rounded-lg"
+                      onClick={() => handleEditClick(service)}
+                    >
                       <Edit2 className="w-4 h-4 mr-2" /> Edit Service
                     </DropdownMenuItem>
                     <DropdownMenuItem 
@@ -198,6 +209,13 @@ export function ServicesView({ initialServices }: ServicesViewProps) {
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <EditServiceDialog 
+        service={editingService}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+      />
     </div>
   );
 }

@@ -23,6 +23,7 @@ export async function createServiceAction(data: {
   price: number;
   duration: number;
   description?: string;
+  popular?: boolean;
 }) {
   console.log('[Actions] createService called with:', data);
   try {
@@ -42,6 +43,7 @@ export async function updateServiceAction(id: string, data: Partial<{
   price: number;
   duration: number;
   description: string;
+  popular: boolean;
 }>) {
   console.log(`[Actions] updateService called for ${id}:`, data);
   try {
