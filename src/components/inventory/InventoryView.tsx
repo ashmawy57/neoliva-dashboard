@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { adjustInventoryStock, createInventoryItem, deleteInventoryItem } from "@/app/actions/inventory";
+import { addStockAction, deductStockAction, deleteItemAction } from "@/app/actions/inventory";
 import { toast } from "sonner";
 import { NewInventoryItemDialog } from "./NewInventoryItemDialog";
 
@@ -54,7 +54,10 @@ export default function InventoryView({ initialItems, lowStockCount }: Inventory
 
   const handleAdjustStock = async (id: string, adjustment: number) => {
     setIsAdjusting(id);
-    const result = await adjustInventoryStock(id, adjustment);
+    const data = { itemId: id, quantity: Math.abs(adjustment), reason: adjustment > 0 ? "Manual Adjustment (In)" : "Manual Adjustment (Out)" };
+    const result = adjustment > 0 
+      ? await addStockAction(data)
+      : await deductStockAction(data);
     
     if (result.success) {
       // Optimistically update or just wait for revalidation? 
@@ -214,7 +217,7 @@ export default function InventoryView({ initialItems, lowStockCount }: Inventory
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-red-600 focus:text-red-600"
-                          onClick={() => deleteInventoryItem(item.id)}
+                          onClick={() => deleteItemAction(item.id)}
                         >
                           Delete Item
                         </DropdownMenuItem>

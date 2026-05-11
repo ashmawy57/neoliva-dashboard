@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createInventoryItem } from "@/app/actions/inventory";
+import { createItemAction } from "@/app/actions/inventory";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -28,10 +28,16 @@ export function NewInventoryItemDialog() {
 
     try {
       const formData = new FormData(e.currentTarget);
-      const result = await createInventoryItem(formData);
+      const result = await createItemAction({
+        name: formData.get('name') as string,
+        category: formData.get('category') as string,
+        unit: formData.get('unit') as string,
+        initialStock: Number(formData.get('quantity') || 0),
+        minimumStock: Number(formData.get('minLevel') || 0),
+      });
 
-      if (result?.error) {
-        toast.error(result.error);
+      if (!result.success) {
+        toast.error(result.error || "Failed to add inventory item");
       } else {
         toast.success("Inventory item added successfully");
         setOpen(false);
