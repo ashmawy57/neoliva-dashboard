@@ -85,7 +85,7 @@ export async function signupWithInvite(formData: FormData) {
     data: {
       supabaseId: data.user.id,
       email: data.user.email!,
-      tenantId: staff.tenantId,
+      tenant: { connect: { id: staff.tenantId } },
       staff: { connect: { id: staff.id } }
     }
   });
