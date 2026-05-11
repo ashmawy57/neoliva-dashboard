@@ -1,5 +1,5 @@
 import { StaffRepository } from "@/repositories/staff.repository";
-import { Staff, Prisma } from "@prisma/client";
+import { Staff, Prisma } from "@/generated/client";
 
 export class StaffService {
   private repository = new StaffRepository();

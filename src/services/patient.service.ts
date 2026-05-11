@@ -1,6 +1,6 @@
 import "server-only";
 import { PatientRepository } from "@/repositories/patient.repository";
-import { Patient, Prisma } from "@prisma/client";
+import { Patient, Prisma } from "@/generated/client";
 
 const patientRepository = new PatientRepository();
 
@@ -8,7 +8,14 @@ export class PatientService {
   async getAllPatients(tenantId: string) {
     return patientRepository.findMany(tenantId, {
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        displayId: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        createdAt: true,
         appointments: {
           select: {
             id: true,
@@ -17,10 +24,20 @@ export class PatientService {
           }
         },
         invoices: {
-          include: {
+          select: {
+            id: true,
+            displayId: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+            createdAt: true,
+            dueDate: true,
             payments: {
               select: {
-                amount: true
+                id: true,
+                amount: true,
+                method: true,
+                paidAt: true
               }
             }
           },
@@ -69,7 +86,7 @@ export class PatientService {
         outstanding: (patient.invoices || [])
           .reduce((sum: number, i: any) => {
             const paid = Number(i.paidAmount || 0);
-            return sum + (Number(i.amount) - paid);
+            return sum + (Number(i.totalAmount) - paid);
           }, 0)
       }
     });
@@ -81,13 +98,32 @@ export class PatientService {
     // Query 2: All clinical records
     const [core, clinical] = await Promise.all([
       patientRepository.findById(tenantId, id, {
+        id: true,
+        displayId: true,
+        name: true,
+        email: true,
+        phone: true,
+        gender: true,
+        dob: true,
+        address: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        tenantId: true,
         appointments: true,
         invoices: {
-          include: {
+          select: {
+            id: true,
+            displayId: true,
+            patientId: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+            dueDate: true,
+            createdAt: true,
             items: true,
             payments: true
-          },
-          orderBy: { createdAt: 'desc' }
+          }
         },
         visitRecords: true,
         patientDocuments: true,
@@ -102,7 +138,10 @@ export class PatientService {
         toothConditions: true,
         periodontalMeasurements: true,
         prescriptions: {
-          include: {
+          select: {
+            id: true,
+            date: true,
+            notes: true,
             items: true
           }
         },
@@ -173,7 +212,7 @@ export class PatientService {
       const invoices = data.invoices || []
       const totalOutstanding = invoices.reduce((sum: number, inv: any) => {
         const totalPaid = Number(inv.paidAmount || 0);
-        return sum + (Number(inv.amount) - totalPaid)
+        return sum + (Number(inv.totalAmount) - totalPaid)
       }, 0)
 
       // Helper for initials
@@ -264,26 +303,27 @@ export class PatientService {
         visitHistory,
         invoiceHistory: invoices.map((i: any) => {
           const paidAmount = Number(i.paidAmount || 0)
+          const totalAmount = Number(i.totalAmount || 0)
           return {
             id: i.id,
-            displayId: i.displayId,
-            amount: Number(i.amount),
-            paidAmount: Number(paidAmount),
-            remainingAmount: Number(i.amount) - Number(paidAmount),
+            displayId: i.displayId || `INV-${i.id.slice(0, 8).toUpperCase()}`,
+            totalAmount: totalAmount,
+            paidAmount: paidAmount,
+            remainingAmount: totalAmount - paidAmount,
             status: i.status,
             dueDate: i.dueDate ? new Date(i.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
-            treatment: i.treatment || '—',
-            date: i.createdAt ? new Date(i.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
+            createdAt: i.createdAt,
             items: (i.items || []).map((item: any) => ({
               id: item.id,
-              name: item.name,
-              amount: Number(item.amount),
+              description: item.description,
+              quantity: item.quantity,
+              price: Number(item.price),
               createdAt: item.createdAt
             })),
             payments: (i.payments || []).map((p: any) => ({
               id: p.id,
               amount: Number(p.amount),
-              date: p.date,
+              paidAt: p.paidAt,
               method: p.method,
               createdAt: p.createdAt
             }))

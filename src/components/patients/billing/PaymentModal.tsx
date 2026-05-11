@@ -17,12 +17,12 @@ import {
   CheckCircle2,
   Calendar,
   Wallet,
-  Coins,
   ArrowRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordPayment } from "@/app/actions/billing";
+import { PaymentMethod } from "@/generated/client";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -33,24 +33,25 @@ interface PaymentModalProps {
 }
 
 const PAYMENT_METHODS = [
-  { id: "Cash", icon: Wallet, label: "Cash" },
-  { id: "Card", icon: CreditCard, label: "Credit Card" },
-  { id: "Insurance", icon: CheckCircle2, label: "Insurance" },
-  { id: "Transfer", icon: ArrowRight, label: "Bank Transfer" },
+  { id: "CASH", icon: Wallet, label: "Cash" },
+  { id: "CARD", icon: CreditCard, label: "Credit Card" },
+  { id: "TRANSFER", icon: ArrowRight, label: "Bank Transfer" },
 ];
 
 export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }: PaymentModalProps) {
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("Cash");
+  const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const remainingBalance = invoice ? (Number(invoice.totalAmount) - Number(invoice.paidAmount)) : 0;
+
   useEffect(() => {
     if (invoice) {
-      setAmount(invoice.remainingAmount.toString());
+      setAmount(remainingBalance.toString());
     }
-  }, [invoice]);
+  }, [invoice, remainingBalance]);
 
   const handleSubmit = async () => {
     if (!amount || Number(amount) <= 0) return toast.error("Please enter a valid amount");
@@ -60,13 +61,12 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
     const toastId = toast.loading("Recording payment...");
 
     try {
-      const result = await recordPayment(
-        invoice.id, 
-        Number(amount), 
-        method, 
+      const result = await recordPayment(invoice.id, {
+        amount: Number(amount), 
+        method: method, 
         notes, 
-        new Date(date)
-      );
+        paidAt: new Date(date)
+      });
 
       if (result.success) {
         toast.success("Payment recorded successfully", { id: toastId });
@@ -97,25 +97,25 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
             <DialogHeader>
               <DialogTitle className="text-2xl font-black">Record Payment</DialogTitle>
               <p className="text-emerald-100 text-sm font-medium mt-1">
-                For Invoice #{invoice.displayId || invoice.id.substring(0, 8).toUpperCase()}
+                For Invoice {invoice.displayId || invoice.id.substring(0, 8).toUpperCase()}
               </p>
             </DialogHeader>
           </div>
           <div className="absolute top-0 right-0 p-8 opacity-10 text-white">
-            <Coins className="w-32 h-32" />
+            {/* Simple placeholder for Coins icon or similar if needed */}
           </div>
         </div>
 
         <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh]">
           <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
             <div>
-              <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Total Remaining</p>
-              <p className="text-2xl font-black text-emerald-700">${invoice.remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Remaining Balance</p>
+              <p className="text-2xl font-black text-emerald-700">${remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
             <Button 
               size="sm" 
               variant="outline" 
-              onClick={() => setAmount(invoice.remainingAmount.toString())}
+              onClick={() => setAmount(remainingBalance.toString())}
               className="rounded-xl border-emerald-200 text-emerald-600 font-black text-[10px] h-8 bg-white hover:bg-emerald-50"
             >
               PAY FULL
@@ -139,37 +139,36 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
 
             <div className="grid gap-2">
               <Label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Payment Method</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {PAYMENT_METHODS.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setMethod(item.id)}
+                    type="button"
+                    onClick={() => setMethod(item.id as PaymentMethod)}
                     className={cn(
-                      "flex items-center gap-2 p-3 rounded-xl border transition-all text-left",
+                      "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center",
                       method === item.id 
                         ? "border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500" 
                         : "border-gray-100 hover:border-emerald-200 hover:bg-gray-50 text-gray-600"
                     )}
                   >
                     <item.icon className={cn("w-4 h-4", method === item.id ? "text-emerald-500" : "text-gray-400")} />
-                    <span className="text-xs font-bold">{item.label}</span>
+                    <span className="text-[10px] font-black uppercase">{item.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Date</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                  <Input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="pl-9 h-10 rounded-xl border-gray-200 text-sm font-medium"
-                  />
-                </div>
+            <div className="grid gap-2">
+              <Label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Date</Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="pl-9 h-10 rounded-xl border-gray-200 text-sm font-medium"
+                />
               </div>
             </div>
 
@@ -192,7 +191,7 @@ export function PaymentModal({ isOpen, onClose, invoice, patientId, onRefresh }:
             disabled={isSubmitting}
             className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 font-black shadow-lg shadow-emerald-100 transition-all active:scale-95"
           >
-            Record Payment
+            {isSubmitting ? "RECORDING..." : "Record Payment"}
           </Button>
         </div>
       </DialogContent>

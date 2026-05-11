@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma, InvoiceStatus, PaymentMethod } from "@/generated/client";
 
 export class BillingRepository {
   /**
@@ -18,7 +18,16 @@ export class BillingRepository {
         ...params?.where,
         tenantId,
       },
-      include: params?.include || {
+      select: {
+        id: true,
+        displayId: true,
+        patientId: true,
+        totalAmount: true,
+        paidAmount: true,
+        status: true,
+        dueDate: true,
+        createdAt: true,
+        updatedAt: true,
         patient: {
           select: {
             id: true,
@@ -31,13 +40,13 @@ export class BillingRepository {
   }
 
   /**
-   * Get total revenue and other financial aggregates
+   * Get financial statistics for a tenant
    */
   async getFinancialStats(tenantId: string) {
     const invoices = await prisma.invoice.findMany({
       where: { tenantId },
       select: {
-        amount: true,
+        totalAmount: true,
         paidAmount: true,
         status: true,
         dueDate: true
@@ -46,26 +55,33 @@ export class BillingRepository {
 
     const now = new Date();
 
-    return {
+    const stats = {
       totalRevenue: invoices.reduce((sum, i) => sum + Number(i.paidAmount), 0),
-      pendingAmount: invoices.reduce((sum, i) => sum + (Number(i.amount) - Number(i.paidAmount)), 0),
+      pendingAmount: invoices.reduce((sum, i) => sum + (Number(i.totalAmount) - Number(i.paidAmount)), 0),
       overdueAmount: invoices
         .filter(i => i.status !== 'PAID' && i.dueDate && new Date(i.dueDate) < now)
-        .reduce((sum, i) => sum + (Number(i.amount) - Number(i.paidAmount)), 0),
+        .reduce((sum, i) => sum + (Number(i.totalAmount) - Number(i.paidAmount)), 0),
       overdueCount: invoices.filter(i => i.status !== 'PAID' && i.dueDate && new Date(i.dueDate) < now).length
     };
-  }
 
-  async findUniqueByAppointmentId(appointmentId: string, tenantId: string) {
-    return await prisma.invoice.findUnique({
-      where: { appointmentId, tenantId }
-    });
+    return stats;
   }
 
   async findUnique(id: string, tenantId: string) {
+    if (!id) {
+      throw new Error("BillingRepository.findUnique: id is required");
+    }
     return await prisma.invoice.findUnique({
       where: { id, tenantId },
-      include: {
+      select: {
+        id: true,
+        displayId: true,
+        patientId: true,
+        totalAmount: true,
+        paidAmount: true,
+        status: true,
+        dueDate: true,
+        createdAt: true,
         patient: true,
         items: true,
         payments: true
@@ -73,25 +89,63 @@ export class BillingRepository {
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.InvoiceCreateInput, 'tenant'>) {
-    return await prisma.invoice.create({
-      data: {
-        ...data,
-        tenant: { connect: { id: tenantId } }
+  async findByAppointmentId(appointmentId: string, tenantId: string) {
+    return await prisma.invoice.findFirst({
+      where: { appointmentId, tenantId },
+      select: {
+        id: true,
+        displayId: true,
+        patientId: true,
+        totalAmount: true,
+        paidAmount: true,
+        status: true,
+        items: true,
+        payments: true
       }
     });
   }
 
-  async update(tenantId: string, id: string, data: Prisma.InvoiceUpdateInput) {
-    return await prisma.invoice.update({
-      where: { id, tenantId },
-      data
-    });
-  }
+  /**
+   * Creates an invoice with items atomically
+   */
+  async create(tenantId: string, data: {
+    patientId: string;
+    displayId: string;
+    appointmentId?: string;
+    dueDate?: Date;
+    items: {
+      description: string;
+      quantity: number;
+      price: number;
+      serviceId?: string;
+    }[];
+  }) {
+    // Calculate total amount from items
+    const totalAmount = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  async delete(tenantId: string, id: string) {
-    return await prisma.invoice.delete({
-      where: { id, tenantId }
+    return await prisma.invoice.create({
+      data: {
+        displayId: data.displayId,
+        totalAmount: totalAmount,
+        paidAmount: 0,
+        status: 'PENDING',
+        dueDate: data.dueDate,
+        patient: { connect: { id: data.patientId } },
+        tenant: { connect: { id: tenantId } },
+        appointment: data.appointmentId ? { connect: { id: data.appointmentId } } : undefined,
+        items: {
+          create: data.items.map(item => ({
+            ...item,
+            tenant: { connect: { id: tenantId } }
+          }))
+        }
+      },
+      select: {
+        id: true,
+        displayId: true,
+        items: true,
+        patient: true
+      }
     });
   }
 
@@ -100,9 +154,9 @@ export class BillingRepository {
    */
   async recordPayment(tenantId: string, invoiceId: string, data: {
     amount: number;
-    method: string;
+    method: PaymentMethod;
     notes?: string;
-    date?: Date;
+    paidAt?: Date;
   }) {
     return prisma.$transaction(async (tx) => {
       // 1. Fetch invoice with strict tenant isolation
@@ -110,9 +164,10 @@ export class BillingRepository {
         where: { id: invoiceId, tenantId },
         select: {
           id: true,
-          amount: true,
+          totalAmount: true,
           paidAmount: true,
-          status: true
+          status: true,
+          patientId: true
         }
       });
 
@@ -124,12 +179,12 @@ export class BillingRepository {
         throw new Error("This invoice is already fully paid.");
       }
 
-      const totalAmount = Number(invoice.amount);
+      const totalAmount = Number(invoice.totalAmount);
       const currentPaid = Number(invoice.paidAmount);
       const remainingBalance = totalAmount - currentPaid;
 
       // 2. Validate payment amount
-      if (data.amount > (remainingBalance + 0.001)) {
+      if (data.amount > (remainingBalance + 0.01)) {
         throw new Error(`Payment amount exceeds the remaining balance ($${remainingBalance.toFixed(2)}).`);
       }
 
@@ -140,19 +195,17 @@ export class BillingRepository {
           amount: data.amount,
           method: data.method,
           notes: data.notes,
-          date: data.date || new Date(),
+          paidAt: data.paidAt || new Date(),
           tenantId
         }
       });
 
       // 4. Calculate new state
       const newPaidAmount = currentPaid + Number(data.amount);
-      let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
+      let newStatus: InvoiceStatus = 'PENDING';
       
-      if (newPaidAmount >= totalAmount - 0.001) {
+      if (newPaidAmount >= totalAmount - 0.01) {
         newStatus = 'PAID';
-      } else if (newPaidAmount > 0) {
-        newStatus = 'PARTIAL';
       }
 
       // 5. Update the Invoice record
@@ -166,6 +219,12 @@ export class BillingRepository {
       });
 
       return payment;
+    });
+  }
+
+  async delete(tenantId: string, id: string) {
+    return await prisma.invoice.delete({
+      where: { id, tenantId }
     });
   }
 }

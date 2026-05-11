@@ -1,7 +1,7 @@
 import { AppointmentRepository } from "@/repositories/appointment.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { InventoryService } from "./inventory.service";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus } from "@/generated/client";
 import { prisma } from "@/lib/prisma";
 
 const appointmentRepository = new AppointmentRepository();
@@ -47,7 +47,7 @@ export class AppointmentService {
         notes: apt.notes,
         hasInvoice: !!apt.invoice,
         invoiceStatus: apt.invoice?.status,
-        invoiceAmount: apt.invoice?.amount ? Number(apt.invoice.amount) : 0,
+        invoiceAmount: apt.invoice?.totalAmount ? Number(apt.invoice.totalAmount) : 0,
         avatar: getInitials(apt.patient?.name || ""),
         color: apt.color || 'from-blue-500 to-indigo-600'
       };
@@ -196,7 +196,7 @@ export class AppointmentService {
     if (serialized.invoice) {
       serialized.invoice = {
         ...serialized.invoice,
-        amount: serialized.invoice.amount ? Number(serialized.invoice.amount) : 0
+        totalAmount: serialized.invoice.totalAmount ? Number(serialized.invoice.totalAmount) : 0
       };
     }
 

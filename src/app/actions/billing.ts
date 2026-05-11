@@ -4,27 +4,54 @@ import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { revalidatePath } from "next/cache";
 import { BillingService } from "@/services/billing.service";
+import { PaymentMethod } from "@/generated/client";
 
 const billingService = new BillingService();
 
 /**
- * Server Action: Creates a new invoice for a patient.
+ * Server Action: Generates an invoice from an appointment.
  */
-export async function createInvoice(patientId: string, data: { 
-  amount: number; 
-  status?: any; 
-  dueDate?: any; 
-  method?: string;
-  treatment?: string;
-  items?: any[];
+export async function generateInvoiceFromAppointment(appointmentId: string) {
+  try {
+    const result = await billingService.generateInvoiceFromAppointment(appointmentId);
+    
+    if (result) {
+      revalidatePath(`/patients/${result.patientId}`);
+      revalidatePath('/dashboard');
+      revalidatePath('/billing');
+      revalidatePath('/billing/invoices');
+      revalidatePath('/appointments');
+    }
+    
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("[generateInvoiceFromAppointment] Action failed:", error);
+    return { success: false, error: error.message || "Failed to generate invoice." };
+  }
+}
+
+/**
+ * Server Action: Creates a new invoice with line items.
+ */
+export async function createInvoice(data: { 
+  patientId: string;
+  appointmentId?: string;
+  dueDate?: Date;
+  items: {
+    description: string;
+    quantity: number;
+    price: number;
+    serviceId?: string;
+  }[];
 }) {
   try {
-    const result = await billingService.createInvoice(patientId, data);
+    const result = await billingService.createInvoice(data);
     
-    revalidatePath(`/patients/${patientId}`);
+    revalidatePath(`/patients/${data.patientId}`);
     revalidatePath('/billing');
+    revalidatePath('/billing/invoices');
     
-    return { success: true, data: JSON.parse(JSON.stringify(result)) };
+    return { success: true, data: result };
   } catch (error: any) {
     console.error("[createInvoice] Action failed:", error);
     return { success: false, error: error.message || "Failed to create invoice." };
@@ -34,11 +61,16 @@ export async function createInvoice(patientId: string, data: {
 /**
  * Server Action: Records a payment for an invoice.
  */
-export async function recordPayment(invoiceId: string, amount: number, method: string, notes?: string, date?: Date) {
+export async function recordPayment(invoiceId: string, data: {
+  amount: number;
+  method: PaymentMethod;
+  notes?: string;
+  paidAt?: Date;
+}) {
   try {
     const tenantId = await resolveTenantContext();
     
-    // Fetch patientId for revalidation before recording payment
+    // Fetch patientId for revalidation
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       select: { patientId: true }
@@ -46,15 +78,11 @@ export async function recordPayment(invoiceId: string, amount: number, method: s
 
     if (!invoice) throw new Error("Invoice not found or unauthorized access.");
 
-    const result = await billingService.recordPayment(invoiceId, {
-      amount,
-      method,
-      notes,
-      date: date || new Date()
-    });
+    const result = await billingService.recordPayment(invoiceId, data);
 
     revalidatePath(`/patients/${invoice.patientId}`);
     revalidatePath(`/billing`);
+    revalidatePath(`/billing/invoices`);
 
     return { 
       success: true, 
@@ -70,13 +98,14 @@ export async function recordPayment(invoiceId: string, amount: number, method: s
 }
 
 /**
- * Server Action: Deletes an invoice and revalidates paths.
+ * Server Action: Deletes an invoice.
  */
 export async function deleteInvoice(patientId: string, invoiceId: string) {
   try {
     await billingService.deleteInvoice(invoiceId);
     revalidatePath(`/patients/${patientId}`);
     revalidatePath(`/billing`);
+    revalidatePath(`/billing/invoices`);
     return { success: true };
   } catch (error: any) {
     console.error("[deleteInvoice] Action failed:", error);
@@ -85,12 +114,11 @@ export async function deleteInvoice(patientId: string, invoiceId: string) {
 }
 
 /**
- * Server Action: Fetches all invoices for the current tenant.
+ * Server Action: Fetches all invoices.
  */
 export async function getInvoices() {
   try {
-    const data = await billingService.getInvoicesList();
-    return JSON.parse(JSON.stringify(data));
+    return await billingService.getInvoicesList();
   } catch (error) {
     console.error("[getInvoices] Action failed:", error);
     return [];
@@ -98,50 +126,34 @@ export async function getInvoices() {
 }
 
 /**
- * Server Action: Fetches billing statistics for the dashboard.
+ * Server Action: Fetches billing stats.
  */
 export async function getBillingStats() {
   try {
-    const stats = await billingService.getBillingStats();
-    return JSON.parse(JSON.stringify(stats));
+    return await billingService.getBillingStats();
   } catch (error) {
     console.error("[getBillingStats] Action failed:", error);
     return {
       totalRevenue: 0,
       pendingAmount: 0,
-      overdueAmount: 0
+      overdueAmount: 0,
+      overdueCount: 0
     };
   }
 }
 
 /**
- * Server Action: Generates an invoice from an appointment.
+ * Server Action: Fetches a single invoice by ID.
  */
-export async function generateInvoiceFromAppointment(appointmentId: string) {
-  try {
-    const result = await billingService.createInvoiceFromAppointment(appointmentId);
-    revalidatePath('/billing');
-    revalidatePath('/appointments');
-    return { success: true, data: JSON.parse(JSON.stringify(result)) };
-  } catch (error: any) {
-    console.error("[generateInvoiceFromAppointment] Action failed:", error);
-    return { success: false, error: error.message || "Failed to generate invoice." };
+export async function getInvoice(id: string) {
+  if (!id) {
+    console.error("[getInvoice] Error: No ID provided to action");
+    return null;
   }
-}
-
-/**
- * Server Action: Updates an existing invoice.
- */
-export async function updateInvoice(invoiceId: string, updates: any) {
   try {
-    const result = await billingService.updateInvoice(invoiceId, updates);
-    
-    revalidatePath(`/patients/${(result as any).patientId}`);
-    revalidatePath('/billing');
-    
-    return { success: true, data: JSON.parse(JSON.stringify(result)) };
-  } catch (error: any) {
-    console.error("[updateInvoice] Action failed:", error);
-    return { success: false, error: error.message || "Failed to update invoice." };
+    return await billingService.getInvoiceDetails(id);
+  } catch (error) {
+    console.error(`[getInvoice] Action failed for ID ${id}:`, error);
+    return null;
   }
 }

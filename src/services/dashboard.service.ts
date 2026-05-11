@@ -23,7 +23,14 @@ export class DashboardService {
     
     const appointmentsData = await this.appointmentRepo.findMany(tenantId, {
       where: { date: today },
-      include: { patient: { select: { name: true } } }
+      select: {
+        id: true,
+        patientId: true,
+        time: true,
+        treatment: true,
+        status: true,
+        patient: { select: { name: true } }
+      }
     });
 
     const todaysAppointmentsCount = appointmentsData.length;

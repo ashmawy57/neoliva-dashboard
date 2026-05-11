@@ -31,13 +31,12 @@ interface InvoiceFormProps {
 }
 
 export function InvoiceForm({ isOpen, onClose, patientId, onRefresh }: InvoiceFormProps) {
-  const [treatment, setTreatment] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [items, setItems] = useState([{ name: "", amount: "" }]);
+  const [items, setItems] = useState([{ description: "", quantity: 1, price: "" }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addItem = () => {
-    setItems([...items, { name: "", amount: "" }]);
+    setItems([...items, { description: "", quantity: 1, price: "" }]);
   };
 
   const removeItem = (index: number) => {
@@ -45,34 +44,35 @@ export function InvoiceForm({ isOpen, onClose, patientId, onRefresh }: InvoiceFo
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, field: "name" | "amount", value: string) => {
+  const updateItem = (index: number, field: keyof typeof items[0], value: string | number) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    (newItems[index] as any)[field] = value;
     setItems(newItems);
   };
 
-  const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * item.quantity || 0), 0);
 
   const handleSubmit = async () => {
-    if (!treatment) return toast.error("Please enter treatment description");
-    if (items.some(i => !i.name || !i.amount)) return toast.error("Please fill all item details");
+    if (items.some(i => !i.description || !i.price)) return toast.error("Please fill all item details");
     if (totalAmount <= 0) return toast.error("Invoice total must be greater than zero");
 
     setIsSubmitting(true);
     const toastId = toast.loading("Creating invoice...");
 
     try {
-      const result = await createInvoice(patientId, {
-        amount: totalAmount,
-        treatment,
+      const result = await createInvoice({
+        patientId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
-        items: items.map(i => ({ name: i.name, amount: Number(i.amount) }))
+        items: items.map(i => ({ 
+          description: i.description, 
+          quantity: Number(i.quantity),
+          price: Number(i.price) 
+        }))
       });
 
       if (result.success) {
         toast.success("Invoice created successfully", { id: toastId });
-        setTreatment("");
-        setItems([{ name: "", amount: "" }]);
+        setItems([{ description: "", quantity: 1, price: "" }]);
         setDueDate("");
         onClose();
         if (onRefresh) onRefresh();
@@ -88,7 +88,7 @@ export function InvoiceForm({ isOpen, onClose, patientId, onRefresh }: InvoiceFo
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-[32px] border-0 shadow-2xl">
+      <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden rounded-[32px] border-0 shadow-2xl">
         <div className="bg-indigo-600 p-8 text-white relative">
           <div className="relative z-10">
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-md">
@@ -105,21 +105,7 @@ export function InvoiceForm({ isOpen, onClose, patientId, onRefresh }: InvoiceFo
         </div>
 
         <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="treatment" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Treatment Description</Label>
-              <div className="relative">
-                <Stethoscope className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
-                <Input
-                  id="treatment"
-                  placeholder="e.g., Root Canal Therapy, Dental Cleaning"
-                  value={treatment}
-                  onChange={(e) => setTreatment(e.target.value)}
-                  className="pl-11 h-12 rounded-xl border-gray-200 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
-                />
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 gap-6">
             <div className="grid gap-2">
               <Label htmlFor="dueDate" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Due Date (Optional)</Label>
               <div className="relative">
@@ -152,21 +138,31 @@ export function InvoiceForm({ isOpen, onClose, patientId, onRefresh }: InvoiceFo
             <div className="space-y-3">
               {items.map((item, index) => (
                 <div key={index} className="flex gap-2 group animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div className="flex-1">
+                  <div className="flex-[2]">
                     <Input
-                      placeholder="Item name"
-                      value={item.name}
-                      onChange={(e) => updateItem(index, "name", e.target.value)}
+                      placeholder="Item description"
+                      value={item.description}
+                      onChange={(e) => updateItem(index, "description", e.target.value)}
                       className="h-11 rounded-xl border-gray-200"
+                    />
+                  </div>
+                  <div className="w-20">
+                    <Input
+                      type="number"
+                      placeholder="Qty"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value) || 1)}
+                      className="h-11 rounded-xl border-gray-200 text-center"
                     />
                   </div>
                   <div className="w-32 relative">
                     <DollarSign className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                     <Input
                       type="number"
-                      placeholder="0.00"
-                      value={item.amount}
-                      onChange={(e) => updateItem(index, "amount", e.target.value)}
+                      placeholder="Price"
+                      value={item.price}
+                      onChange={(e) => updateItem(index, "price", e.target.value)}
                       className="h-11 pl-8 rounded-xl border-gray-200 font-bold"
                     />
                   </div>

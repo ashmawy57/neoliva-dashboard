@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { ServiceService } from "@/services/service.service";
-import { ServiceCategory } from "@prisma/client";
+import { ServiceCategory } from "@/generated/client";
 
 const serviceService = new ServiceService();
 

@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { TreatmentPlan, TreatmentPlanItem, Prisma } from "@prisma/client";
+import { TreatmentPlan, TreatmentPlanItem, Prisma } from "@/generated/client";
 
 export class TreatmentPlanRepository {
   async findMany(tenantId: string, params?: {
     where?: Prisma.TreatmentPlanWhereInput;
-    include?: Prisma.TreatmentPlanInclude;
+    select?: Prisma.TreatmentPlanSelect;
     orderBy?: Prisma.TreatmentPlanOrderByWithRelationInput;
     take?: number;
     skip?: number;
@@ -18,13 +18,13 @@ export class TreatmentPlanRepository {
     });
   }
 
-  async findById(tenantId: string, id: string, include?: Prisma.TreatmentPlanInclude): Promise<TreatmentPlan | null> {
+  async findById(tenantId: string, id: string, select?: Prisma.TreatmentPlanSelect): Promise<any | null> {
     return prisma.treatmentPlan.findFirst({
       where: {
         id,
         tenantId,
       },
-      include
+      select
     });
   }
 

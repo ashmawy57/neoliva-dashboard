@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/client";
 
 export class InventoryRepository {
   /**
@@ -55,7 +55,11 @@ export class InventoryRepository {
   async getServiceUsages(serviceId: string, tenantId: string) {
     return await prisma.serviceInventoryUsage.findMany({
       where: { serviceId, tenantId },
-      include: {
+      select: {
+        id: true,
+        serviceId: true,
+        inventoryId: true,
+        quantityUsed: true,
         inventory: true
       }
     });

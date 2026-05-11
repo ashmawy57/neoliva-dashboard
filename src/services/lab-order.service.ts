@@ -1,10 +1,30 @@
 import { LabOrderRepository } from "@/repositories/lab-order.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
-import { LabOrderStatus } from "@prisma/client";
+import { LabOrderStatus } from "@/generated/client";
 
 const repository = new LabOrderRepository();
 
 export class LabOrderService {
+  /**
+   * Helper to ensure LabOrder objects are serializable for Client Components
+   */
+  private serializeLabOrder(order: any) {
+    if (!order) return null;
+    return {
+      ...order,
+      cost: order.cost ? Number(order.cost) : 0,
+      // Ensure dates are serializable strings
+      sentAt: order.sentAt instanceof Date ? order.sentAt.toISOString() : order.sentAt,
+      dueDate: order.dueDate instanceof Date ? order.dueDate.toISOString() : order.dueDate,
+      receivedAt: order.receivedAt instanceof Date ? order.receivedAt.toISOString() : order.receivedAt,
+      createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : order.createdAt,
+      updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : order.updatedAt,
+      // Add common UI fields
+      patientName: order.patient?.name || "Unknown",
+      patientDisplayId: order.patient?.displayId || "",
+    };
+  }
+
   /**
    * Fetches and formats the list of lab orders for the UI
    */
@@ -14,17 +34,7 @@ export class LabOrderService {
       orderBy: { createdAt: 'desc' }
     });
 
-    return orders.map(order => ({
-      ...order,
-      cost: Number(order.cost || 0),
-      patientName: order.patient?.name || "Unknown",
-      patientDisplayId: order.patient?.displayId || "",
-      // Ensure dates are serializable if used in Client Components
-      sentAt: order.sentAt ? order.sentAt.toISOString() : null,
-      dueDate: order.dueDate ? order.dueDate.toISOString() : null,
-      receivedAt: order.receivedAt ? order.receivedAt.toISOString() : null,
-      createdAt: order.createdAt ? order.createdAt.toISOString() : null,
-    }));
+    return orders.map(order => this.serializeLabOrder(order));
   }
 
   /**
@@ -71,7 +81,8 @@ export class LabOrderService {
       createData.appointment = { connect: { id: data.appointmentId } };
     }
 
-    return await repository.create(tenantId, createData);
+    const newOrder = await repository.create(tenantId, createData);
+    return this.serializeLabOrder(newOrder);
   }
 
   /**
@@ -79,7 +90,8 @@ export class LabOrderService {
    */
   async updateLabOrderStatus(id: string, status: LabOrderStatus) {
     const tenantId = await resolveTenantContext();
-    return await repository.updateStatus(tenantId, id, status);
+    const updated = await repository.updateStatus(tenantId, id, status);
+    return this.serializeLabOrder(updated);
   }
 
   /**
@@ -87,6 +99,7 @@ export class LabOrderService {
    */
   async deleteLabOrder(id: string) {
     const tenantId = await resolveTenantContext();
-    return await repository.delete(tenantId, id);
+    const deleted = await repository.delete(tenantId, id);
+    return this.serializeLabOrder(deleted);
   }
 }

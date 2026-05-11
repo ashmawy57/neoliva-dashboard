@@ -33,9 +33,14 @@ export async function resolveTenantContext(): Promise<string> {
   console.log('[TenantContext] Resolving tenant for supabaseId:', user.id, 'email:', user.email);
 
   // 1. Find the user record with tenant status and staff invitation status
-  const dbUser = await prisma.user.findUnique({
+  let dbUser = await prisma.user.findUnique({
     where: { supabaseId: user.id },
-    include: {
+    select: {
+      id: true,
+      email: true,
+      supabaseId: true,
+      tenantId: true,
+      role: true,
       tenant: {
         select: { id: true, status: true, name: true }
       },
@@ -46,11 +51,46 @@ export async function resolveTenantContext(): Promise<string> {
   });
 
   if (!dbUser) {
-    console.error('[TenantContext] No DB User record found for supabaseId:', user.id);
-    throw new TenantContextError(
-      `Access Denied: No account record found for ${user.email}. Please contact support.`,
-      'NO_USER_RECORD'
-    );
+    console.log('[TenantContext] No DB User record found for supabaseId:', user.id, '| Checking for Staff by email:', user.email);
+    
+    // Self-healing: Search for Staff record by email
+    const staff = await prisma.staff.findUnique({
+      where: { email: user.email! }
+    });
+
+    if (staff) {
+      console.log('[Auth] Creating missing user mapping for:', user.email);
+      dbUser = await prisma.user.upsert({
+        where: { supabaseId: user.id },
+        update: {}, // No updates needed if it already exists
+        create: {
+          supabaseId: user.id,
+          email: user.email!,
+          tenantId: staff.tenantId,
+          staffId: staff.id,
+          role: staff.role // Assign the role from staff record
+        },
+        select: {
+          id: true,
+          email: true,
+          supabaseId: true,
+          tenantId: true,
+          role: true,
+          tenant: {
+            select: { id: true, status: true, name: true }
+          },
+          staff: {
+            select: { inviteAccepted: true, role: true }
+          }
+        }
+      });
+    } else {
+      console.error('[TenantContext] No Staff record found for email:', user.email);
+      throw new TenantContextError(
+        `Access Denied: No account record found for ${user.email}. Please contact your clinic administrator.`,
+        'UNAUTHORIZED'
+      );
+    }
   }
 
   console.log('[TenantContext] Found User:', dbUser.id, '| Role:', dbUser.role, '| TenantStatus:', dbUser.tenant.status, '| Staff:', dbUser.staff ? `inviteAccepted=${dbUser.staff.inviteAccepted}` : 'null');

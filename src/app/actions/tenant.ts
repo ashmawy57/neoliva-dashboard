@@ -45,24 +45,24 @@ export async function createClinicRequest(formData: FormData) {
         }
       });
 
-      const user = await tx.user.create({
-        data: {
-          supabaseId: authData.user!.id,
-          email,
-          tenantId: tenant.id,
-          role: 'ADMIN'
-        }
-      });
-
-      await tx.staff.create({
+      const staff = await tx.staff.create({
         data: {
           name,
           email,
           role: 'ADMIN',
-          userId: user.id,
           tenantId: tenant.id,
           inviteAccepted: true,
           status: 'Online'
+        }
+      });
+
+      await tx.user.create({
+        data: {
+          supabaseId: authData.user!.id,
+          email,
+          tenantId: tenant.id,
+          role: 'ADMIN',
+          staffId: staff.id
         }
       });
     });

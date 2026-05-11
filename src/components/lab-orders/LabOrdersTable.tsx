@@ -15,6 +15,7 @@ import Link from "next/link";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
+  DropdownMenuGroup,
   DropdownMenuItem, 
   DropdownMenuLabel, 
   DropdownMenuSeparator, 
@@ -23,7 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { updateLabOrderStatusAction, deleteLabOrderAction } from "@/app/actions/lab-orders";
 import { toast } from "sonner";
-import { LabOrderStatus } from "@prisma/client";
+import { LabOrderStatus } from "@/generated/client";
 
 export function LabOrdersTable({ initialOrders }: { initialOrders: any[] }) {
   const [search, setSearch] = useState("");
@@ -175,26 +176,30 @@ export function LabOrdersTable({ initialOrders }: { initialOrders: any[] }) {
                     </Button>
                   } />
                   <DropdownMenuContent align="end" className="w-56 rounded-xl border-gray-100 shadow-xl p-1">
-                    <DropdownMenuLabel className="text-xs text-gray-400 uppercase tracking-widest p-2">Actions</DropdownMenuLabel>
-                    <DropdownMenuItem render={
-                      <Link href={`/patients/${order.patientId}`} className="flex items-center gap-2 cursor-pointer rounded-lg py-2">
-                        <Eye className="w-4 h-4 text-gray-500" /> View Patient
-                      </Link>
-                    } />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="text-xs text-gray-400 uppercase tracking-widest p-2">Actions</DropdownMenuLabel>
+                      <DropdownMenuItem render={
+                        <Link href={`/patients/${order.patientId}`} className="flex items-center gap-2 cursor-pointer rounded-lg py-2">
+                          <Eye className="w-4 h-4 text-gray-500" /> View Patient
+                        </Link>
+                      } />
+                    </DropdownMenuGroup>
                     <DropdownMenuSeparator className="bg-gray-50" />
-                    <DropdownMenuLabel className="text-xs text-gray-400 uppercase tracking-widest p-2">Update Status</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "SENT")} className="flex items-center gap-2 cursor-pointer rounded-lg text-blue-600 font-semibold py-2">
-                      <Truck className="w-4 h-4" /> Mark as Sent
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "RECEIVED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-emerald-600 font-semibold py-2">
-                      <CheckCircle className="w-4 h-4" /> Mark as Received
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "DELIVERED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-gray-600 font-semibold py-2">
-                      <CheckCircle className="w-4 h-4" /> Mark as Delivered
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "CANCELLED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-rose-600 font-semibold py-2">
-                      <AlertCircle className="w-4 h-4" /> Cancel Order
-                    </DropdownMenuItem>
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="text-xs text-gray-400 uppercase tracking-widest p-2">Update Status</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "SENT")} className="flex items-center gap-2 cursor-pointer rounded-lg text-blue-600 font-semibold py-2">
+                        <Truck className="w-4 h-4" /> Mark as Sent
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "RECEIVED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-emerald-600 font-semibold py-2">
+                        <CheckCircle className="w-4 h-4" /> Mark as Received
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "DELIVERED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-gray-600 font-semibold py-2">
+                        <CheckCircle className="w-4 h-4" /> Mark as Delivered
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "CANCELLED")} className="flex items-center gap-2 cursor-pointer rounded-lg text-rose-600 font-semibold py-2">
+                        <AlertCircle className="w-4 h-4" /> Cancel Order
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
                     <DropdownMenuSeparator className="bg-gray-50" />
                     <DropdownMenuItem onClick={() => handleDelete(order.id)} className="flex items-center gap-2 cursor-pointer rounded-lg text-rose-500 font-medium py-2">
                       <Trash2 className="w-4 h-4" /> Delete Order

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Patient, Prisma } from "@prisma/client";
+import { Patient, Prisma } from "@/generated/client";
 
 export class PatientRepository {
   /**
@@ -10,8 +10,8 @@ export class PatientRepository {
     take?: number;
     where?: Prisma.PatientWhereInput;
     orderBy?: Prisma.PatientOrderByWithRelationInput;
-    include?: Prisma.PatientInclude;
-  }): Promise<Patient[]> {
+    select?: Prisma.PatientSelect;
+  }): Promise<any[]> {
     return prisma.patient.findMany({
       ...params,
       where: {
@@ -21,10 +21,18 @@ export class PatientRepository {
     });
   }
 
-  async findById(tenantId: string, id: string, include?: Prisma.PatientInclude) {
+  async findById(tenantId: string, id: string, select?: Prisma.PatientSelect) {
     return prisma.patient.findFirst({
       where: { id, tenantId },
-      include
+      select: select || {
+        id: true,
+        displayId: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        createdAt: true
+      }
     });
   }
 
@@ -236,19 +244,28 @@ export class PatientRepository {
       data: {
         patientId,
         tenantId,
-        amount: data.amount,
+        totalAmount: data.amount,
         treatment: data.treatment,
         dueDate: data.dueDate,
         status: data.status || 'PENDING',
         items: {
-          create: data.items.map((item: Prisma.InvoiceItemCreateWithoutInvoiceInput) => ({
-            name: item.name,
-            amount: item.amount,
+          create: data.items.map((item: any) => ({
+            description: item.description || item.name || "Service",
+            price: item.price || item.amount || 0,
+            quantity: item.quantity || 1,
             tenantId
           }))
         }
       },
-      include: {
+      select: {
+        id: true,
+        displayId: true,
+        patientId: true,
+        totalAmount: true,
+        paidAmount: true,
+        status: true,
+        dueDate: true,
+        createdAt: true,
         items: true
       }
     });
@@ -261,7 +278,7 @@ export class PatientRepository {
         where: { id: invoiceId, tenantId },
         select: {
           id: true,
-          amount: true,
+          totalAmount: true,
           paidAmount: true,
           status: true
         }
@@ -275,7 +292,7 @@ export class PatientRepository {
         throw new Error("This invoice is already fully paid.");
       }
 
-      const totalAmount = Number(invoice.amount);
+      const totalAmount = Number(invoice.totalAmount);
       const currentPaid = Number(invoice.paidAmount);
       const remainingBalance = totalAmount - currentPaid;
 

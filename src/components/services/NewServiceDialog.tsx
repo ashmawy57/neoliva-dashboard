@@ -17,7 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { createServiceAction } from "@/app/actions/services";
 import { toast } from "sonner";
-import { ServiceCategory } from "@prisma/client";
+import { ServiceCategory } from "@/generated/client";
 
 export function NewServiceDialog() {
   const [open, setOpen] = useState(false);

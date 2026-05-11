@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { LabOrder, LabOrderStatus, Prisma } from "@prisma/client";
+import { LabOrder, LabOrderStatus, Prisma } from "@/generated/client";
 
 export class LabOrderRepository {
   async findMany(tenantId: string, params?: {
     skip?: number;
     take?: number;
-    include?: Prisma.LabOrderInclude;
+    select?: Prisma.LabOrderSelect;
     orderBy?: Prisma.LabOrderOrderByWithRelationInput;
     where?: Prisma.LabOrderWhereInput;
   }): Promise<any[]> {
@@ -15,14 +15,21 @@ export class LabOrderRepository {
         ...params?.where,
         tenantId,
       },
-      include: {
+      select: params?.select || {
+        id: true,
+        displayId: true,
+        labName: true,
+        itemType: true,
+        toothNumber: true,
+        status: true,
+        cost: true,
+        dueDate: true,
         patient: {
           select: {
             name: true,
             displayId: true
           }
         },
-        ...params?.include
       }
     });
   }
@@ -33,7 +40,16 @@ export class LabOrderRepository {
         id,
         tenantId,
       },
-      include: {
+      select: {
+        id: true,
+        displayId: true,
+        labName: true,
+        itemType: true,
+        toothNumber: true,
+        status: true,
+        cost: true,
+        dueDate: true,
+        notes: true,
         patient: true,
         appointment: true
       }
@@ -43,8 +59,26 @@ export class LabOrderRepository {
   async create(tenantId: string, data: any): Promise<LabOrder> {
     return prisma.labOrder.create({
       data: {
-        ...data,
-        tenantId,
+        displayId: data.displayId,
+        labName: data.labName,
+        itemType: data.itemType,
+        toothNumber: data.toothNumber,
+        cost: data.cost,
+        dueDate: data.dueDate,
+        notes: data.notes,
+        status: data.status || 'PENDING',
+
+        patient: data.patient || {
+          connect: { id: data.patientId }
+        },
+
+        tenant: {
+          connect: { id: tenantId }
+        },
+
+        ...(data.appointment && {
+          appointment: data.appointment
+        })
       },
     });
   }

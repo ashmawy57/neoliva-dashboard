@@ -1,5 +1,5 @@
 import "server-only";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma, InvoiceStatus, PaymentMethod } from "@/generated/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 

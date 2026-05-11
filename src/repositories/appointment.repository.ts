@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/client";
 
 export class AppointmentRepository {
   /**
@@ -7,7 +7,7 @@ export class AppointmentRepository {
    */
   async findMany(tenantId: string, params?: {
     where?: Prisma.AppointmentWhereInput;
-    include?: Prisma.AppointmentInclude;
+    select?: Prisma.AppointmentSelect;
     orderBy?: Prisma.AppointmentOrderByWithRelationInput | Prisma.AppointmentOrderByWithRelationInput[];
     skip?: number;
     take?: number;
@@ -18,7 +18,13 @@ export class AppointmentRepository {
         ...params?.where,
         tenantId
       },
-      include: params?.include || {
+      select: params?.select || {
+        id: true,
+        date: true,
+        time: true,
+        status: true,
+        treatment: true,
+        notes: true,
         patient: {
           select: {
             id: true,
@@ -36,7 +42,7 @@ export class AppointmentRepository {
           select: {
             id: true,
             status: true,
-            amount: true
+            totalAmount: true
           }
         }
       },
@@ -53,11 +59,24 @@ export class AppointmentRepository {
   async findUnique(id: string, tenantId: string) {
     return await prisma.appointment.findUnique({
       where: { id, tenantId },
-      include: {
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        status: true,
+        treatment: true,
+        notes: true,
         patient: true,
         doctor: true,
         service: true,
-        invoice: true
+        invoice: {
+          select: {
+            id: true,
+            status: true,
+            totalAmount: true,
+            paidAmount: true
+          }
+        }
       }
     });
   }

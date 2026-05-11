@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Service, Prisma } from "@prisma/client";
+import { Service, Prisma } from "@/generated/client";
 
 export class ServiceRepository {
   async findMany(tenantId: string, params?: {

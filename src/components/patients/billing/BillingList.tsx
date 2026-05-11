@@ -17,7 +17,6 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle2,
-  Clock,
   ArrowRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -89,7 +88,7 @@ export function BillingList({
               <div class="invoice-info">
                 <h1>Invoice</h1>
                 <p>#${invoice.displayId || invoice.id.substring(0, 8).toUpperCase()}</p>
-                <p>Date: ${invoice.date}</p>
+                <p>Date: ${new Date(invoice.createdAt).toLocaleDateString()}</p>
                 <div class="status-badge status-${invoice.status.toLowerCase()}">${invoice.status}</div>
               </div>
             </div>
@@ -106,7 +105,6 @@ export function BillingList({
                 <h3>Bill To</h3>
                 <p><strong>${patientName}</strong></p>
                 <p>Patient ID: ${patientId.substring(0, 8)}</p>
-                <p>Treatment: ${invoice.treatment}</p>
               </div>
             </div>
 
@@ -114,14 +112,18 @@ export function BillingList({
               <thead>
                 <tr>
                   <th>Description</th>
-                  <th class="amount-col">Amount</th>
+                  <th>Qty</th>
+                  <th class="amount-col">Price</th>
+                  <th class="amount-col">Total</th>
                 </tr>
               </thead>
               <tbody>
                 ${invoice.items.map((item: any) => `
                   <tr>
-                    <td>${item.name}</td>
-                    <td class="amount-col">$${Number(item.amount).toFixed(2)}</td>
+                    <td>${item.description}</td>
+                    <td>${item.quantity}</td>
+                    <td class="amount-col">$${Number(item.price).toFixed(2)}</td>
+                    <td class="amount-col">$${(Number(item.price) * item.quantity).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -129,16 +131,16 @@ export function BillingList({
 
             <div class="totals">
               <div class="total-row">
-                <span>Subtotal</span>
-                <span>$${invoice.amount.toFixed(2)}</span>
+                <span>Total Amount</span>
+                <span>$${Number(invoice.totalAmount).toFixed(2)}</span>
               </div>
               <div class="total-row">
                 <span>Total Paid</span>
-                <span>$${invoice.paidAmount.toFixed(2)}</span>
+                <span>$${Number(invoice.paidAmount).toFixed(2)}</span>
               </div>
               <div class="total-row grand-total">
                 <span>Balance Due</span>
-                <span>$${invoice.remainingAmount.toFixed(2)}</span>
+                <span>$${(Number(invoice.totalAmount) - Number(invoice.paidAmount)).toFixed(2)}</span>
               </div>
             </div>
 
@@ -184,8 +186,6 @@ export function BillingList({
     switch (status) {
       case 'PAID':
         return <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100">Paid</Badge>;
-      case 'PARTIAL':
-        return <Badge className="bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100">Partial</Badge>;
       case 'OVERDUE':
         return <Badge className="bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100">Overdue</Badge>;
       default:
@@ -210,7 +210,7 @@ export function BillingList({
             </div>
             <div className="mt-6 flex items-center gap-2 text-indigo-100/80 text-xs font-bold uppercase tracking-wider">
               <AlertCircle className="w-3.5 h-3.5" />
-              {invoiceHistory.filter(i => i.status !== 'PAID').length} Pending Invoices
+              {invoiceHistory.filter(i => i.status !== 'PAID').length} Unpaid Invoices
             </div>
           </CardContent>
           <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-white/5 rounded-full blur-3xl"></div>
@@ -222,7 +222,7 @@ export function BillingList({
               <div>
                 <p className="text-gray-500 text-sm font-medium">Total Billed</p>
                 <h3 className="text-3xl font-black mt-1 text-gray-900">
-                  ${invoiceHistory.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  ${invoiceHistory.reduce((sum, inv) => sum + Number(inv.totalAmount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </h3>
               </div>
               <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center">
@@ -242,7 +242,7 @@ export function BillingList({
               <div>
                 <p className="text-gray-500 text-sm font-medium">Total Paid</p>
                 <h3 className="text-3xl font-black mt-1 text-emerald-600">
-                  ${invoiceHistory.reduce((sum, inv) => sum + inv.paidAmount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  ${invoiceHistory.reduce((sum, inv) => sum + Number(inv.paidAmount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </h3>
               </div>
               <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center">
@@ -307,12 +307,14 @@ export function BillingList({
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-black text-gray-900 truncate">#{invoice.displayId || invoice.id.substring(0, 8).toUpperCase()}</span>
+                        <span className="text-sm font-black text-gray-900 truncate">{invoice.displayId || `INV-${invoice.id.substring(0, 8).toUpperCase()}`}</span>
                         {getStatusBadge(invoice.status)}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
-                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {invoice.date}</span>
-                        <span className="flex items-center gap-1 truncate"><History className="w-3 h-3" /> {invoice.treatment}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(invoice.createdAt).toLocaleDateString()}</span>
+                        {invoice.items?.[0] && (
+                          <span className="flex items-center gap-1 truncate"><History className="w-3 h-3" /> {invoice.items[0].description}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -320,15 +322,15 @@ export function BillingList({
                   <div className="flex items-center justify-between md:justify-end gap-6">
                     <div className="text-right">
                       <p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Amount</p>
-                      <p className="text-lg font-black text-gray-900">${invoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                      <p className="text-lg font-black text-gray-900">${Number(invoice.totalAmount).toLocaleString()}</p>
                     </div>
                     
                     <div className="text-right">
                       <p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Balance</p>
                       <p className={cn(
                         "text-lg font-black",
-                        invoice.remainingAmount > 0 ? "text-rose-500" : "text-emerald-500"
-                      )}>${invoice.remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                        (Number(invoice.totalAmount) - Number(invoice.paidAmount)) > 0 ? "text-rose-500" : "text-emerald-500"
+                      )}>${(Number(invoice.totalAmount) - Number(invoice.paidAmount)).toLocaleString()}</p>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -360,21 +362,24 @@ export function BillingList({
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Invoice Items</h5>
-                          <Badge variant="outline" className="bg-white text-gray-500 border-gray-100">{invoice.items.length} Items</Badge>
+                          <Badge variant="outline" className="bg-white text-gray-500 border-gray-100">{invoice.items?.length || 0} Items</Badge>
                         </div>
                         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                          {invoice.items.map((item: any, idx: number) => (
+                          {invoice.items?.map((item: any, idx: number) => (
                             <div key={item.id} className={cn(
                               "flex justify-between items-center p-3 text-sm font-medium",
                               idx !== invoice.items.length - 1 && "border-b border-gray-50"
                             )}>
-                              <span className="text-gray-700">{item.name}</span>
-                              <span className="font-bold text-gray-900">${Number(item.amount).toFixed(2)}</span>
+                              <div className="flex flex-col">
+                                <span className="text-gray-700">{item.description}</span>
+                                <span className="text-[10px] text-gray-400">Qty: {item.quantity} × ${Number(item.price).toFixed(2)}</span>
+                              </div>
+                              <span className="font-bold text-gray-900">${(Number(item.price) * item.quantity).toFixed(2)}</span>
                             </div>
                           ))}
                           <div className="bg-gray-50/50 p-3 flex justify-between items-center text-sm font-black border-t border-gray-100">
                             <span className="text-gray-500">Total Amount</span>
-                            <span className="text-indigo-600">${invoice.amount.toFixed(2)}</span>
+                            <span className="text-indigo-600">${Number(invoice.totalAmount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -383,10 +388,10 @@ export function BillingList({
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment History</h5>
-                          <Badge variant="outline" className="bg-white text-emerald-500 border-emerald-50">{invoice.payments.length} Payments</Badge>
+                          <Badge variant="outline" className="bg-white text-emerald-500 border-emerald-50">{invoice.payments?.length || 0} Payments</Badge>
                         </div>
                         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                          {invoice.payments.length === 0 ? (
+                          {(!invoice.payments || invoice.payments.length === 0) ? (
                             <div className="p-8 text-center text-gray-400">
                               <p className="text-xs font-medium italic">No payments recorded yet</p>
                             </div>
@@ -402,7 +407,7 @@ export function BillingList({
                                   </div>
                                   <div>
                                     <p className="font-bold text-gray-900">${Number(payment.amount).toFixed(2)}</p>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{payment.method} · {new Date(payment.date).toLocaleDateString()}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{payment.method} · {new Date(payment.paidAt).toLocaleDateString()}</p>
                                   </div>
                                 </div>
                                 <div className="text-right">
@@ -413,7 +418,7 @@ export function BillingList({
                           )}
                           <div className="bg-gray-50/50 p-3 flex justify-between items-center text-sm font-black border-t border-gray-100">
                             <span className="text-gray-500">Total Paid</span>
-                            <span className="text-emerald-600">${invoice.paidAmount.toFixed(2)}</span>
+                            <span className="text-emerald-600">${Number(invoice.paidAmount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>

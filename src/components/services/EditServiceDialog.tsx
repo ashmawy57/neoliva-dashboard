@@ -17,7 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { updateServiceAction } from "@/app/actions/services";
 import { toast } from "sonner";
-import { ServiceCategory } from "@prisma/client";
+import { ServiceCategory } from "@/generated/client";
 
 interface Service {
   id: string;

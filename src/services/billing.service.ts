@@ -1,11 +1,59 @@
 import { BillingRepository } from "@/repositories/billing.repository";
+import { AppointmentRepository } from "@/repositories/appointment.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
-import { prisma } from "@/lib/prisma";
-import { InvoiceStatus, Prisma } from "@prisma/client";
+import { PaymentMethod } from "@/generated/client";
 
 const billingRepository = new BillingRepository();
+const appointmentRepository = new AppointmentRepository();
 
 export class BillingService {
+  /**
+   * Generates an invoice from an appointment's data
+   */
+  async generateInvoiceFromAppointment(appointmentId: string) {
+    const tenantId = await resolveTenantContext();
+
+    // Check if invoice already exists for this appointment
+    const existing = await billingRepository.findByAppointmentId(appointmentId, tenantId);
+    if (existing) {
+      return this.serializeInvoice(existing);
+    }
+
+    // Get appointment details
+    const apt = await appointmentRepository.findUnique(appointmentId, tenantId);
+    if (!apt) throw new Error("Appointment not found");
+
+    // Prepare items
+    const items = [];
+    if (apt.service) {
+      items.push({
+        description: apt.service.name,
+        quantity: 1,
+        price: Number(apt.service.price),
+        serviceId: apt.serviceId || undefined
+      });
+    } else if (apt.treatment) {
+      items.push({
+        description: apt.treatment,
+        quantity: 1,
+        price: 0 // Default price if no service is linked
+      });
+    } else {
+      items.push({
+        description: "Dental Treatment",
+        quantity: 1,
+        price: 0
+      });
+    }
+
+    // Create the invoice
+    return await this.createInvoice({
+      patientId: apt.patientId,
+      appointmentId: apt.id,
+      items
+    });
+  }
+
   /**
    * Get formatted invoices for the list view
    */
@@ -25,11 +73,12 @@ export class BillingService {
       return {
         id: inv.id,
         patientName: inv.patient?.name || "Unknown Patient",
-        amount: Number(inv.amount),
+        totalAmount: Number(inv.totalAmount),
+        paidAmount: Number(inv.paidAmount),
         status: currentStatus,
-        date: inv.createdAt,
+        createdAt: inv.createdAt,
         dueDate: inv.dueDate,
-        invoiceNumber: (inv as any).invoiceNumber || `INV-${inv.id.slice(0, 8).toUpperCase()}`
+        displayId: inv.displayId || `INV-${inv.id.slice(0, 8).toUpperCase()}`
       };
     });
   }
@@ -47,36 +96,32 @@ export class BillingService {
    */
   async getInvoiceDetails(id: string) {
     const tenantId = await resolveTenantContext();
-    return await billingRepository.findUnique(id, tenantId);
+    const invoice = await billingRepository.findUnique(id, tenantId);
+    return this.serializeInvoice(invoice);
   }
 
   /**
-   * Create new invoice with optional items
+   * Create new invoice with items
    */
-  async createInvoice(patientId: string, data: {
-    amount: number;
+  async createInvoice(data: {
+    patientId: string;
+    appointmentId?: string;
     dueDate?: Date;
-    description?: string;
-    status?: string;
-    items?: any[];
+    items: {
+      description: string;
+      quantity: number;
+      price: number;
+      serviceId?: string;
+    }[];
   }) {
     const tenantId = await resolveTenantContext();
-    const { items, ...rest } = data;
+    
+    // Generate a simple display ID
+    const displayId = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const result = await billingRepository.create(tenantId, {
-      ...rest,
-      displayId: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
-      amount: data.amount,
-      status: (data.status as any) || 'PENDING',
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      patient: { connect: { id: patientId } },
-      items: items ? {
-        create: items.map((item: any) => ({
-          name: item.name,
-          amount: item.amount,
-          tenant: { connect: { id: tenantId } }
-        }))
-      } : undefined
+      ...data,
+      displayId
     });
 
     return this.serializeInvoice(result);
@@ -87,30 +132,13 @@ export class BillingService {
    */
   async recordPayment(invoiceId: string, data: {
     amount: number;
-    method: string;
+    method: PaymentMethod;
     notes?: string;
-    date?: Date;
+    paidAt?: Date;
   }) {
     const tenantId = await resolveTenantContext();
     const result = await billingRepository.recordPayment(tenantId, invoiceId, data);
-    return this.serializeInvoice(result);
-  }
-
-  /**
-   * Updates an existing invoice
-   */
-  async updateInvoice(invoiceId: string, updates: any) {
-    const tenantId = await resolveTenantContext();
-    const { patientId, ...rest } = updates;
-
-    const result = await billingRepository.update(tenantId, invoiceId, {
-      ...rest,
-      ...(updates.dueDate ? { dueDate: new Date(updates.dueDate) } : {}),
-      ...(patientId ? { patient: { connect: { id: patientId } } } : {}),
-      updatedAt: new Date()
-    });
-
-    return this.serializeInvoice(result);
+    return result; // Payment record is simple
   }
 
   /**
@@ -121,68 +149,20 @@ export class BillingService {
     return await billingRepository.delete(tenantId, invoiceId);
   }
 
-  /**
-   * Mark an invoice as paid (convenience method)
-   */
-  async markAsPaid(id: string) {
-    const tenantId = await resolveTenantContext();
-    const result = await billingRepository.update(tenantId, id, {
-      status: 'PAID'
-    });
-    return this.serializeInvoice(result);
-  }
-
-  /**
-   * Create an invoice directly from an appointment
-   */
-  async createInvoiceFromAppointment(appointmentId: string) {
-    const tenantId = await resolveTenantContext();
-    
-    // 1. Verify appointment exists and belongs to tenant
-    const appointment = await prisma.appointment.findUnique({
-      where: { id: appointmentId, tenantId },
-      include: { 
-        patient: true,
-        service: true 
-      }
-    });
-
-    if (!appointment) throw new Error("Appointment not found");
-
-    // 2. Check if invoice already exists
-    const existing = await prisma.invoice.findFirst({
-      where: { appointmentId, tenantId }
-    });
-    if (existing) throw new Error("Invoice already exists for this appointment");
-
-    // 3. Determine amount (Priority: Service Price -> Default)
-    let amount = 0;
-    if (appointment.service) {
-      amount = Number(appointment.service.price);
-    } else {
-      // Fallback if no service is linked (should ideally not happen with the new flow)
-      amount = 0; 
-    }
-
-    // 4. Create invoice
-    const result = await billingRepository.create(tenantId, {
-      patient: { connect: { id: appointment.patientId } },
-      appointment: { connect: { id: appointment.id } },
-      displayId: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
-      amount: amount,
-      status: 'PENDING',
-      treatment: appointment.service?.name || appointment.treatment || 'Dental Service',
-      date: new Date()
-    });
-
-    return this.serializeInvoice(result);
-  }
-
   private serializeInvoice(inv: any) {
     if (!inv) return null;
     return {
       ...inv,
-      amount: inv.amount ? Number(inv.amount) : 0
+      totalAmount: inv.totalAmount ? Number(inv.totalAmount) : 0,
+      paidAmount: inv.paidAmount ? Number(inv.paidAmount) : 0,
+      items: inv.items?.map((item: any) => ({
+        ...item,
+        price: Number(item.price)
+      })),
+      payments: inv.payments?.map((p: any) => ({
+        ...p,
+        amount: Number(p.amount)
+      }))
     };
   }
 }

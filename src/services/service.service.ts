@@ -1,6 +1,6 @@
 import { ServiceRepository } from "@/repositories/service.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
-import { ServiceCategory } from "@prisma/client";
+import { ServiceCategory } from "@/generated/client";
 
 export class ServiceService {
   private repository = new ServiceRepository();

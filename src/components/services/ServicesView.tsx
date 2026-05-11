@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { deleteServiceAction } from "@/app/actions/services";
 import { EditServiceDialog } from "./EditServiceDialog";
 import { toast } from "sonner";
-import { $Enums } from "@prisma/client";
+import { $Enums } from "@/generated/client";
 type ServiceCategory = $Enums.ServiceCategory;
 const ServiceCategory = $Enums.ServiceCategory;
 

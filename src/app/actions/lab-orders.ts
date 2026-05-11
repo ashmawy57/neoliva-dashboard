@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { LabOrderService } from "@/services/lab-order.service";
-import { LabOrderStatus } from "@prisma/client";
+import { LabOrderStatus } from "@/generated/client";
 
 const labOrderService = new LabOrderService();
 

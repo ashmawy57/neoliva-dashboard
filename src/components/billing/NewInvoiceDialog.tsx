@@ -22,14 +22,13 @@ export function NewInvoiceDialog() {
   // Form state
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [amount, setAmount] = useState("");
-  const [status, setStatus] = useState("Pending");
-  const [method, setMethod] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [treatment, setTreatment] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
 
   useEffect(() => {
     if (open) {
+      console.log(`[NewInvoiceDialog] Dialog opened. Patients: ${patients.length}, Services: ${services.length}`);
       fetchInitialData();
     }
   }, [open]);
@@ -37,14 +36,16 @@ export function NewInvoiceDialog() {
   async function fetchInitialData() {
     setFetchingData(true);
     try {
+      console.log(`[NewInvoiceDialog] Fetching data...`);
       const [patientsData, servicesData] = await Promise.all([
         getPatients(),
         getServices()
       ]);
-      setPatients(patientsData);
-      setServices(servicesData);
+      console.log(`[NewInvoiceDialog] Patients: ${patientsData?.length || 0}, Services: ${servicesData?.length || 0}`);
+      setPatients(patientsData || []);
+      setServices(servicesData || []);
     } catch (error) {
-      console.error("Failed to fetch initial data:", error);
+      console.error("[NewInvoiceDialog] Error fetching data:", error);
       toast.error("Failed to load patients and services");
     } finally {
       setFetchingData(false);
@@ -61,18 +62,25 @@ export function NewInvoiceDialog() {
 
     setLoading(true);
     try {
-      await createInvoice(selectedPatientId, {
-        amount: parseFloat(amount),
-        status,
-        dueDate: dueDate || undefined,
-        method: method || undefined,
-        treatment: treatment || undefined,
+      const result = await createInvoice({
+        patientId: selectedPatientId,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        items: [{
+          description: treatment || "Dental Service",
+          quantity: 1,
+          price: parseFloat(amount),
+          serviceId: selectedServiceId || undefined
+        }]
       });
       
-      toast.success("Invoice created successfully");
-      setOpen(false);
-      resetForm();
-    } catch (error) {
+      if (result.success) {
+        toast.success("Invoice created successfully");
+        setOpen(false);
+        resetForm();
+      } else {
+        toast.error(result.error || "Failed to create invoice");
+      }
+    } catch (error: any) {
       console.error("Failed to create invoice:", error);
       toast.error("Failed to create invoice. Please try again.");
     } finally {
@@ -83,16 +91,23 @@ export function NewInvoiceDialog() {
   const resetForm = () => {
     setSelectedPatientId("");
     setAmount("");
-    setStatus("Pending");
-    setMethod("");
     setDueDate("");
     setTreatment("");
     setSelectedServiceId("");
   };
 
-  const handleServiceChange = (serviceId: string) => {
-    setSelectedServiceId(serviceId);
-    const service = services.find(s => s.id === serviceId);
+  const handleServiceChange = (serviceId: string | null) => {
+    const id = serviceId === "none" ? "" : (serviceId || "");
+    setSelectedServiceId(id);
+    
+    if (!id) {
+      setAmount("");
+      setTreatment("");
+      return;
+    }
+
+    const service = services.find(s => s.id === id);
+    console.log(`[NewInvoiceDialog] Service selected:`, service);
     if (service) {
       setAmount(service.price.toString());
       setTreatment(service.name);
@@ -106,7 +121,7 @@ export function NewInvoiceDialog() {
           <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium border-0 cursor-pointer">
             <PlusCircle className="mr-2 h-4 w-4" /> New Invoice
           </Button>
-        } 
+        }
       />
       
       <DialogContent className="sm:max-w-md md:max-w-lg p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl">
@@ -137,6 +152,11 @@ export function NewInvoiceDialog() {
                       {patient.name}
                     </SelectItem>
                   ))}
+                  {patients.length === 0 && !fetchingData && (
+                    <SelectItem value="none" disabled className="text-center text-xs text-gray-500 italic">
+                      No patients found. Add them first.
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -146,16 +166,21 @@ export function NewInvoiceDialog() {
               <Label htmlFor="service" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <ActivityIcon className="w-4 h-4 text-gray-400" /> Quick Service Select
               </Label>
-              <Select value={selectedServiceId} onValueChange={(val: string | null) => handleServiceChange(val ?? "")}>
+              <Select value={selectedServiceId} onValueChange={(val: string) => handleServiceChange(val)}>
                 <SelectTrigger id="service" className="h-11 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm">
                   <SelectValue placeholder={fetchingData ? "Loading services..." : "Select a service to auto-fill"} />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-gray-100 shadow-xl">
                   {services.map((service) => (
                     <SelectItem key={service.id} value={service.id} className="rounded-lg">
-                      {service.name} - ${service.price}
+                      {service.name} - ${Number(service.price)}
                     </SelectItem>
                   ))}
+                  {services.length === 0 && !fetchingData && (
+                    <SelectItem value="none" disabled className="text-center text-xs text-gray-500 italic">
+                      No services found. Add them in the Services page.
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -196,38 +221,6 @@ export function NewInvoiceDialog() {
               </div>
             </div>
 
-            {/* Status & Method */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="status" className="text-sm font-semibold text-gray-700">Status</Label>
-                <Select value={status} onValueChange={(val) => setStatus(val ?? "Pending")}>
-                  <SelectTrigger id="status" className="h-11 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
-                    <SelectItem value="Pending" className="rounded-lg text-amber-600 font-medium">Pending</SelectItem>
-                    <SelectItem value="Paid" className="rounded-lg text-emerald-600 font-medium">Paid</SelectItem>
-                    <SelectItem value="Cancelled" className="rounded-lg text-red-600 font-medium">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="method" className="text-sm font-semibold text-gray-700">Payment Method</Label>
-                <Select value={method} onValueChange={(val) => setMethod(val ?? "")}>
-                  <SelectTrigger id="method" className="h-11 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm">
-                    <SelectValue placeholder="Select method" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
-                    <SelectItem value="Cash" className="rounded-lg">Cash</SelectItem>
-                    <SelectItem value="Credit Card" className="rounded-lg">Credit Card</SelectItem>
-                    <SelectItem value="Bank Transfer" className="rounded-lg">Bank Transfer</SelectItem>
-                    <SelectItem value="Insurance" className="rounded-lg">Insurance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             {/* Treatment Description */}
             <div className="space-y-2">
               <Label htmlFor="treatment" className="text-sm font-semibold text-gray-700">Treatment / Description</Label>
@@ -238,6 +231,12 @@ export function NewInvoiceDialog() {
                 placeholder="e.g. Root Canal Treatment, Consultation" 
                 className="h-11 bg-white border-gray-200 focus:ring-blue-500 rounded-xl shadow-sm"
               />
+            </div>
+
+            <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+              <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
+                This will generate a PENDING invoice. You can record payments later from the billing list or patient profile.
+              </p>
             </div>
 
           </div>

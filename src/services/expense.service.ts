@@ -1,5 +1,5 @@
 import { ExpenseRepository } from "@/repositories/expense.repository";
-import { Expense, Prisma } from "@prisma/client";
+import { Expense, Prisma } from "@/generated/client";
 
 export class ExpenseService {
   private repository = new ExpenseRepository();

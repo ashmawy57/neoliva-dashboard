@@ -1,5 +1,5 @@
 import { TreatmentPlanRepository } from "@/repositories/treatment-plan.repository";
-import { TreatmentPlan, TreatmentPlanItem, Prisma } from "@prisma/client";
+import { TreatmentPlan, TreatmentPlanItem, Prisma } from "@/generated/client";
 
 export class TreatmentPlanService {
   private repository = new TreatmentPlanRepository();
@@ -7,7 +7,17 @@ export class TreatmentPlanService {
   async getTreatmentPlans(tenantId: string, patientId: string) {
     return this.repository.findMany(tenantId, {
       where: { patientId },
-      include: { items: true },
+      select: {
+        id: true,
+        displayId: true,
+        patientId: true,
+        title: true,
+        status: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+        items: true
+      },
       orderBy: { createdAt: 'desc' }
     });
   }

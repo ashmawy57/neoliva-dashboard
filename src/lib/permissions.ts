@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { StaffRole } from "@prisma/client";
+import { StaffRole } from "@/generated/client";
 
 export type Permission = 
   | 'VIEW_PATIENTS' | 'MANAGE_PATIENTS'
@@ -38,7 +38,11 @@ export async function getCurrentUserRole(): Promise<StaffRole | null> {
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseId: user.id },
-    include: { staff: true }
+    select: {
+      staff: {
+        select: { role: true }
+      }
+    }
   });
 
   return (dbUser?.staff?.role as StaffRole) || null;

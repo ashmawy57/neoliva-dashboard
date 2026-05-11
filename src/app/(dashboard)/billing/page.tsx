@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { getInvoices, getBillingStats } from "@/app/actions/billing";
 import { NewInvoiceDialog } from "@/components/billing/NewInvoiceDialog";
+import { ExportCSVButton, InvoiceRowActions } from "@/components/billing/BillingClientActions";
 
 export default async function BillingPage() {
   const [transactions, stats] = await Promise.all([
@@ -81,9 +82,7 @@ export default async function BillingPage() {
       <Card className="border-0 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold text-gray-900">Recent Transactions</CardTitle>
-          <Button variant="ghost" size="sm" className="text-xs text-gray-500 rounded-lg">
-            Export <Download className="ml-1.5 w-3 h-3" />
-          </Button>
+          <ExportCSVButton data={transactions} />
         </CardHeader>
         <CardContent className="pt-0">
           <Table>
@@ -101,7 +100,7 @@ export default async function BillingPage() {
               {transactions.map((tx) => (
                 <TableRow key={tx.id} className="table-row-hover group">
                   <TableCell className="text-sm font-medium text-gray-500">
-                    {tx.invoiceNumber}
+                    {tx.displayId}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
@@ -112,7 +111,7 @@ export default async function BillingPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-gray-500">
-                    {tx.date ? new Date(tx.date).toLocaleDateString() : 'N/A'}
+                    {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell>
                     <Badge className={`text-[11px] font-semibold rounded-full px-2.5 border-none ${
@@ -123,12 +122,16 @@ export default async function BillingPage() {
                       {tx.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right text-sm font-bold text-gray-900">${tx.amount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 rounded-lg"><Download className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 rounded-lg"><Printer className="h-3.5 w-3.5" /></Button>
+                  <TableCell className="text-right text-sm font-bold text-gray-900">
+                    <div className="flex flex-col items-end">
+                      <span>${tx.totalAmount.toLocaleString()}</span>
+                      {tx.paidAmount > 0 && tx.status !== 'PAID' && (
+                        <span className="text-[10px] text-emerald-600 font-medium">Paid: ${tx.paidAmount.toLocaleString()}</span>
+                      )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <InvoiceRowActions invoice={tx} />
                   </TableCell>
                 </TableRow>
               ))}
