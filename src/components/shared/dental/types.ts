@@ -13,7 +13,7 @@ export interface ToothSurfaces {
 
 export interface ClinicalFinding {
   id: string;
-  tooth: number;
+  tooth: string;
   date: string;
   note: string;
   type: "finding" | "parameter";

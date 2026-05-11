@@ -663,7 +663,7 @@ export function TreatmentPlans({
 
             {/* Create Button */}
             <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: 0, notes: "", toothList: [] }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
+              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
               <Button onClick={handleAddPlan} disabled={!newPlan.title.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-semibold shadow-md shadow-blue-500/20">
                 <Save className="w-4 h-4 mr-2" /> Create Plan
                 {newPlanPhases.length > 0 && (

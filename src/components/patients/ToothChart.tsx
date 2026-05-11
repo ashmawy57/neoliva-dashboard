@@ -185,7 +185,8 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
     
     const meta = currentMeta(tooth);
     const finding: ClinicalFinding = {
-      id: Math.random().toString(36).substring(7),
+      id: crypto.randomUUID(),
+      tooth: tooth.toString(),
       type: findingType,
       note: newFinding.trim(),
       date: new Date().toLocaleDateString()
