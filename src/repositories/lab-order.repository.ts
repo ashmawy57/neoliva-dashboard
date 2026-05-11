@@ -34,22 +34,13 @@ export class LabOrderRepository {
     });
   }
 
-  async findById(tenantId: string, id: string): Promise<LabOrder | null> {
+  async findById(tenantId: string, id: string): Promise<any | null> {
     return prisma.labOrder.findFirst({
       where: {
         id,
         tenantId,
       },
-      select: {
-        id: true,
-        displayId: true,
-        labName: true,
-        itemType: true,
-        toothNumber: true,
-        status: true,
-        cost: true,
-        dueDate: true,
-        notes: true,
+      include: {
         patient: true,
         appointment: true
       }
