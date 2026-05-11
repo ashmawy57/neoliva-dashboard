@@ -9,7 +9,6 @@ export class TreatmentPlanService {
       where: { patientId },
       select: {
         id: true,
-        displayId: true,
         patientId: true,
         title: true,
         status: true,
