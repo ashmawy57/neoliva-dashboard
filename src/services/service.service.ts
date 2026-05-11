@@ -1,38 +1,78 @@
 import { ServiceRepository } from "@/repositories/service.repository";
-import { Service, Prisma } from "@prisma/client";
+import { resolveTenantContext } from "@/lib/tenant-context";
+import { ServiceCategory } from "@prisma/client";
 
 export class ServiceService {
   private repository = new ServiceRepository();
 
-  async getServices(tenantId: string) {
-    return this.repository.findMany(tenantId, {
+  async getServices() {
+    const tenantId = await resolveTenantContext();
+    console.log(`[ServiceService] Fetching services for tenant: ${tenantId}`);
+    
+    const services = await this.repository.findMany(tenantId, {
       orderBy: { name: 'asc' }
     });
-  }
 
-  async createService(tenantId: string, data: any) {
-    const { inventoryUsages, ...serviceData } = data;
+    console.log(`[ServiceService] Found ${services.length} services`);
     
-    return this.repository.create(tenantId, {
-      ...serviceData,
-      inventoryUsages: inventoryUsages?.length ? {
-        create: inventoryUsages.map((usage: any) => ({
-          inventoryId: usage.inventoryId,
-          quantity: usage.quantity,
-          tenantId: tenantId
-        }))
-      } : undefined
-    });
+    // Convert Decimal to number for serialization to Client Components
+    return services.map(s => ({
+      ...s,
+      price: Number(s.price)
+    }));
   }
 
-  async updateService(tenantId: string, id: string, data: any) {
-    return this.repository.update(tenantId, id, {
+  async createService(data: {
+    name: string;
+    category: ServiceCategory;
+    price: number;
+    duration: number;
+    description?: string;
+  }) {
+    const tenantId = await resolveTenantContext();
+    console.log(`[ServiceService] Creating service for tenant ${tenantId}:`, data);
+    
+    const result = await this.repository.create(tenantId, {
+      name: data.name,
+      category: data.category,
+      price: data.price,
+      duration: data.duration,
+      description: data.description
+    });
+
+    return this.serializeService(result);
+  }
+
+  async updateService(id: string, data: Partial<{
+    name: string;
+    category: ServiceCategory;
+    price: number;
+    duration: number;
+    description: string;
+  }>) {
+    const tenantId = await resolveTenantContext();
+    console.log(`[ServiceService] Updating service ${id} for tenant ${tenantId}:`, data);
+    
+    const result = await this.repository.update(tenantId, id, {
       ...data,
       updatedAt: new Date()
     });
+
+    return this.serializeService(result);
   }
 
-  async deleteService(tenantId: string, id: string) {
-    return this.repository.delete(tenantId, id);
+  async deleteService(id: string) {
+    const tenantId = await resolveTenantContext();
+    console.log(`[ServiceService] Soft deleting service ${id} for tenant ${tenantId}`);
+    const result = await this.repository.softDelete(tenantId, id);
+    return this.serializeService(result);
+  }
+
+  private serializeService(s: any) {
+    if (!s) return null;
+    return {
+      ...s,
+      price: s.price ? Number(s.price) : 0
+    };
   }
 }

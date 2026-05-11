@@ -117,9 +117,9 @@ export async function getBillingStats() {
 /**
  * Server Action: Generates an invoice from an appointment.
  */
-export async function generateInvoiceFromAppointment(appointmentId: string, amount: number) {
+export async function generateInvoiceFromAppointment(appointmentId: string) {
   try {
-    const result = await billingService.createInvoiceFromAppointment(appointmentId, amount);
+    const result = await billingService.createInvoiceFromAppointment(appointmentId);
     revalidatePath('/billing');
     revalidatePath('/appointments');
     return { success: true, data: JSON.parse(JSON.stringify(result)) };

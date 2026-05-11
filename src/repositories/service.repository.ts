@@ -11,6 +11,7 @@ export class ServiceRepository {
       ...params,
       where: {
         tenantId,
+        isActive: true,
       },
     });
   }
@@ -43,11 +44,14 @@ export class ServiceRepository {
     });
   }
 
-  async delete(tenantId: string, id: string): Promise<Service> {
-    return prisma.service.delete({
+  async softDelete(tenantId: string, id: string): Promise<Service> {
+    return prisma.service.update({
       where: {
         id,
         tenantId,
+      },
+      data: {
+        isActive: false,
       },
     });
   }

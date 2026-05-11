@@ -36,7 +36,6 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
   const [view, setView] = useState<"list" | "calendar">("list");
   const [editingApt, setEditingApt] = useState<any>(null);
   const [generatingInvoiceApt, setGeneratingInvoiceApt] = useState<any>(null);
-  const [invoiceAmount, setInvoiceAmount] = useState<string>("100.00");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
@@ -169,7 +168,6 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
                               <DropdownMenuItem 
                                 onClick={() => {
                                   setGeneratingInvoiceApt(apt);
-                                  setInvoiceAmount(apt.invoiceAmount > 0 ? apt.invoiceAmount.toString() : "100.00");
                                 }} 
                                 className="text-sm rounded-lg font-semibold text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 cursor-pointer"
                               >
@@ -262,44 +260,47 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
             </DialogTitle>
           </DialogHeader>
 
-          <div className="p-6 space-y-6">
-            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold bg-emerald-600 shadow-md`}>
-                {generatingInvoiceApt?.avatar || 'P'}
+          <div className="p-6">
+            <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mb-6">
+              <div className="bg-emerald-100 p-3 rounded-xl">
+                <Receipt className="h-6 w-6 text-emerald-600" />
               </div>
               <div>
-                <h3 className="font-bold text-gray-900">{generatingInvoiceApt?.patient}</h3>
-                <p className="text-xs font-semibold text-emerald-600 tracking-wider uppercase mt-1">
-                  {generatingInvoiceApt?.treatment} - {generatingInvoiceApt?.date}
-                </p>
+                <h4 className="font-bold text-gray-900">Generate Invoice</h4>
+                <p className="text-sm text-gray-600">The amount is automatically synced with the clinic pricing.</p>
               </div>
             </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Invoice Amount ($)</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={invoiceAmount}
-                    onChange={(e) => setInvoiceAmount(e.target.value)}
-                    className="pl-10 border-gray-200 focus:ring-emerald-500/20 rounded-xl bg-gray-50/50 font-bold text-lg"
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400">Confirm the total amount for the services provided during this visit.</p>
+            
+            <div className="space-y-4 px-1">
+              <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                <span className="text-xs font-black uppercase tracking-widest text-gray-400">Patient</span>
+                <span className="text-sm font-bold text-gray-900">{generatingInvoiceApt?.patient}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                <span className="text-xs font-black uppercase tracking-widest text-gray-400">Treatment</span>
+                <span className="text-sm font-bold text-gray-900">{generatingInvoiceApt?.treatment}</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-xs font-black uppercase tracking-widest text-gray-400">Date</span>
+                <span className="text-sm font-bold text-gray-900">{generatingInvoiceApt?.date}</span>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setGeneratingInvoiceApt(null)} className="rounded-xl font-medium border-gray-200" disabled={isGenerating}>Cancel</Button>
+          <DialogFooter className="px-8 py-6 border-t border-gray-100 bg-gray-50/50 flex gap-3 sm:justify-end shrink-0">
+            <Button 
+              variant="ghost" 
+              onClick={() => setGeneratingInvoiceApt(null)} 
+              className="rounded-2xl font-bold text-gray-500 hover:bg-gray-100 h-12 px-6" 
+              disabled={isGenerating}
+            >
+              Cancel
+            </Button>
             <Button 
               disabled={isGenerating}
               onClick={async () => {
                 setIsGenerating(true);
-                const res = await generateInvoiceFromAppointment(generatingInvoiceApt.id, parseFloat(invoiceAmount));
+                const res = await generateInvoiceFromAppointment(generatingInvoiceApt.id);
                 setIsGenerating(false);
                 
                 if (res.success) {
@@ -309,7 +310,7 @@ export function AppointmentsView({ initialAppointments }: { initialAppointments:
                   toast.error(res.error || "Failed to generate invoice");
                 }
               }} 
-              className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-2"
+              className="rounded-2xl font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-200 h-12 px-8 flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
             >
               {isGenerating ? "Generating..." : "Confirm & Generate"}
             </Button>

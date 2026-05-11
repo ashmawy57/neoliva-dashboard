@@ -2,92 +2,66 @@
 
 import { revalidatePath } from 'next/cache'
 import { ServiceService } from "@/services/service.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { ServiceCategory } from "@prisma/client";
 
 const serviceService = new ServiceService();
 
 export async function getServices() {
   try {
-    const tenantId = await resolveTenantContext();
-    const data = await serviceService.getServices(tenantId);
-
-    return data.map((service) => ({
-      id: service.id,
-      name: service.name,
-      price: Number(service.price),
-      duration: service.duration,
-      description: service.description || '',
-      category: service.category || 'General',
-      // Fallback icons based on category
-      icon: service.category === 'Preventive' ? '🪥' 
-        : service.category === 'Restorative' ? '🦷'
-        : service.category === 'Cosmetic' ? '✨'
-        : service.category === 'Surgical' ? '🔩'
-        : service.category === 'Orthodontics' ? '📋'
-        : '⚕️',
-      popular: service.popular || false
-    }))
+    const data = await serviceService.getServices();
+    console.log(`[Actions] getServices fetched ${data.length} items`);
+    return data;
   } catch (error) {
-    console.error('Error fetching services:', error);
+    console.error('[Actions] Error fetching services:', error);
     return [];
   }
 }
 
-export async function createService(formData: FormData) {
-  const name = formData.get('name') as string
-  const priceStr = formData.get('price') as string
-  const durationStr = formData.get('duration') as string
-  const description = formData.get('description') as string
-  const category = formData.get('category') as string
-
-  if (!name || !priceStr || !durationStr || !category) {
-    return { error: 'Missing required fields' }
-  }
-
-  const price = parseFloat(priceStr)
-  const duration = parseInt(durationStr, 10)
-
+export async function createServiceAction(data: {
+  name: string;
+  category: ServiceCategory;
+  price: number;
+  duration: number;
+  description?: string;
+}) {
+  console.log('[Actions] createService called with:', data);
   try {
-    const tenantId = await resolveTenantContext();
-    await serviceService.createService(tenantId, {
-      name,
-      price,
-      duration,
-      description,
-      category
-    });
-
+    const result = await serviceService.createService(data);
     revalidatePath('/services');
-    return { success: true };
+    revalidatePath('/appointments'); // In case appointments uses services
+    return { success: true, data: result };
   } catch (error: any) {
-    console.error('Error creating service:', error);
+    console.error('[Actions] Error creating service:', error);
     return { error: error.message };
   }
 }
 
-export async function updateService(id: string, data: any) {
+export async function updateServiceAction(id: string, data: Partial<{
+  name: string;
+  category: ServiceCategory;
+  price: number;
+  duration: number;
+  description: string;
+}>) {
+  console.log(`[Actions] updateService called for ${id}:`, data);
   try {
-    const tenantId = await resolveTenantContext();
-    await serviceService.updateService(tenantId, id, data);
-
+    const result = await serviceService.updateService(id, data);
     revalidatePath('/services');
-    return { success: true };
+    return { success: true, data: result };
   } catch (error: any) {
-    console.error('Error updating service:', error);
+    console.error('[Actions] Error updating service:', error);
     return { error: error.message };
   }
 }
 
-export async function deleteService(id: string) {
+export async function deleteServiceAction(id: string) {
+  console.log(`[Actions] deleteService called for ${id}`);
   try {
-    const tenantId = await resolveTenantContext();
-    await serviceService.deleteService(tenantId, id);
-
+    const result = await serviceService.deleteService(id);
     revalidatePath('/services');
-    return { success: true };
+    return { success: true, data: result };
   } catch (error: any) {
-    console.error('Error deleting service:', error);
+    console.error('[Actions] Error deleting service:', error);
     return { error: error.message };
   }
 }
-

@@ -1,73 +1,58 @@
 export const dynamic = 'force-dynamic';
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Clock, Sparkles } from "lucide-react";
-import { NewServiceDialog } from "@/components/services/NewServiceDialog";
-import { getServices } from "@/app/actions/services";
 
-const categoryColors: Record<string, string> = {
-  Preventive: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  Restorative: "bg-blue-50 text-blue-700 border-blue-100",
-  Cosmetic: "bg-purple-50 text-purple-700 border-purple-100",
-  Surgical: "bg-red-50 text-red-700 border-red-100",
-  Orthodontics: "bg-amber-50 text-amber-700 border-amber-100",
-};
+import { ServiceService } from "@/services/service.service";
+import { ServicesView } from "@/components/services/ServicesView";
+import { NewServiceDialog } from "@/components/services/NewServiceDialog";
+import { 
+  Sparkles, 
+  LayoutGrid, 
+  Zap, 
+  BarChart3 
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function ServicesPage() {
-  const servicesList = await getServices();
+  const serviceService = new ServiceService();
+  const services = await serviceService.getServices();
+
+  // Mock stats for the top row (could be expanded to be real later)
+  const stats = [
+    { label: "Active Services", value: services.length, icon: LayoutGrid, color: "text-blue-600 bg-blue-50" },
+    { label: "Most Popular", value: services.filter(s => s.popular).length, icon: Sparkles, color: "text-amber-600 bg-amber-50" },
+    { label: "Revenue Driver", value: services.length > 0 ? "Premium" : "None", icon: Zap, color: "text-indigo-600 bg-indigo-50" },
+    { label: "Avg. Duration", value: services.length > 0 
+      ? `${Math.round(services.reduce((acc, s) => acc + s.duration, 0) / services.length)}m` 
+      : "0m", icon: BarChart3, color: "text-emerald-600 bg-emerald-50" },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Services & Pricing</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage clinic treatments and pricing structure</p>
+          <p className="text-sm text-gray-500 mt-1">Manage clinic treatments and centralized pricing</p>
         </div>
         <NewServiceDialog />
       </div>
 
-      {servicesList.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
-          No services found.
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-          {servicesList.map((service) => (
-            <Card key={service.id} className="border-0 shadow-sm card-hover overflow-hidden group relative">
-              {service.popular && (
-                <div className="absolute top-3 right-3 z-10">
-                  <Badge className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-none text-[10px] font-bold rounded-full px-2 shadow-sm">
-                    <Sparkles className="w-2.5 h-2.5 mr-1" /> Popular
-                  </Badge>
-                </div>
-              )}
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-2xl flex-shrink-0 group-hover:scale-110 transition-transform">
-                    {service.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-gray-900 mb-0.5">{service.name}</h3>
-                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{service.description}</p>
-                  </div>
-                </div>
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
+        {stats.map((stat) => (
+          <Card key={stat.label} className="border-0 shadow-sm card-hover bg-white">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${stat.color}`}>
+                <stat.icon className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-gray-900">{stat.value}</p>
+                <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{stat.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <Clock className="w-3 h-3" /> {service.duration} min
-                    </div>
-                    <Badge variant="outline" className={`text-[10px] rounded-full border ${categoryColors[service.category] || ""}`}>
-                      {service.category}
-                    </Badge>
-                  </div>
-                  <p className="text-base font-bold text-gray-900">${service.price}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <ServicesView initialServices={services} />
     </div>
   );
 }

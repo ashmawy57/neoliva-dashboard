@@ -184,18 +184,20 @@ model Appointment {
 
 model Service {
   id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
   name               String
-  category           String
-  price              Decimal             @db.Decimal
-  durationMinutes    Int?                @map("duration_minutes")
   description        String?
+  price              Decimal             @db.Decimal
+  duration           Int                 // in minutes
+  category           ServiceCategory
+  isActive           Boolean             @default(true) @map("is_active")
   popular            Boolean?            @default(false)
+  
   createdAt          DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
-  duration           Int?
-  tenantId           String              @map("tenant_id") @db.Uuid
-  appointments       Appointment[]
+
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointments       Appointment[]
   treatmentPlanItems TreatmentPlanItem[]
   inventoryUsages    ServiceInventoryUsage[]
 
@@ -673,4 +675,13 @@ enum LabOrderStatus {
   DELIVERED
 
   @@map("lab_order_status")
+}
+
+enum ServiceCategory {
+  PREVENTIVE
+  RESTORATIVE
+  SURGICAL
+  ORTHODONTICS
+
+  @@map("service_category")
 }
