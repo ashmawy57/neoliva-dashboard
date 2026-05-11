@@ -1,4 +1,5 @@
 import { InventoryRepository } from "@/repositories/inventory.repository";
+import { prisma } from "@/lib/prisma";
 
 const inventoryRepository = new InventoryRepository();
 
@@ -99,6 +100,33 @@ export class InventoryService {
   async deleteItemService(tenantId: string, id: string) {
     // Optional: check if there are stock entries or handle cascade
     return await inventoryRepository.deleteItem(tenantId, id);
+  }
+
+  async consumeItemsFromService(serviceId: string) {
+    // 1. Get usage rules for this service
+    const usages = await prisma.serviceInventoryUsage.findMany({
+      where: { serviceId },
+      include: { inventory: true }
+    });
+
+    if (usages.length === 0) return;
+
+    // 2. For each usage, deduct stock
+    // Note: We are mapping the old 'Inventory' model usage to 'InventoryItem' 
+    // by finding the item with the same name if needed, or by ID if they align.
+    for (const usage of usages) {
+      // Try to find a matching InventoryItem by name to perform the deduction in the new system
+      const item = await inventoryRepository.getItems(usage.tenantId, { search: usage.inventory.name });
+      const targetItem = item.find(i => i.name === usage.inventory.name);
+
+      if (targetItem) {
+        await this.deductStockService(usage.tenantId, {
+          itemId: targetItem.id,
+          quantity: usage.quantity,
+          reason: `Auto-consumed by Service Completion`
+        });
+      }
+    }
   }
 
   private calculateCurrentStock(entries: any[]): number {
