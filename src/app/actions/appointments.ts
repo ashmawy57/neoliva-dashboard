@@ -32,7 +32,7 @@ export async function createAppointment(data: any) {
     return { success: true, data: created };
   } catch (error: any) {
     console.error('Error creating appointment:', error);
-    throw new Error(error.message || 'Failed to create appointment');
+    return { success: false, error: error.message || 'Failed to create appointment' };
   }
 }
 
@@ -44,6 +44,6 @@ export async function updateAppointmentStatus(id: string, status: any) {
     return { success: true, data: updated };
   } catch (error: any) {
     console.error('Error updating appointment:', error);
-    throw new Error('Failed to update appointment');
+    return { success: false, error: error.message || 'Failed to update appointment' };
   }
 }
