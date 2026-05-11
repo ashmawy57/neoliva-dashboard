@@ -3,21 +3,20 @@ import { Badge } from "@/components/ui/badge";
 import { Wallet, TrendingDown, ArrowUpRight } from "lucide-react";
 import { NewExpenseDialog } from "@/components/expenses/NewExpenseDialog";
 import { ExpensesTable } from "@/components/expenses/ExpensesTable";
-import { getExpenses } from "@/app/actions/expenses";
+import { getExpenses, getExpenseStats } from "@/app/actions/expenses";
+import { ExportExpensesCSV } from "@/components/expenses/ExpenseClientActions";
 
 export default async function ExpensesPage() {
-  const expenses = await getExpenses();
+  const [expenses, stats] = await Promise.all([
+    getExpenses(),
+    getExpenseStats()
+  ]);
 
-  const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-  const pendingPayments = expenses.filter(e => e.status !== "Paid").reduce((acc, curr) => acc + curr.amount, 0);
-  
-  // Find largest category
-  const categories: Record<string, number> = {};
-  expenses.forEach(e => {
-    categories[e.category] = (categories[e.category] || 0) + e.amount;
-  });
-  const largestCategory = Object.entries(categories).reduce((acc, curr) => curr[1] > acc[1] ? curr : acc, ["None", 0]);
-  const largestCategoryPercent = totalExpenses > 0 ? Math.round((largestCategory[1] / totalExpenses) * 100) : 0;
+  const totalExpenses = stats?.totalThisMonth || 0;
+  const pendingPayments = stats?.pendingAmount || 0;
+  const largestCategory = stats?.largestCategory || 'None';
+  const totalAmount = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+  const largestCategoryPercent = totalAmount > 0 ? Math.round(((stats?.largestCategoryAmount || 0) / totalAmount) * 100) : 0;
 
   return (
     <div className="p-6 md:p-8 space-y-6 animate-fade-in-up">
@@ -26,7 +25,10 @@ export default async function ExpensesPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Expenses</h1>
           <p className="text-gray-500 mt-1">Manage and track your clinic's operating costs.</p>
         </div>
-        <NewExpenseDialog />
+        <div className="flex items-center gap-3">
+          <ExportExpensesCSV data={expenses} />
+          <NewExpenseDialog />
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -63,7 +65,7 @@ export default async function ExpensesPage() {
               </div>
             </div>
             <p className="text-sm font-semibold text-gray-400 mb-1">Largest Category</p>
-            <h2 className="text-3xl font-bold text-white">{largestCategory[0]}</h2>
+            <h2 className="text-2xl font-bold text-white capitalize">{largestCategory}</h2>
             <p className="text-sm text-gray-400 mt-1">{largestCategoryPercent}% of total</p>
           </CardContent>
         </Card>

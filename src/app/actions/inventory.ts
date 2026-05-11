@@ -1,84 +1,109 @@
-"use server"
+'use server'
 
+import { revalidatePath } from 'next/cache';
 import { InventoryService } from "@/services/inventory.service";
-import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant-context";
 
 const inventoryService = new InventoryService();
 
-export async function getInventory() {
-  try {
-    return await inventoryService.getInventoryList();
-  } catch (error) {
-    console.error("Failed to fetch inventory:", error);
-    return [];
-  }
-}
-
-export async function getLowStockAlerts() {
-  try {
-    return await inventoryService.getLowStockItems();
-  } catch (error) {
-    return [];
-  }
-}
-
-export async function createInventoryItem(data: any) {
-  try {
-    let finalData = data;
-    
-    // Handle FormData if passed (from standard form actions)
-    if (data instanceof FormData) {
-      finalData = {
-        name: data.get("name") as string,
-        category: data.get("category") as string,
-        quantity: parseInt(data.get("quantity") as string),
-        minLevel: parseInt(data.get("minLevel") as string),
-        unit: data.get("unit") as string,
-      };
-    }
-
-    await inventoryService.addItem(finalData);
-    revalidatePath("/inventory");
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function adjustInventoryStock(id: string, adjustment: number) {
-  try {
-    await inventoryService.adjustStock(id, adjustment);
-    revalidatePath("/inventory");
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function deleteInventoryItem(id: string) {
-  try {
-    await inventoryService.deleteItem(id);
-    revalidatePath("/inventory");
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-export async function mapServiceConsumable(serviceId: string, inventoryId: string, quantity: number) {
+export async function createItemAction(data: {
+  name: string;
+  category: string;
+  unit: string;
+  minimumStock: number;
+  initialStock?: number;
+}) {
   try {
     const tenantId = await resolveTenantContext();
-    await prisma.serviceInventoryUsage.upsert({
-      where: {
-        serviceId_inventoryId: { serviceId, inventoryId }
-      },
-      update: { quantity, tenantId },
-      create: { serviceId, inventoryId, quantity, tenantId }
-    });
+    const result = await inventoryService.createItemService(tenantId, data);
+    revalidatePath('/inventory');
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error('[createItemAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getInventoryAction(filters?: { search?: string; category?: string }) {
+  try {
+    const tenantId = await resolveTenantContext();
+    const items = await inventoryService.getItemsService(tenantId, filters);
+    const stats = await inventoryService.getInventoryStatsService(tenantId);
+    return { success: true, data: { items, stats } };
+  } catch (error: any) {
+    console.error('[getInventoryAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function addStockAction(data: {
+  itemId: string;
+  quantity: number;
+  reason: string;
+}) {
+  try {
+    const tenantId = await resolveTenantContext();
+    await inventoryService.addStockService(tenantId, data);
+    revalidatePath('/inventory');
     return { success: true };
   } catch (error: any) {
+    console.error('[addStockAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deductStockAction(data: {
+  itemId: string;
+  quantity: number;
+  reason: string;
+}) {
+  try {
+    const tenantId = await resolveTenantContext();
+    await inventoryService.deductStockService(tenantId, data);
+    revalidatePath('/inventory');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[deductStockAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getItemHistoryAction(itemId: string) {
+  try {
+    const tenantId = await resolveTenantContext();
+    const history = await inventoryService.getItemHistoryService(tenantId, itemId);
+    return { success: true, data: history };
+  } catch (error: any) {
+    console.error('[getItemHistoryAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateItemAction(id: string, data: {
+  name?: string;
+  category?: string;
+  unit?: string;
+  minimumStock?: number;
+}) {
+  try {
+    const tenantId = await resolveTenantContext();
+    await inventoryService.updateItemService(tenantId, id, data);
+    revalidatePath('/inventory');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[updateItemAction]', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteItemAction(id: string) {
+  try {
+    const tenantId = await resolveTenantContext();
+    await inventoryService.deleteItemService(tenantId, id);
+    revalidatePath('/inventory');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[deleteItemAction]', error);
     return { success: false, error: error.message };
   }
 }

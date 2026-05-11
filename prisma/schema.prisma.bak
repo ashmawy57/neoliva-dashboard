@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -40,8 +39,6 @@ model Tenant {
   treatmentPlans          TreatmentPlan[]
   users                   User[]
   visitRecords            VisitRecord[]
-  inventoryItems          InventoryItem[]
-  stockEntries            StockEntry[]
 
   @@index([createdAt])
   @@map("tenants")
@@ -198,23 +195,29 @@ model Service {
 }
 
 model Invoice {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  displayId     String?       @unique @map("display_id")
-  patientId     String        @map("patient_id") @db.Uuid
-  createdAt     DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime?     @default(now()) @map("updated_at") @db.Timestamptz(6)
-  treatment     String?
-  tenantId      String        @map("tenant_id") @db.Uuid
-  dueDate       DateTime?     @map("due_date") @db.Date
-  status        InvoiceStatus @default(PENDING)
-  appointmentId String?       @unique @map("appointment_id") @db.Uuid
-  paidAmount    Decimal       @default(0) @map("paid_amount") @db.Decimal
-  totalAmount   Decimal       @map("total_amount") @db.Decimal
-  items         InvoiceItem[]
-  appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
-  patient       Patient       @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  payments      Payment[]
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayId     String?        @unique @map("display_id")
+  patientId     String         @map("patient_id") @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  appointmentId String?        @unique @map("appointment_id") @db.Uuid
+
+  totalAmount Decimal @map("total_amount") @db.Decimal
+  paidAmount  Decimal @default(0) @map("paid_amount") @db.Decimal
+
+  status  InvoiceStatus @default(PENDING)
+  dueDate DateTime?     @map("due_date") @db.Date
+
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  // Legacy field support (optional, can be removed if not needed)
+  treatment String?
+
+  appointment Appointment?  @relation(fields: [appointmentId], references: [id])
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items       InvoiceItem[]
+  payments    Payment[]
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
@@ -223,15 +226,17 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId   String  @map("invoice_id") @db.Uuid
-  tenantId    String  @map("tenant_id") @db.Uuid
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId String  @map("invoice_id") @db.Uuid
+  serviceId String? @map("service_id") @db.Uuid
+
   description String
-  price       Decimal @db.Decimal
   quantity    Int     @default(1)
-  serviceId   String? @map("service_id") @db.Uuid
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  price       Decimal @db.Decimal
+
+  tenantId String  @map("tenant_id") @db.Uuid
+  invoice  Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, invoiceId])
   @@map("invoice_items")
@@ -241,12 +246,13 @@ model Payment {
   id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   invoiceId String        @map("invoice_id") @db.Uuid
   amount    Decimal       @db.Decimal
-  notes     String?
-  tenantId  String        @map("tenant_id") @db.Uuid
-  paidAt    DateTime      @default(now()) @map("paid_at") @db.Timestamptz(6)
   method    PaymentMethod
-  invoice   Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paidAt    DateTime      @default(now()) @map("paid_at") @db.Timestamptz(6)
+  notes     String?
+
+  tenantId String  @map("tenant_id") @db.Uuid
+  invoice  Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, invoiceId])
   @@map("payments")
@@ -255,16 +261,15 @@ model Payment {
 model Expense {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayId   String?        @unique @map("display_id")
-  title       String
   category    String
-  description String?
+  description String
   amount      Decimal        @db.Decimal
   date        DateTime       @db.Date
   createdAt   DateTime?      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime?      @default(now()) @map("updated_at") @db.Timestamptz(6)
   method      String?
   tenantId    String         @map("tenant_id") @db.Uuid
-  status      ExpenseStatus? @default(PAID)
+  status      ExpenseStatus? @default(PENDING)
   notes       String?
   tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -311,25 +316,29 @@ model ServiceInventoryUsage {
 }
 
 model LabOrder {
-  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  displayId     String?        @unique @map("display_id")
-  tenantId      String         @map("tenant_id") @db.Uuid
-  patientId     String         @map("patient_id") @db.Uuid
-  appointmentId String?        @map("appointment_id") @db.Uuid
-  labName       String         @map("lab_name")
-  itemType      String         @map("item_type")
-  toothNumber   String?        @map("tooth_number")
-  status        LabOrderStatus @default(PENDING)
-  sentAt        DateTime?      @map("sent_at") @db.Timestamptz(6)
-  dueDate       DateTime?      @map("due_date") @db.Date
-  receivedAt    DateTime?      @map("received_at") @db.Timestamptz(6)
-  cost          Decimal?       @db.Decimal
-  notes         String?
-  createdAt     DateTime?      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime?      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayId     String? @unique @map("display_id")
+  tenantId      String  @map("tenant_id") @db.Uuid
+  patientId     String  @map("patient_id") @db.Uuid
+  appointmentId String? @map("appointment_id") @db.Uuid
+
+  labName     String         @map("lab_name")
+  itemType    String         @map("item_type")
+  toothNumber String?        @map("tooth_number")
+  status      LabOrderStatus @default(PENDING)
+
+  sentAt     DateTime? @map("sent_at") @db.Timestamptz(6)
+  dueDate    DateTime? @map("due_date") @db.Date
+  receivedAt DateTime? @map("received_at") @db.Timestamptz(6)
+
+  cost      Decimal?  @db.Decimal
+  notes     String?
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
@@ -653,8 +662,8 @@ enum AppointmentStatus {
 enum InvoiceStatus {
   PENDING
   PAID
-  OVERDUE
   PARTIAL
+  OVERDUE
   CANCELLED
 
   @@map("invoice_status")
@@ -693,48 +702,4 @@ enum ServiceCategory {
   ORTHODONTICS
 
   @@map("service_category")
-}
-
-model InventoryItem {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String
-  category      String
-  unit          String
-  minimumStock  Int      @map("minimum_stock")
-
-  tenantId String @map("tenant_id") @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  stockEntries StockEntry[]
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@index([tenantId])
-  @@map("inventory_items")
-}
-
-model StockEntry {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  itemId    String   @map("item_id") @db.Uuid
-  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  type      StockType
-  quantity  Int
-  reason    String
-  referenceId String? @map("reference_id")
-
-  tenantId String @map("tenant_id") @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([tenantId])
-  @@index([itemId])
-  @@map("stock_entries")
-}
-
-enum StockType {
-  IN
-  OUT
 }

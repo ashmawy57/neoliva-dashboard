@@ -8,18 +8,14 @@ const dashboardService = new DashboardService();
 export async function getDashboardData() {
   try {
     const tenantId = await resolveTenantContext();
+
+    if (!tenantId) {
+      throw new Error("Unauthorized");
+    }
+
     return await dashboardService.getDashboardData(tenantId);
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    return {
-      lowInventoryCount: 0,
-      pendingPayments: 0,
-      overdueCount: 0,
-      todaysAppointmentsCount: 0,
-      completedAppointmentsCount: 0,
-      pendingAppointmentsCount: 0,
-      recentPatients: [],
-    };
+  } catch (error: any) {
+    console.error('[getDashboardData]', error);
+    throw error;
   }
 }
-

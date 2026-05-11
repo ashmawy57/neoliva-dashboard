@@ -170,19 +170,19 @@ export function LabOrdersTable({ initialOrders }: { initialOrders: any[] }) {
               </TableCell>
               <TableCell className="pr-6">
                 <DropdownMenu>
-                  <DropdownMenuTrigger render={
+                  <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-purple-100 text-gray-400 hover:text-purple-600 rounded-lg">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
-                  } />
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 rounded-xl border-gray-100 shadow-xl p-1">
                     <DropdownMenuGroup>
                       <DropdownMenuLabel className="text-xs text-gray-400 uppercase tracking-widest p-2">Actions</DropdownMenuLabel>
-                      <DropdownMenuItem render={
+                      <DropdownMenuItem asChild>
                         <Link href={`/patients/${order.patientId}`} className="flex items-center gap-2 cursor-pointer rounded-lg py-2">
                           <Eye className="w-4 h-4 text-gray-500" /> View Patient
                         </Link>
-                      } />
+                      </DropdownMenuItem>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator className="bg-gray-50" />
                     <DropdownMenuGroup>

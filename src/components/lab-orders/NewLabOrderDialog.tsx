@@ -85,11 +85,11 @@ export function NewLabOrderDialog({ patients }: NewLabOrderDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 h-12 rounded-2xl shadow-lg shadow-purple-500/20 transition-all flex items-center gap-2 border-0 cursor-pointer">
           <Plus className="w-5 h-5" /> New Order
         </Button>
-      } />
+      </DialogTrigger>
       
       <DialogContent className="sm:max-w-md md:max-w-xl p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-3xl">
         <DialogHeader className="bg-gray-50 px-8 py-6 flex flex-row items-center justify-between border-b shrink-0 m-0 space-y-0">

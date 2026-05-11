@@ -289,17 +289,19 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
         }
       >
         <Popover>
-          <PopoverTrigger render={<button className="cursor-pointer group flex items-center justify-center focus:outline-none bg-transparent border-0 p-1 w-full hover:bg-gray-100 rounded-xl transition-colors" />}>
-            <ToothVisual
-              toothId={tooth}
-              isTop={isTop}
-              toothType={type}
-              fill={fill}
-              stroke={stroke}
-              isExtracted={isMissing}
-              className="group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md mx-auto"
-            />
-            {isUpdating && <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-xl"><RefreshCw className="w-4 h-4 animate-spin text-blue-500" /></div>}
+          <PopoverTrigger asChild>
+            <button className="cursor-pointer group flex items-center justify-center focus:outline-none bg-transparent border-0 p-1 w-full hover:bg-gray-100 rounded-xl transition-colors relative">
+              <ToothVisual
+                toothId={tooth}
+                isTop={isTop}
+                toothType={type}
+                fill={fill}
+                stroke={stroke}
+                isExtracted={isMissing}
+                className="group-hover:scale-110 drop-shadow-sm group-hover:drop-shadow-md mx-auto"
+              />
+              {isUpdating && <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-xl"><RefreshCw className="w-4 h-4 animate-spin text-blue-500" /></div>}
+            </button>
           </PopoverTrigger>
 
           <PopoverContent className="w-80 p-4 rounded-2xl shadow-xl border-gray-100 flex flex-col gap-4">

@@ -25,11 +25,12 @@ export function NewExpenseDialog() {
   const router = useRouter();
 
   const [formData, setFormData] = useState({
-    description: "",
+    title: "",
     amount: "",
     date: "",
     category: "",
     status: "paid",
+    description: "",
     notes: ""
   });
 
@@ -51,11 +52,12 @@ export function NewExpenseDialog() {
       
       // Reset form
       setFormData({
-        description: "",
+        title: "",
         amount: "",
         date: "",
         category: "",
         status: "paid",
+        description: "",
         notes: ""
       });
       
@@ -70,8 +72,10 @@ export function NewExpenseDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md px-5 h-10 text-sm font-medium border-0 cursor-pointer">
-        <Plus className="mr-2 h-4 w-4" /> Add Expense
+      <DialogTrigger asChild>
+        <Button className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-md px-5 h-10 font-medium border-0">
+          <Plus className="mr-2 h-4 w-4" /> Add Expense
+        </Button>
       </DialogTrigger>
       
       <DialogContent className="sm:max-w-md md:max-w-lg p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl">
@@ -90,16 +94,29 @@ export function NewExpenseDialog() {
         >
           <div className="flex-1 overflow-y-auto w-full p-6 space-y-5">
             
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="title" className="text-sm font-semibold text-gray-700">Expense Title</Label>
+              <Input 
+                id="title"
+                value={formData.title}
+                onChange={(e) => handleChange('title', e.target.value)}
+                placeholder="e.g. Monthly Rent, Medical Supplies..." 
+                className="bg-white border-gray-200 focus-visible:ring-red-500 rounded-xl shadow-sm h-11" 
+                required
+                disabled={loading}
+              />
+            </div>
+
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-semibold text-gray-700">Description</Label>
+              <Label htmlFor="description" className="text-sm font-semibold text-gray-700">Description (Optional)</Label>
               <Input 
                 id="description"
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
                 placeholder="e.g. Dental composites & syringes" 
                 className="bg-white border-gray-200 focus-visible:ring-red-500 rounded-xl shadow-sm h-11" 
-                required
                 disabled={loading}
               />
             </div>

@@ -153,13 +153,11 @@ export function PatientDocuments({
         
         <div className="flex items-center gap-3">
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger 
-              render={
-                <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 text-white font-bold h-11 px-6 transition-all active:scale-95">
-                  <UploadCloud className="w-4 h-4 mr-2" /> Upload Record
-                </Button>
-              } 
-            />
+            <DialogTrigger asChild>
+              <Button className="bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 text-white font-bold h-11 px-6 transition-all active:scale-95">
+                <UploadCloud className="w-4 h-4 mr-2" /> Upload Record
+              </Button>
+            </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-2xl border-0 shadow-2xl">
               <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                 <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -359,11 +357,11 @@ export function PatientDocuments({
                     </div>
                     
                     <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-900">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      } />
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-900">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-xl p-1 border-gray-100">
                         <DropdownMenuItem onClick={() => window.open(doc.fileUrl, "_blank")} className="rounded-lg gap-2 cursor-pointer py-2">
                           <Download className="w-4 h-4 text-blue-500" />

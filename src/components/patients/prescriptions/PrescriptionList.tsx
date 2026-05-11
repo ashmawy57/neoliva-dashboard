@@ -138,13 +138,11 @@ export function PrescriptionList({
                   </Button>
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger 
-                      render={
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg text-gray-400">
-                          {loading === rx.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
-                        </Button>
-                      } 
-                    />
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg text-gray-400">
+                        {loading === rx.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                      </Button>
+                    </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-xl">
                       <DropdownMenuItem onClick={() => handleDuplicate(rx.id)} className="rounded-lg gap-2 cursor-pointer py-2">
                         <Copy className="w-4 h-4 text-blue-500" />

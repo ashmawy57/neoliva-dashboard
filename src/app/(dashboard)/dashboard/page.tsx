@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic';
+import { getDashboardData } from "@/app/actions/dashboard";
+import { DashboardKPIs } from "@/components/dashboard/DashboardKPIs";
+import { DashboardChartsDynamic } from "@/components/dashboard/DashboardChartsDynamic";
+import { DashboardRecentPatients } from "@/components/dashboard/DashboardRecentPatients";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Calendar, DollarSign, AlertTriangle, TrendingUp, ArrowUpRight, ArrowDownRight, Clock
-} from "lucide-react";
-import { getDashboardData } from "@/app/actions/dashboard";
-import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
-import { DashboardRecentPatients } from "@/components/dashboard/DashboardRecentPatients";
+import { Clock } from "lucide-react";
 
 const upcomingAppointments = [
   { patient: "Dr. Adams — Emily Johnson", time: "09:00 – 09:45", type: "Cleaning", progress: 65 },
@@ -23,102 +22,26 @@ export default async function DashboardPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">
-            Good morning, Dr. Smith 👋
+            Clinic Dashboard 👋
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Here&apos;s what&apos;s happening at your clinic today.
+            Real-time insights and clinic performance overview.
           </p>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
-        {/* Revenue Card */}
-        <Card className="card-hover border-0 shadow-sm bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 text-white overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
-          <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-10 -translate-x-10" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-blue-100">Daily Revenue</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
-              <DollarSign className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-3xl font-bold">$2,847</div>
-            <div className="flex items-center gap-1 mt-2 text-sm">
-              <div className="flex items-center gap-0.5 bg-white/15 rounded-full px-2 py-0.5 text-xs font-medium">
-                <ArrowUpRight className="w-3 h-3" /> +14.2%
-              </div>
-              <span className="text-blue-200 text-xs">vs yesterday</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Appointments Card */}
-        <Card className="card-hover border-0 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Today&apos;s Appointments</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-              <Calendar className="h-4 w-4 text-violet-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{data?.todaysAppointmentsCount || 0}</div>
-            <div className="flex items-center gap-2 mt-2">
-              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[11px] font-semibold hover:bg-emerald-50">
-                {data?.completedAppointmentsCount || 0} completed
-              </Badge>
-              <Badge className="bg-amber-50 text-amber-700 border-amber-100 text-[11px] font-semibold hover:bg-amber-50">
-                {data?.pendingAppointmentsCount || 0} pending
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pending Payments */}
-        <Card className="card-hover border-0 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Pending Payments</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-amber-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">${data?.pendingPayments?.toLocaleString() || 0}</div>
-            <div className="flex items-center gap-1 mt-2">
-              <span className="flex items-center gap-0.5 text-red-600 text-xs font-semibold bg-red-50 rounded-full px-2 py-0.5">
-                <ArrowDownRight className="w-3 h-3" /> {data?.overdueCount || 0} overdue
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Low Inventory */}
-        <Card className="card-hover border-0 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Low Inventory</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{data?.lowInventoryCount || 0}</div>
-            <div className="flex items-center gap-1 mt-2">
-              <span className="text-xs text-gray-500">Items need restocking</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <DashboardKPIs data={data.kpis} />
 
       {/* Charts Row */}
-      <DashboardCharts />
+      <DashboardChartsDynamic data={data.charts} />
 
       {/* Bottom Row */}
       <div className="grid gap-4 lg:grid-cols-5">
         {/* Recent Patients */}
-        <DashboardRecentPatients patients={data?.recentPatients || []} />
+        <DashboardRecentPatients patients={data.recentPatients || []} />
 
-        {/* Live Progress */}
+        {/* Live Progress (Using mock data for now as per previous design) */}
         <Card className="lg:col-span-2 border-0 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-semibold text-gray-900">Active Treatments</CardTitle>

@@ -18,7 +18,7 @@ export default async function LabOrdersPage() {
   const [labOrders, stats, patients] = await Promise.all([
     labOrderService.getLabOrdersList(),
     labOrderService.getLabOrdersStats(),
-    patientService.getAllPatients(tenantId)
+    patientService.getPatientsForSelection(tenantId)
   ]);
 
   const statCards = [

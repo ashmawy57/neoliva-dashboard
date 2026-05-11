@@ -1,71 +1,126 @@
-import { InventoryRepository } from "@/repositories/inventory.repository";
-import { BillingRepository } from "@/repositories/billing.repository";
-import { AppointmentRepository } from "@/repositories/appointment.repository";
+import { DashboardRepository } from "@/repositories/dashboard.repository";
+import { subMonths, startOfMonth } from "date-fns";
 
 export class DashboardService {
-  private inventoryRepo = new InventoryRepository();
-  private billingRepo = new BillingRepository();
-  private appointmentRepo = new AppointmentRepository();
+  private dashboardRepo = new DashboardRepository();
 
   async getDashboardData(tenantId: string) {
-    // 1. Low inventory
-    const inventoryData = await this.inventoryRepo.findMany(tenantId);
-    const lowInventoryCount = inventoryData.filter(item => item.quantity <= item.minLevel).length;
+    const [
+      dailyRevenueRaw,
+      appointmentsToday,
+      pendingPaymentsRaw,
+      inventoryItems,
+      revenueVsExpensesRaw,
+      weeklyAppointmentsRaw,
+      recentPatientsRaw
+    ] = await Promise.all([
+      this.dashboardRepo.getDailyRevenue(tenantId),
+      this.dashboardRepo.getTodayAppointments(tenantId),
+      this.dashboardRepo.getPendingPayments(tenantId),
+      this.dashboardRepo.getInventoryItems(tenantId),
+      this.dashboardRepo.getRevenueVsExpenses(tenantId),
+      this.dashboardRepo.getWeeklyAppointments(tenantId),
+      this.dashboardRepo.getRecentPatients(tenantId)
+    ]);
 
-    // 2. Financial Stats
-    const billingStats = await this.billingRepo.getFinancialStats(tenantId);
-    const pendingPayments = billingStats.pendingAmount;
-    const overdueCount = billingStats.overdueCount;
-
-    // 3. Appointments for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // 1. KPI Normalization
+    const dailyRevenue = Number(dailyRevenueRaw || 0);
+    const pendingPayments = Number(pendingPaymentsRaw || 0);
     
-    const appointmentsData = await this.appointmentRepo.findMany(tenantId, {
-      where: { date: today },
-      select: {
-        id: true,
-        patientId: true,
-        time: true,
-        treatment: true,
-        status: true,
-        patient: { select: { name: true } }
+    const appointments = {
+      total: appointmentsToday.length,
+      completed: appointmentsToday.filter(a => a.status === 'COMPLETED').length,
+      pending: appointmentsToday.filter(a => ['SCHEDULED', 'WAITING', 'IN_PROGRESS'].includes(a.status || '')).length
+    };
+
+    // 2. Inventory Calculation
+    let lowInventoryCount = 0;
+    inventoryItems.forEach(item => {
+      const currentStock = item.stockEntries.reduce((acc, entry) => {
+        if (entry.type === 'IN') return acc + entry.quantity;
+        if (entry.type === 'OUT') return acc - entry.quantity;
+        return acc;
+      }, 0);
+      if (currentStock <= item.minimumStock) {
+        lowInventoryCount++;
       }
     });
 
-    const todaysAppointmentsCount = appointmentsData.length;
-    const completedAppointmentsCount = appointmentsData.filter(a => a.status === "COMPLETED").length;
-    const pendingAppointmentsCount = appointmentsData.filter(a => 
-      ["WAITING", "SCHEDULED", "IN_PROGRESS"].includes(a.status || "")
-    ).length;
+    // 3. Chart: Revenue vs Expenses
+    const monthlyData: Record<string, { revenue: number; expenses: number }> = {};
+    for (let i = 0; i <= 6; i++) {
+      const monthDate = subMonths(new Date(), i);
+      const monthKey = monthDate.toLocaleString('en-US', { month: 'short' });
+      monthlyData[monthKey] = { revenue: 0, expenses: 0 };
+    }
 
-    // 4. Recent patients for queue
-    const recentPatients = appointmentsData.map(a => {
-      const name = (a as any).patient?.name || "Unknown Patient";
-      const parts = name.trim().split(/\s+/).filter(Boolean);
-      const initials = parts.length > 1 
-        ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() 
-        : parts.length === 1 ? parts[0].substring(0, 2).toUpperCase() : "??";
-        
-      return {
-        id: a.patientId,
-        name,
-        time: a.time ? new Date(a.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
-        treatment: a.treatment || "Checkup",
-        status: a.status,
-        avatar: initials,
-        color: a.status === "IN_PROGRESS" ? "from-blue-500 to-indigo-600" : "from-blue-500 to-cyan-500",
-      };
+    revenueVsExpensesRaw.invoices.forEach(inv => {
+      const monthKey = new Date(inv.createdAt!).toLocaleString('en-US', { month: 'short' });
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].revenue += Number(inv.totalAmount || 0);
+      }
     });
 
+    revenueVsExpensesRaw.expenses.forEach(exp => {
+      const monthKey = new Date(exp.date).toLocaleString('en-US', { month: 'short' });
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].expenses += Number(exp.amount || 0);
+      }
+    });
+
+    const revenueVsExpenses = Object.entries(monthlyData)
+      .map(([month, data]) => ({ month, ...data }))
+      .reverse();
+
+    // 4. Chart: Weekly Appointments
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const dailyCounts: Record<string, number> = {};
+    days.forEach(d => dailyCounts[d] = 0);
+
+    weeklyAppointmentsRaw.forEach(a => {
+      const dayName = new Date(a.date).toLocaleString('en-US', { weekday: 'short' });
+      if (dailyCounts[dayName] !== undefined) {
+        dailyCounts[dayName]++;
+      }
+    });
+
+    const weeklyAppointments = days.map(day => ({
+      day,
+      count: dailyCounts[day]
+    }));
+
+    // 5. Recent Patients with Treatment Normalization
+    const colors = ["from-blue-400 to-blue-600", "from-indigo-400 to-indigo-600", "from-emerald-400 to-emerald-600", "from-amber-400 to-amber-600", "from-rose-400 to-rose-600"];
+    
+    const recentPatients = recentPatientsRaw.map((apt, i) => ({
+      id: apt.patientId,
+      name: apt.patient.name,
+      treatment: this.normalizeTreatment(apt.treatment),
+      time: new Date(apt.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      status: apt.status,
+      avatar: apt.patient.name.charAt(0),
+      color: colors[i % colors.length]
+    }));
+
     return {
-      lowInventoryCount,
-      pendingPayments,
-      overdueCount,
-      todaysAppointmentsCount,
-      completedAppointmentsCount,
-      pendingAppointmentsCount,
-      recentPatients,
+      kpis: {
+        dailyRevenue,
+        appointments,
+        pendingPayments,
+        lowInventory: lowInventoryCount
+      },
+      charts: {
+        revenueVsExpenses,
+        weeklyAppointments
+      },
+      recentPatients
     };
+  }
+
+  private normalizeTreatment(treatment?: string | null): string {
+    if (!treatment || treatment.trim() === "") {
+      return "General Checkup";
+    }
+    return treatment;
   }
 }

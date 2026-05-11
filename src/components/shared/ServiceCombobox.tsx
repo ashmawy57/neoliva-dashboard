@@ -61,7 +61,7 @@ export function ServiceCombobox({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={
+      <PopoverTrigger asChild>
         <Button
           variant="outline"
           role="combobox"
@@ -71,21 +71,21 @@ export function ServiceCombobox({
             selectedService && "border-primary/30 bg-primary/5",
             className
           )}
-        />
-      }>
-        <div className="flex items-center gap-2 truncate">
-          {selectedService ? (
-            <>
-              <span className="font-medium text-gray-900">{selectedService.name}</span>
-              <Badge variant="secondary" className="text-[10px] h-5 bg-white/50 text-primary border-primary/10">
-                {selectedService.category}
-              </Badge>
-            </>
-          ) : (
-            <span className="text-muted-foreground">Select dental service...</span>
-          )}
-        </div>
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        >
+          <div className="flex items-center gap-2 truncate">
+            {selectedService ? (
+              <>
+                <span className="font-medium text-gray-900">{selectedService.name}</span>
+                <Badge variant="secondary" className="text-[10px] h-5 bg-white/50 text-primary border-primary/10">
+                  {selectedService.category}
+                </Badge>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Select dental service...</span>
+            )}
+          </div>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
       </PopoverTrigger>
 
       <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start" sideOffset={8}>

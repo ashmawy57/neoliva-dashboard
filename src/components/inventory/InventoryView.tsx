@@ -200,7 +200,7 @@ export default function InventoryView({ initialItems, lowStockCount }: Inventory
                   </td>
                   <td className="px-6 py-4 text-right">
                     <DropdownMenu>
-                      <DropdownMenuTrigger>
+                      <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full">
                           <MoreVertical className="w-4 h-4 text-gray-400" />
                         </Button>

@@ -64,11 +64,11 @@ export function NewServiceDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-11 px-6 text-sm font-bold border-0 text-white">
           <PlusCircle className="mr-2 h-4 w-4" /> Add Service
         </Button>
-      } />
+      </DialogTrigger>
       
       <DialogContent className="sm:max-w-md md:max-w-lg p-0 overflow-hidden bg-white border-0 shadow-2xl rounded-3xl">
         <DialogHeader className="bg-gray-50/50 px-8 py-6 flex flex-row items-center justify-between border-b shrink-0 m-0 space-y-0">

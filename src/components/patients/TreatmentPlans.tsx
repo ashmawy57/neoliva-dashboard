@@ -614,14 +614,16 @@ export function TreatmentPlans({
                     />
                   </div>
                   <Popover>
-                    <PopoverTrigger render={<Button variant="outline" size="sm" className="h-9 rounded-lg border-blue-200 bg-white text-blue-600 hover:bg-blue-50" />}>
-                      {inlinePhase.toothList.length > 0 ? (
-                        <Badge className="bg-blue-600 text-white hover:bg-blue-600 px-1.5 py-0 h-5">
-                          {inlinePhase.toothList.length} Teeth
-                        </Badge>
-                      ) : (
-                        "Select Teeth"
-                      )}
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 rounded-lg border-blue-200 bg-white text-blue-600 hover:bg-blue-50">
+                        {inlinePhase.toothList.length > 0 ? (
+                          <Badge className="bg-blue-600 text-white hover:bg-blue-600 px-1.5 py-0 h-5">
+                            {inlinePhase.toothList.length} Teeth
+                          </Badge>
+                        ) : (
+                          "Select Teeth"
+                        )}
+                      </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[500px] p-4 rounded-2xl shadow-xl" align="end">
                       <div className="space-y-3">

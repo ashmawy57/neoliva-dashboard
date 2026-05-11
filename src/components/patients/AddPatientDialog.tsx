@@ -126,8 +126,10 @@ export function AddPatientDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 text-sm font-medium border-0 inline-flex items-center justify-center text-white">
-        <PlusCircle className="mr-2 h-4 w-4" /> Add Patient
+      <DialogTrigger asChild>
+        <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl h-10 px-5 font-medium border-0 text-white">
+          <PlusCircle className="mr-2 h-4 w-4" /> Add Patient
+        </Button>
       </DialogTrigger>
       
       <DialogContent className="sm:max-w-md md:max-w-xl lg:max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden bg-gray-50 border-0 shadow-2xl rounded-2xl text-gray-900">

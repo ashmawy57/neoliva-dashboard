@@ -47,8 +47,49 @@ export class PatientService {
     });
   }
 
+  /**
+   * Lightweight patient list for selection inputs
+   */
+  async getPatientsForSelection(tenantId: string) {
+    const data = await patientRepository.findMany(tenantId, {
+      select: {
+        id: true,
+        displayId: true,
+        name: true,
+      },
+      orderBy: { name: 'asc' }
+    });
+    
+    // Ensure 100% plain object compatibility
+    return JSON.parse(JSON.stringify(data));
+  }
+
   async getPatientsList(tenantId: string) {
-    const data = await this.getAllPatients(tenantId);
+    // Optimization: Fetch only needed fields for the list view
+    const data = await patientRepository.findMany(tenantId, {
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        displayId: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        createdAt: true,
+        appointments: {
+          select: {
+            date: true,
+            status: true
+          }
+        },
+        invoices: {
+          select: {
+            totalAmount: true,
+            paidAmount: true
+          }
+        }
+      }
+    });
     
     return data.map((patient: any) => {
       const appts = patient.appointments || []
@@ -86,7 +127,8 @@ export class PatientService {
         outstanding: (patient.invoices || [])
           .reduce((sum: number, i: any) => {
             const paid = Number(i.paidAmount || 0);
-            return sum + (Number(i.totalAmount) - paid);
+            const total = Number(i.totalAmount || 0);
+            return sum + (total - paid);
           }, 0)
       }
     });

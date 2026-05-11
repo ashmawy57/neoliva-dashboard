@@ -260,39 +260,40 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   const renderTooth = (tooth: number, isTop: boolean) => {
     return (
       <Popover key={tooth} open={openPopover === tooth} onOpenChange={(open) => setOpenPopover(open ? tooth : null)}>
-        <PopoverTrigger render={<button className="focus:outline-none bg-transparent border-0 p-0 m-0 w-full text-left" />}>
-          <ToothCell
-            toothId={tooth}
-            isTop={isTop}
-            className="group"
-            label={String(tooth)}
-
+        <PopoverTrigger asChild>
+          <button className="focus:outline-none bg-transparent border-0 p-0 m-0 w-full text-left cursor-pointer">
+            <ToothCell
+              toothId={tooth}
+              isTop={isTop}
+              className="group"
+              label={String(tooth)}
               extraContent={
                 <div className="flex flex-col gap-0.5 items-center justify-center py-2 h-16 text-center w-full transition-opacity">
-                   <div className={cn("text-[#800000] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showBuccal ? 'opacity-100' : 'opacity-0')}>
-                       {getParmValStr(tooth, activeParam, 'buccal')}
-                   </div>
-                   <div className={cn("text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showLingual ? 'opacity-100' : 'opacity-0')}>
-                       {getParmValStr(tooth, activeParam, 'lingual')}
-                   </div>
-                   <div className="h-4 flex items-center justify-center w-full">
-                     <div className="w-[80%] h-[2px] border-b-[1.5px] border-dashed border-[#0000cd]" />
-                   </div>
+                  <div className={cn("text-[#800000] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showBuccal ? 'opacity-100' : 'opacity-0')}>
+                    {getParmValStr(tooth, activeParam, 'buccal')}
+                  </div>
+                  <div className={cn("text-[#0000cd] text-[9px] font-mono leading-tight tracking-tighter transition-opacity duration-200", showLingual ? 'opacity-100' : 'opacity-0')}>
+                    {getParmValStr(tooth, activeParam, 'lingual')}
+                  </div>
+                  <div className="h-4 flex items-center justify-center w-full">
+                    <div className="w-[80%] h-[2px] border-b-[1.5px] border-dashed border-[#0000cd]" />
+                  </div>
                 </div>
               }
             >
               <div className="relative w-10 h-[60px] flex items-center justify-center bg-transparent cursor-pointer hover:bg-white/30 rounded-lg transition-colors">
-                 <ToothVisual 
-                    toothId={tooth}
-                    isTop={isTop}
-                    className="w-full h-full"
-                    fill="white"
-                    stroke="black"
-                 />
-                 <div className={`absolute left-0 right-0 h-px bg-[#0000cd] z-10 ${isTop ? "bottom-4" : "top-4"}`} />
-                 <div className={`absolute left-0 right-0 h-[4px] bg-[#0000cd] rounded-full w-1 mx-auto z-10 ${isTop ? "bottom-[14px]" : "top-[14px]"}`} />
+                <ToothVisual
+                  toothId={tooth}
+                  isTop={isTop}
+                  className="w-full h-full"
+                  fill="white"
+                  stroke="black"
+                />
+                <div className={`absolute left-0 right-0 h-px bg-[#0000cd] z-10 ${isTop ? "bottom-4" : "top-4"}`} />
+                <div className={`absolute left-0 right-0 h-[4px] bg-[#0000cd] rounded-full w-1 mx-auto z-10 ${isTop ? "bottom-[14px]" : "top-[14px]"}`} />
               </div>
             </ToothCell>
+          </button>
         </PopoverTrigger>
         
         {(activeParam === "Mobility" || activeParam === "Furcation") ? renderSingleValueDropdown(tooth, activeParam) : renderValueTable(tooth, activeParam)}

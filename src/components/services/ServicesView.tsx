@@ -154,11 +154,11 @@ export function ServicesView({ initialServices }: ServicesViewProps) {
 
               <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DropdownMenu>
-                  <DropdownMenuTrigger render={
+                  <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-gray-100">
                       <MoreVertical className="w-4 h-4 text-gray-500" />
                     </Button>
-                  } />
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="rounded-xl border-gray-100 shadow-xl">
                     <DropdownMenuItem 
                       className="text-gray-600 focus:text-indigo-600 cursor-pointer rounded-lg"

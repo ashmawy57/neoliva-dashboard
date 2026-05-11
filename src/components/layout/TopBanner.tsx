@@ -14,8 +14,10 @@ export function TopBanner() {
     <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/60 flex items-center justify-between px-4 md:px-6 z-10 sticky top-0">
       {/* Mobile menu */}
       <Sheet>
-        <SheetTrigger className="md:hidden mr-2 text-gray-500 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-gray-100">
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon" className="md:hidden mr-2 text-gray-500 h-10 w-10 rounded-md hover:bg-gray-100">
             <Menu className="h-5 w-5" />
+          </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-[280px] bg-[oklch(0.14_0.025_255)] border-none">
           <MobileSidebar />
