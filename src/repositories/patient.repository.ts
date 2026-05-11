@@ -308,7 +308,7 @@ export class PatientRepository {
           amount: data.amount,
           method: data.method,
           notes: data.notes,
-          date: data.date || new Date(),
+          paidAt: data.date || new Date(),
           tenantId
         }
       });
