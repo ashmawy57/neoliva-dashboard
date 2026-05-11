@@ -15,8 +15,8 @@ export default async function ExpensesPage() {
   const totalExpenses = stats?.totalThisMonth || 0;
   const pendingPayments = stats?.pendingAmount || 0;
   const largestCategory = stats?.largestCategory || 'None';
-  const totalAmount = expenses.reduce((acc, curr) => acc + curr.amount, 0);
-  const largestCategoryPercent = totalAmount > 0 ? Math.round(((stats?.largestCategoryAmount || 0) / totalAmount) * 100) : 0;
+  const totalAmount = expenses.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+  const largestCategoryPercent = totalAmount > 0 ? Math.round((Number(stats?.largestCategoryAmount || 0) / totalAmount) * 100) : 0;
 
   return (
     <div className="p-6 md:p-8 space-y-6 animate-fade-in-up">
