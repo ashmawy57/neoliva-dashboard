@@ -108,7 +108,7 @@ export class BillingRepository {
   /**
    * Creates an invoice with items atomically
    */
-  async create(tenantId: string, data: Omit<Prisma.InvoiceUncheckedCreateInput, 'tenantId'>) {
+  async create(tenantId: string, data: Omit<Prisma.InvoiceUncheckedCreateInput, 'tenantId' | 'totalAmount'> & { totalAmount?: number | any }) {
     // Calculate total amount if items are provided in the create-input style
     let totalAmount = 0;
     if (data.items && typeof data.items === 'object' && 'create' in data.items) {
