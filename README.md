@@ -35,6 +35,24 @@ A premium, comprehensive Dental Clinic Management System designed for modern den
 - **Charts**: [Recharts](https://recharts.org/)
 - **Forms**: [React Hook Form](https://react-hook-form.com/) with [Zod](https://zod.dev/) validation
 
+## 🏗️ Architecture
+
+The project follows a clean, decoupled architecture to ensure maintainability, scalability, and strict security:
+
+- **Server Actions**: Handle client interactions and resolve security contexts (e.g., `resolveTenantContext`).
+- **Service Layer**: Contains business logic, validation, and data transformation.
+- **Repository Layer**: The final line of defense for data access. Implements strict tenant isolation by force-injecting `tenantId` into every query.
+- **Prisma ORM**: Manages database interactions with a custom-generated client for enhanced type safety.
+
+## 🔒 Multi-Tenant Security
+
+Security is a primary focus of Neoliva. We implement a **Strict Isolation Policy**:
+
+- **Repository Hardening**: Every database operation (CRUD) requires `tenantId` as its first mandatory argument.
+- **Direct Injection**: `tenantId` is force-injected into Prisma queries at the repository level, preventing cross-tenant data leakage.
+- **Ownership Verification**: Sensitive operations (like stock updates or financial records) verify record ownership within the tenant context before execution.
+- **Row-Level Protection**: Database schema is designed with `tenant_id` fields on all shared tables to facilitate rigid partitioning.
+
 ## 🛠️ Getting Started
 
 ### Prerequisites
