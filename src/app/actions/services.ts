@@ -3,13 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { ServiceService } from "@/services/service.service";
 import { ServiceCategory } from "@/generated/client";
+import { resolveTenantContext } from "@/lib/tenant-context";
 
 const serviceService = new ServiceService();
 
 export async function getServices() {
   try {
-    const data = await serviceService.getServices();
-    console.log(`[Actions] getServices fetched ${data.length} items`);
+    const tenantId = await resolveTenantContext();
+    const data = await serviceService.getServices(tenantId);
     return data;
   } catch (error) {
     console.error('[Actions] Error fetching services:', error);
@@ -25,15 +26,15 @@ export async function createServiceAction(data: {
   description?: string;
   popular?: boolean;
 }) {
-  console.log('[Actions] createService called with:', data);
   try {
-    const result = await serviceService.createService(data);
+    const tenantId = await resolveTenantContext();
+    const result = await serviceService.createService(tenantId, data);
     revalidatePath('/services');
-    revalidatePath('/appointments'); // In case appointments uses services
+    revalidatePath('/appointments'); 
     return { success: true, data: result };
   } catch (error: any) {
     console.error('[Actions] Error creating service:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }
 
@@ -45,25 +46,25 @@ export async function updateServiceAction(id: string, data: Partial<{
   description: string;
   popular: boolean;
 }>) {
-  console.log(`[Actions] updateService called for ${id}:`, data);
   try {
-    const result = await serviceService.updateService(id, data);
+    const tenantId = await resolveTenantContext();
+    const result = await serviceService.updateService(tenantId, id, data);
     revalidatePath('/services');
     return { success: true, data: result };
   } catch (error: any) {
     console.error('[Actions] Error updating service:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }
 
 export async function deleteServiceAction(id: string) {
-  console.log(`[Actions] deleteService called for ${id}`);
   try {
-    const result = await serviceService.deleteService(id);
+    const tenantId = await resolveTenantContext();
+    const result = await serviceService.deleteService(tenantId, id);
     revalidatePath('/services');
     return { success: true, data: result };
   } catch (error: any) {
     console.error('[Actions] Error deleting service:', error);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }

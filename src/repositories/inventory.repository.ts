@@ -2,30 +2,23 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, StockType } from "@/generated/client";
 
 export class InventoryRepository {
-  async createItem(tenantId: string, data: {
-    name: string;
-    category: string;
-    unit: string;
-    minimumStock: number;
-    initialStock?: number;
-  }) {
+  async createItem(tenantId: string, data: Omit<Prisma.InventoryItemUncheckedCreateInput, 'tenantId'> & { initialStock?: number }) {
     return await prisma.$transaction(async (tx) => {
+      const { initialStock, ...itemData } = data;
+      
       const item = await tx.inventoryItem.create({
         data: {
-          name: data.name,
-          category: data.category,
-          unit: data.unit,
-          minimumStock: data.minimumStock,
+          ...itemData,
           tenantId,
         },
       });
 
-      if (data.initialStock && data.initialStock > 0) {
+      if (initialStock && initialStock > 0) {
         await tx.stockEntry.create({
           data: {
             itemId: item.id,
             type: 'IN',
-            quantity: data.initialStock,
+            quantity: initialStock,
             reason: 'Initial Stock',
             tenantId,
           },
@@ -66,6 +59,10 @@ export class InventoryRepository {
     reason: string;
     referenceId?: string;
   }) {
+    // Ownership check
+    const item = await this.findUnique(tenantId, data.itemId);
+    if (!item) throw new Error("Item not found or unauthorized");
+
     return await prisma.stockEntry.create({
       data: {
         itemId: data.itemId,
@@ -84,6 +81,10 @@ export class InventoryRepository {
     reason: string;
     referenceId?: string;
   }) {
+    // Ownership check
+    const item = await this.findUnique(tenantId, data.itemId);
+    if (!item) throw new Error("Item not found or unauthorized");
+
     return await prisma.stockEntry.create({
       data: {
         itemId: data.itemId,
@@ -107,18 +108,13 @@ export class InventoryRepository {
   }
   
   async findUnique(tenantId: string, id: string) {
-    return await prisma.inventoryItem.findUnique({
+    return await prisma.inventoryItem.findFirst({
       where: { id, tenantId },
       include: { stockEntries: true }
     });
   }
 
-  async updateItem(tenantId: string, id: string, data: {
-    name?: string;
-    category?: string;
-    unit?: string;
-    minimumStock?: number;
-  }) {
+  async updateItem(tenantId: string, id: string, data: Prisma.InventoryItemUpdateInput) {
     return await prisma.inventoryItem.update({
       where: { id, tenantId },
       data,

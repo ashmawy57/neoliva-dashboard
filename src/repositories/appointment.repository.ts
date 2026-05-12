@@ -56,7 +56,7 @@ export class AppointmentRepository {
   /**
    * Find a specific appointment by ID within a tenant context
    */
-  async findUnique(id: string, tenantId: string) {
+  async findUnique(tenantId: string, id: string) {
     return await prisma.appointment.findUnique({
       where: { id, tenantId },
       select: {
@@ -87,16 +87,19 @@ export class AppointmentRepository {
   /**
    * Create a new appointment
    */
-  async create(data: Prisma.AppointmentUncheckedCreateInput) {
+  async create(tenantId: string, data: Omit<Prisma.AppointmentUncheckedCreateInput, 'tenantId'>) {
     return await prisma.appointment.create({
-      data
+      data: {
+        ...data,
+        tenantId
+      }
     });
   }
 
   /**
    * Update an appointment status or details
    */
-  async update(id: string, tenantId: string, data: Prisma.AppointmentUncheckedUpdateInput) {
+  async update(tenantId: string, id: string, data: Prisma.AppointmentUncheckedUpdateInput) {
     return await prisma.appointment.update({
       where: { id, tenantId },
       data
@@ -106,7 +109,7 @@ export class AppointmentRepository {
   /**
    * Delete/Cancel an appointment
    */
-  async delete(id: string, tenantId: string) {
+  async delete(tenantId: string, id: string) {
     return await prisma.appointment.delete({
       where: { id, tenantId }
     });

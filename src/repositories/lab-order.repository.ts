@@ -34,7 +34,7 @@ export class LabOrderRepository {
     });
   }
 
-  async findById(tenantId: string, id: string): Promise<any | null> {
+  async findUnique(tenantId: string, id: string): Promise<any | null> {
     return prisma.labOrder.findFirst({
       where: {
         id,
@@ -47,29 +47,11 @@ export class LabOrderRepository {
     });
   }
 
-  async create(tenantId: string, data: any): Promise<LabOrder> {
+  async create(tenantId: string, data: Omit<Prisma.LabOrderUncheckedCreateInput, 'tenantId'>): Promise<LabOrder> {
     return prisma.labOrder.create({
       data: {
-        displayId: data.displayId,
-        labName: data.labName,
-        itemType: data.itemType,
-        toothNumber: data.toothNumber,
-        cost: data.cost,
-        dueDate: data.dueDate,
-        notes: data.notes,
-        status: data.status || 'PENDING',
-
-        patient: data.patient || {
-          connect: { id: data.patientId }
-        },
-
-        tenant: {
-          connect: { id: tenantId }
-        },
-
-        ...(data.appointment && {
-          appointment: data.appointment
-        })
+        ...data,
+        tenantId
       },
     });
   }

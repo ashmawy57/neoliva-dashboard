@@ -67,7 +67,7 @@ export class BillingRepository {
     return stats;
   }
 
-  async findUnique(id: string, tenantId: string) {
+  async findUnique(tenantId: string, id: string) {
     if (!id) {
       throw new Error("BillingRepository.findUnique: id is required");
     }
@@ -89,7 +89,7 @@ export class BillingRepository {
     });
   }
 
-  async findByAppointmentId(appointmentId: string, tenantId: string) {
+  async findByAppointmentId(tenantId: string, appointmentId: string) {
     return await prisma.invoice.findFirst({
       where: { appointmentId, tenantId },
       select: {
@@ -108,37 +108,21 @@ export class BillingRepository {
   /**
    * Creates an invoice with items atomically
    */
-  async create(tenantId: string, data: {
-    patientId: string;
-    displayId: string;
-    appointmentId?: string;
-    dueDate?: Date;
-    items: {
-      description: string;
-      quantity: number;
-      price: number;
-      serviceId?: string;
-    }[];
-  }) {
-    // Calculate total amount from items
-    const totalAmount = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  async create(tenantId: string, data: Omit<Prisma.InvoiceUncheckedCreateInput, 'tenantId'>) {
+    // Calculate total amount if items are provided in the create-input style
+    let totalAmount = 0;
+    if (data.items && typeof data.items === 'object' && 'create' in data.items) {
+      const items = (data.items as any).create;
+      if (Array.isArray(items)) {
+        totalAmount = items.reduce((sum: number, item: any) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+      }
+    }
 
     return await prisma.invoice.create({
       data: {
-        displayId: data.displayId,
-        totalAmount: totalAmount,
-        paidAmount: 0,
-        status: 'PENDING',
-        dueDate: data.dueDate,
-        patient: { connect: { id: data.patientId } },
-        tenant: { connect: { id: tenantId } },
-        appointment: data.appointmentId ? { connect: { id: data.appointmentId } } : undefined,
-        items: {
-          create: data.items.map(item => ({
-            ...item,
-            tenant: { connect: { id: tenantId } }
-          }))
-        }
+        ...data,
+        totalAmount: data.totalAmount || totalAmount,
+        tenantId
       },
       select: {
         id: true,
@@ -146,6 +130,16 @@ export class BillingRepository {
         items: true,
         patient: true
       }
+    });
+  }
+
+  /**
+   * Generic update for invoices with tenant isolation
+   */
+  async update(tenantId: string, id: string, data: Prisma.InvoiceUpdateInput) {
+    return await prisma.invoice.update({
+      where: { id, tenantId },
+      data
     });
   }
 
@@ -210,7 +204,7 @@ export class BillingRepository {
 
       // 5. Update the Invoice record
       await tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: invoiceId, tenantId },
         data: { 
           paidAmount: newPaidAmount,
           status: newStatus,

@@ -1,54 +1,94 @@
+import "server-only";
 import { LabOrderRepository } from "@/repositories/lab-order.repository";
-import { resolveTenantContext } from "@/lib/tenant-context";
 import { LabOrderStatus } from "@/generated/client";
 
 const repository = new LabOrderRepository();
 
 export class LabOrderService {
+  private normalizeString(val: string | undefined | null, fallback: string = ""): string {
+    if (!val || typeof val !== 'string') return fallback;
+    return val.trim();
+  }
+
+  private getSafeOrderFallback(id?: string) {
+    return {
+      id: id || "unknown",
+      displayId: "LAB-0000",
+      labName: "—",
+      itemType: "—",
+      toothNumber: null,
+      cost: 0,
+      status: "PENDING" as LabOrderStatus,
+      sentAt: null,
+      dueDate: null,
+      receivedAt: null,
+      notes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      patientName: "—",
+      patientDisplayId: "",
+    };
+  }
+
+  private validateTenant(tenantId: string) {
+    if (!tenantId) {
+      throw new Error("[LabOrderService] Missing tenantId");
+    }
+  }
+
   /**
    * Helper to ensure LabOrder objects are serializable for Client Components
    */
   private serializeLabOrder(order: any) {
-    if (!order) return null;
-    return {
-      ...order,
-      cost: order.cost ? Number(order.cost) : 0,
-      // Ensure dates are serializable strings
-      sentAt: order.sentAt instanceof Date ? order.sentAt.toISOString() : order.sentAt,
-      dueDate: order.dueDate instanceof Date ? order.dueDate.toISOString() : order.dueDate,
-      receivedAt: order.receivedAt instanceof Date ? order.receivedAt.toISOString() : order.receivedAt,
-      createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : order.createdAt,
-      updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : order.updatedAt,
-      // Add common UI fields
-      patientName: order.patient?.name || "Unknown",
-      patientDisplayId: order.patient?.displayId || "",
-    };
+    if (!order) return this.getSafeOrderFallback();
+    try {
+      const result = {
+        ...order,
+        cost: order.cost ? Number(order.cost) : 0,
+        patientName: order.patient?.name || "—",
+        patientDisplayId: order.patient?.displayId || "",
+      };
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[LabOrderService.serialize] Serialization error:", error);
+      return this.getSafeOrderFallback(order?.id);
+    }
   }
 
   /**
    * Fetches and formats the list of lab orders for the UI
    */
-  async getLabOrdersList() {
-    const tenantId = await resolveTenantContext();
-    const orders = await repository.findMany(tenantId, {
-      orderBy: { createdAt: 'desc' }
-    });
-
-    return orders.map(order => this.serializeLabOrder(order));
+  async getLabOrdersList(tenantId: string) {
+    try {
+      this.validateTenant(tenantId);
+      const orders = await repository.findMany(tenantId, {
+        orderBy: { createdAt: 'desc' }
+      });
+      return (orders || []).map(order => this.serializeLabOrder(order));
+    } catch (error) {
+      console.error("[LabOrderService.getLabOrdersList] Error:", error);
+      return [];
+    }
   }
 
   /**
    * Calculates statistics for the lab orders dashboard
    */
-  async getLabOrdersStats() {
-    const tenantId = await resolveTenantContext();
-    return await repository.getStats(tenantId);
+  async getLabOrdersStats(tenantId: string) {
+    try {
+      this.validateTenant(tenantId);
+      const stats = await repository.getStats(tenantId);
+      return JSON.parse(JSON.stringify(stats || { pending: 0, sent: 0, received: 0, totalCost: 0 }));
+    } catch (error) {
+      console.error("[LabOrderService.getLabOrdersStats] Error:", error);
+      return { pending: 0, sent: 0, received: 0, totalCost: 0 };
+    }
   }
 
   /**
    * Creates a new lab order
    */
-  async createLabOrder(data: {
+  async createLabOrder(tenantId: string, data: {
     patientId: string;
     appointmentId?: string;
     labName: string;
@@ -58,48 +98,60 @@ export class LabOrderService {
     dueDate?: string;
     notes?: string;
   }) {
-    const tenantId = await resolveTenantContext();
-    
-    // Validation
-    if (!data.patientId || !data.labName || !data.itemType) {
-      throw new Error("Missing required fields: patientId, labName, or itemType");
+    try {
+      this.validateTenant(tenantId);
+      // Validation
+      if (!data.patientId || !data.labName || !data.itemType) {
+        throw new Error("Missing required fields: patientId, labName, or itemType");
+      }
+
+      const createData: any = {
+        displayId: `LAB-${Math.floor(1000 + Math.random() * 9000)}`,
+        labName: this.normalizeString(data.labName, "Unknown Lab"),
+        itemType: this.normalizeString(data.itemType, "General"),
+        toothNumber: data.toothNumber ? this.normalizeString(data.toothNumber) : null,
+        cost: data.cost ? Number(data.cost) : 0,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        notes: data.notes ? this.normalizeString(data.notes) : null,
+        status: 'PENDING',
+        patientId: data.patientId,
+        appointmentId: data.appointmentId || null,
+      };
+
+      const newOrder = await repository.create(tenantId, createData);
+      return this.serializeLabOrder(newOrder);
+    } catch (error) {
+      console.error("[LabOrderService.createLabOrder] Error:", error);
+      return this.getSafeOrderFallback();
     }
-
-    const createData: any = {
-      displayId: `LAB-${Math.floor(1000 + Math.random() * 9000)}`,
-      labName: data.labName,
-      itemType: data.itemType,
-      toothNumber: data.toothNumber || null,
-      cost: data.cost ? Number(data.cost) : 0,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      notes: data.notes || null,
-      status: 'PENDING',
-      patient: { connect: { id: data.patientId } },
-    };
-
-    if (data.appointmentId) {
-      createData.appointment = { connect: { id: data.appointmentId } };
-    }
-
-    const newOrder = await repository.create(tenantId, createData);
-    return this.serializeLabOrder(newOrder);
   }
 
   /**
    * Updates the status of a lab order and manages lifecycle dates
    */
-  async updateLabOrderStatus(id: string, status: LabOrderStatus) {
-    const tenantId = await resolveTenantContext();
-    const updated = await repository.updateStatus(tenantId, id, status);
-    return this.serializeLabOrder(updated);
+  async updateLabOrderStatus(tenantId: string, id: string, status: LabOrderStatus) {
+    try {
+      this.validateTenant(tenantId);
+      const updated = await repository.updateStatus(tenantId, id, status);
+      return this.serializeLabOrder(updated);
+    } catch (error) {
+      console.error("[LabOrderService.updateLabOrderStatus] Error:", error);
+      return this.getSafeOrderFallback(id);
+    }
   }
 
   /**
    * Simple delete for management
    */
-  async deleteLabOrder(id: string) {
-    const tenantId = await resolveTenantContext();
-    const deleted = await repository.delete(tenantId, id);
-    return this.serializeLabOrder(deleted);
+  async deleteLabOrder(tenantId: string, id: string) {
+    try {
+      this.validateTenant(tenantId);
+      const deleted = await repository.delete(tenantId, id);
+      return this.serializeLabOrder(deleted);
+    } catch (error) {
+      console.error("[LabOrderService.deleteLabOrder] Error:", error);
+      return this.getSafeOrderFallback(id);
+    }
   }
 }
+

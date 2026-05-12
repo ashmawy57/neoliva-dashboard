@@ -18,7 +18,7 @@ export class ExpenseRepository {
     });
   }
 
-  async findById(tenantId: string, id: string): Promise<Expense | null> {
+  async findUnique(tenantId: string, id: string): Promise<Expense | null> {
     return prisma.expense.findFirst({
       where: {
         id,
@@ -27,11 +27,11 @@ export class ExpenseRepository {
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.ExpenseCreateInput, 'tenant'>): Promise<Expense> {
+  async create(tenantId: string, data: Omit<Prisma.ExpenseUncheckedCreateInput, 'tenantId'>): Promise<Expense> {
     return prisma.expense.create({
       data: {
         ...data,
-        tenant: { connect: { id: tenantId } },
+        tenantId
       },
     });
   }

@@ -16,8 +16,8 @@ export default async function LabOrdersPage() {
   
   // Fetch data in parallel
   const [labOrders, stats, patients] = await Promise.all([
-    labOrderService.getLabOrdersList(),
-    labOrderService.getLabOrdersStats(),
+    labOrderService.getLabOrdersList(tenantId),
+    labOrderService.getLabOrdersStats(tenantId),
     patientService.getPatientsForSelection(tenantId)
   ]);
 

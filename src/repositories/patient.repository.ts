@@ -16,12 +16,12 @@ export class PatientRepository {
       ...params,
       where: {
         ...params?.where,
-        tenantId, // Strict isolation
+        tenantId,
       },
     });
   }
 
-  async findById(tenantId: string, id: string, select?: Prisma.PatientSelect) {
+  async findUnique(tenantId: string, id: string, select?: Prisma.PatientSelect) {
     return prisma.patient.findFirst({
       where: { id, tenantId },
       select: select || {
@@ -36,11 +36,11 @@ export class PatientRepository {
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.PatientCreateInput, 'tenant'>) {
+  async create(tenantId: string, data: Omit<Prisma.PatientUncheckedCreateInput, 'tenantId'>) {
     return prisma.patient.create({
       data: {
         ...data,
-        tenant: { connect: { id: tenantId } }
+        tenantId
       }
     });
   }
@@ -325,7 +325,7 @@ export class PatientRepository {
 
       // 5. Update the Invoice record
       await tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: invoiceId, tenantId },
         data: { 
           paidAmount: newPaidAmount,
           status: newStatus,

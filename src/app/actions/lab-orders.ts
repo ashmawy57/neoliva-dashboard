@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { LabOrderService } from "@/services/lab-order.service";
 import { LabOrderStatus } from "@/generated/client";
+import { resolveTenantContext } from "@/lib/tenant-context";
 
 const labOrderService = new LabOrderService();
 
@@ -17,7 +18,8 @@ export async function createLabOrderAction(data: {
   notes?: string;
 }) {
   try {
-    const result = await labOrderService.createLabOrder(data);
+    const tenantId = await resolveTenantContext();
+    const result = await labOrderService.createLabOrder(tenantId, data);
     revalidatePath('/lab-orders');
     return { success: true, data: result };
   } catch (error: any) {
@@ -28,7 +30,8 @@ export async function createLabOrderAction(data: {
 
 export async function updateLabOrderStatusAction(id: string, status: LabOrderStatus) {
   try {
-    const result = await labOrderService.updateLabOrderStatus(id, status);
+    const tenantId = await resolveTenantContext();
+    const result = await labOrderService.updateLabOrderStatus(tenantId, id, status);
     revalidatePath('/lab-orders');
     return { success: true, data: result };
   } catch (error: any) {
@@ -39,7 +42,8 @@ export async function updateLabOrderStatusAction(id: string, status: LabOrderSta
 
 export async function deleteLabOrderAction(id: string) {
   try {
-    await labOrderService.deleteLabOrder(id);
+    const tenantId = await resolveTenantContext();
+    await labOrderService.deleteLabOrder(tenantId, id);
     revalidatePath('/lab-orders');
     return { success: true };
   } catch (error: any) {

@@ -1,246 +1,328 @@
 import "server-only";
 import { PatientRepository } from "@/repositories/patient.repository";
-import { Patient, Prisma } from "@/generated/client";
+import { Prisma } from "@/generated/client";
 
 const patientRepository = new PatientRepository();
 
 export class PatientService {
-  async getAllPatients(tenantId: string) {
-    return patientRepository.findMany(tenantId, {
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        displayId: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        createdAt: true,
-        appointments: {
-          select: {
-            id: true,
-            date: true,
-            status: true
-          }
-        },
-        invoices: {
-          select: {
-            id: true,
-            displayId: true,
-            totalAmount: true,
-            paidAmount: true,
-            status: true,
-            createdAt: true,
-            dueDate: true,
-            payments: {
-              select: {
-                id: true,
-                amount: true,
-                method: true,
-                paidAt: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' }
-        }
-      }
-    });
+  private normalizeString(val: string | null | undefined, fallback: string = "-"): string {
+    if (!val || typeof val !== 'string') return fallback;
+    const trimmed = val.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
   }
 
-  /**
-   * Lightweight patient list for selection inputs
-   */
-  async getPatientsForSelection(tenantId: string) {
-    const data = await patientRepository.findMany(tenantId, {
-      select: {
-        id: true,
-        displayId: true,
-        name: true,
-      },
-      orderBy: { name: 'asc' }
-    });
-    
-    // Ensure 100% plain object compatibility
-    return JSON.parse(JSON.stringify(data));
+  private mapSafePatient(patient: any): any {
+    if (!patient) return this.getSafeFallback();
+    try {
+      return JSON.parse(JSON.stringify({
+        ...patient,
+        name: this.normalizeString(patient.name, "Unknown Patient"),
+        phone: this.normalizeString(patient.phone, "-"),
+        email: this.normalizeString(patient.email, "-"),
+        status: patient.status || "Active",
+        createdAt: patient.createdAt || new Date(),
+      }));
+    } catch (error) {
+      console.error("[PatientService.mapSafePatient] Error:", error);
+      return this.getSafeFallback(patient?.id);
+    }
   }
 
-  async getPatientsList(tenantId: string) {
-    // Optimization: Fetch only needed fields for the list view
-    const data = await patientRepository.findMany(tenantId, {
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        displayId: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        createdAt: true,
-        appointments: {
-          select: {
-            date: true,
-            status: true
-          }
-        },
-        invoices: {
-          select: {
-            totalAmount: true,
-            paidAmount: true
-          }
-        }
-      }
-    });
-    
-    return data.map((patient: any) => {
-      const appts = patient.appointments || []
-      const nextAppt = appts
-        .filter((a: any) => a.date && new Date(a.date) > new Date() && a.status !== 'Cancelled')
-        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-
-      const lastVisit = appts
-        .filter((a: any) => a.date && new Date(a.date) < new Date() && a.status === 'Completed')
-        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-
-      // Helper for initials
-      const getInitials = (name: string) => {
-        if (!name) return '??';
-        const parts = name.trim().split(/\s+/).filter(Boolean);
-        if (parts.length === 0) return '??';
-        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-        return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-      }
-
-      return {
-        id: patient.id,
-        displayId: patient.displayId,
-        name: patient.name,
-        email: patient.email || '—',
-        phone: patient.phone || '—',
-        gender: patient.gender,
-        lastVisit: lastVisit ? new Date(lastVisit.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No visits',
-        nextAppt: nextAppt ? new Date(nextAppt.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not scheduled',
-        status: patient.status || 'Active',
-        visits: appts.filter((a: any) => a.status === 'Completed').length,
-        avatar: patient.avatarInitials || getInitials(patient.name),
-        color: patient.colorGradient || 'from-blue-500 to-indigo-600',
-        registeredSince: patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
-        outstanding: (patient.invoices || [])
-          .reduce((sum: number, i: any) => {
-            const paid = Number(i.paidAmount || 0);
-            const total = Number(i.totalAmount || 0);
-            return sum + (total - paid);
-          }, 0)
-      }
-    });
-  }
-
-  async getPatientById(tenantId: string, id: string) {
-    // Split into two parallel queries to avoid connection timeout
-    // Query 1: Core demographics + scheduling + billing
-    // Query 2: All clinical records
-    const [core, clinical] = await Promise.all([
-      patientRepository.findById(tenantId, id, {
-        id: true,
-        displayId: true,
-        name: true,
-        email: true,
-        phone: true,
-        gender: true,
-        dob: true,
-        address: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        tenantId: true,
-        appointments: true,
-        invoices: {
-          select: {
-            id: true,
-            displayId: true,
-            patientId: true,
-            totalAmount: true,
-            paidAmount: true,
-            status: true,
-            dueDate: true,
-            createdAt: true,
-            items: true,
-            payments: true
-          }
-        },
-        visitRecords: true,
-        patientDocuments: true,
-      }),
-      patientRepository.findById(tenantId, id, {
-        patientAllergies: true,
-        medicalConditions: true,
-        patientMedications: true,
-        patientSurgeries: true,
-        patientFamilyHistory: true,
-        oralTissueFindings: true,
-        toothConditions: true,
-        periodontalMeasurements: true,
-        prescriptions: {
-          select: {
-            id: true,
-            date: true,
-            notes: true,
-            items: true
-          }
-        },
-        oralConditions: true,
-      }),
-    ]);
-
-    if (!core) return null;
-
-    // Merge results carefully:
-    // 1. Start with core fields (scalars like name, id, etc.)
-    // 2. Add clinical fields if they exist
-    // 3. Ensure relational arrays are defaulted to empty arrays to prevent frontend crashes
+  private getSafeFallback(id?: string): any {
     return {
-      ...clinical, // Relations like oralTissueFindings, etc.
-      ...core,     // Core scalars and other relations like appointments
-      
-      // Explicitly ensure clinical relations are preserved and defaulted
-      patientAllergies: clinical?.patientAllergies ?? [],
-      medicalConditions: clinical?.medicalConditions ?? [],
-      patientMedications: clinical?.patientMedications ?? [],
-      patientSurgeries: clinical?.patientSurgeries ?? [],
-      patientFamilyHistory: clinical?.patientFamilyHistory ?? [],
-      oralTissueFindings: clinical?.oralTissueFindings ?? [],
-      toothConditions: clinical?.toothConditions ?? [],
-      periodontalMeasurements: clinical?.periodontalMeasurements ?? [],
-      prescriptions: clinical?.prescriptions ?? [],
-      oralConditions: clinical?.oralConditions ?? [],
-      
-      // Ensure core relations are preserved and defaulted
-      appointments: core?.appointments ?? [],
-      invoices: core?.invoices ?? [],
-      visitRecords: core?.visitRecords ?? [],
-      patientDocuments: core?.patientDocuments ?? [],
+      id: id || "unknown",
+      displayId: "P-0000",
+      name: "Unknown Patient",
+      phone: "-",
+      email: "-",
+      status: "Inactive",
+      createdAt: new Date(),
+      appointments: [],
+      invoices: [],
+      visitRecords: [],
+      patientDocuments: [],
+      patientAllergies: [],
+      medicalConditions: [],
+      patientMedications: [],
+      patientSurgeries: [],
+      patientFamilyHistory: [],
+      oralTissueFindings: [],
+      toothConditions: [],
+      periodontalMeasurements: [],
+      prescriptions: [],
+      oralConditions: [],
     };
   }
 
-  async createPatient(tenantId: string, data: Omit<Prisma.PatientCreateInput, 'tenant'>) {
-    return patientRepository.create(tenantId, data);
+  async getAllPatients(tenantId: string) {
+    try {
+      if (!tenantId) return [];
+      const patients = await patientRepository.findMany(tenantId, {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          displayId: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+        }
+      });
+      return (patients || []).map(p => this.mapSafePatient(p));
+    } catch (error) {
+      console.error("[PatientService.getAllPatients] Error:", error);
+      return [];
+    }
+  }
+
+  async getPatientsForSelection(tenantId: string) {
+    try {
+      if (!tenantId) return [];
+      const data = await patientRepository.findMany(tenantId, {
+        select: {
+          id: true,
+          displayId: true,
+          name: true,
+        },
+        orderBy: { name: 'asc' }
+      });
+      
+      const safeData = (data || []).map(p => ({
+        id: p.id,
+        displayId: p.displayId || "P-0000",
+        name: this.normalizeString(p.name, "Unknown Patient"),
+      }));
+
+      return JSON.parse(JSON.stringify(safeData));
+    } catch (error) {
+      console.error("[PatientService.getPatientsForSelection] Error:", error);
+      return [];
+    }
+  }
+
+  async getPatientsList(tenantId: string) {
+    try {
+      if (!tenantId) return [];
+      const data = await patientRepository.findMany(tenantId, {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          displayId: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+          appointments: {
+            select: {
+              date: true,
+              status: true
+            }
+          },
+          invoices: {
+            select: {
+              totalAmount: true,
+              paidAmount: true
+            }
+          }
+        }
+      });
+      
+      const result = (data || []).map((patient: any) => {
+        try {
+          const appts = patient.appointments || []
+          const nextAppt = appts
+            .filter((a: any) => a.date && new Date(a.date) > new Date() && a.status !== 'Cancelled')
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+
+          const lastVisit = appts
+            .filter((a: any) => a.date && new Date(a.date) < new Date() && a.status === 'Completed')
+            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+          const getInitials = (name: string) => {
+            if (!name) return '??';
+            const parts = name.trim().split(/\s+/).filter(Boolean);
+            if (parts.length === 0) return '??';
+            if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+            return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+          }
+
+          const name = this.normalizeString(patient.name, "Unknown Patient");
+
+          return {
+            id: patient.id,
+            displayId: patient.displayId || "P-0000",
+            name: name,
+            email: this.normalizeString(patient.email, "—"),
+            phone: this.normalizeString(patient.phone, "—"),
+            gender: patient.gender,
+            lastVisit: lastVisit ? new Date(lastVisit.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No visits',
+            nextAppt: nextAppt ? new Date(nextAppt.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not scheduled',
+            status: patient.status || 'Active',
+            visits: appts.filter((a: any) => a.status === 'Completed').length,
+            avatar: patient.avatarInitials || getInitials(name),
+            color: patient.colorGradient || 'from-blue-500 to-indigo-600',
+            registeredSince: patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
+            outstanding: (patient.invoices || [])
+              .reduce((sum: number, i: any) => {
+                const paid = Number(i.paidAmount || 0);
+                const total = Number(i.totalAmount || 0);
+                return sum + (total - paid);
+              }, 0)
+          }
+        } catch (innerError) {
+          console.error(`[PatientService.getPatientsList] Mapping error for patient ${patient?.id}:`, innerError);
+          return { id: patient?.id || "unknown", name: "Error Loading" };
+        }
+      });
+
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.getPatientsList] Error:", error);
+      return [];
+    }
+  }
+
+  async getPatientById(tenantId: string, id: string) {
+    try {
+      if (!id || !tenantId) return this.getSafeFallback(id);
+
+      const [core, clinical] = await Promise.all([
+        patientRepository.findUnique(tenantId, id, {
+          id: true,
+          displayId: true,
+          name: true,
+          email: true,
+          phone: true,
+          gender: true,
+          dob: true,
+          address: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          tenantId: true,
+          appointments: true,
+          invoices: {
+            select: {
+              id: true,
+              displayId: true,
+              patientId: true,
+              totalAmount: true,
+              paidAmount: true,
+              status: true,
+              dueDate: true,
+              createdAt: true,
+              items: true,
+              payments: true
+            }
+          },
+          visitRecords: true,
+          patientDocuments: true,
+        }),
+        patientRepository.findUnique(tenantId, id, {
+          patientAllergies: true,
+          medicalConditions: true,
+          patientMedications: true,
+          patientSurgeries: true,
+          patientFamilyHistory: true,
+          oralTissueFindings: true,
+          toothConditions: true,
+          periodontalMeasurements: true,
+          prescriptions: {
+            select: {
+              id: true,
+              date: true,
+              notes: true,
+              items: true
+            }
+          },
+          oralConditions: true,
+        }),
+      ]);
+
+      if (!core) return this.getSafeFallback(id);
+
+      const result = {
+        ...clinical,
+        ...core,
+        name: this.normalizeString(core.name, "Unknown Patient"),
+        phone: this.normalizeString(core.phone, "-"),
+        email: this.normalizeString(core.email, "-"),
+        patientAllergies: clinical?.patientAllergies ?? [],
+        medicalConditions: clinical?.medicalConditions ?? [],
+        patientMedications: clinical?.patientMedications ?? [],
+        patientSurgeries: clinical?.patientSurgeries ?? [],
+        patientFamilyHistory: clinical?.patientFamilyHistory ?? [],
+        oralTissueFindings: clinical?.oralTissueFindings ?? [],
+        toothConditions: clinical?.toothConditions ?? [],
+        periodontalMeasurements: clinical?.periodontalMeasurements ?? [],
+        prescriptions: clinical?.prescriptions ?? [],
+        oralConditions: clinical?.oralConditions ?? [],
+        appointments: core?.appointments ?? [],
+        invoices: core?.invoices ?? [],
+        visitRecords: core?.visitRecords ?? [],
+        patientDocuments: core?.patientDocuments ?? [],
+      };
+
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error(`[PatientService.getPatientById] Error fetching patient ${id}:`, error);
+      return this.getSafeFallback(id);
+    }
+  }
+
+  async createPatient(tenantId: string, data: Omit<Prisma.PatientUncheckedCreateInput, 'tenantId'>) {
+    try {
+      if (!tenantId) throw new Error("tenantId is required");
+      const normalizedData = {
+        ...data,
+        name: data.name?.trim() || "Unknown Patient",
+        phone: data.phone?.trim() || "-",
+        email: data.email?.trim() || null,
+      };
+      const result = await patientRepository.create(tenantId, normalizedData);
+      return this.mapSafePatient(result);
+    } catch (error) {
+      console.error("[PatientService.createPatient] Error:", error);
+      return this.getSafeFallback();
+    }
   }
 
   async updatePatient(tenantId: string, id: string, data: Prisma.PatientUpdateInput) {
-    return patientRepository.update(tenantId, id, data);
+    try {
+      if (!tenantId || !id) throw new Error("tenantId and id are required");
+      const normalizedData = { ...data };
+      if (typeof data.name === 'string') normalizedData.name = data.name.trim();
+      if (typeof data.phone === 'string') normalizedData.phone = data.phone.trim();
+      if (typeof data.email === 'string') normalizedData.email = data.email.trim() || null;
+
+      const result = await patientRepository.update(tenantId, id, normalizedData);
+      return this.mapSafePatient(result);
+    } catch (error) {
+      console.error(`[PatientService.updatePatient] Error updating patient ${id}:`, error);
+      return this.getSafeFallback(id);
+    }
   }
 
   async deletePatient(tenantId: string, id: string) {
-    return patientRepository.delete(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.delete(tenantId, id);
+    } catch (error) {
+      console.error(`[PatientService.deletePatient] Error deleting patient ${id}:`, error);
+      return false;
+    }
   }
 
   async getPatientProfile(tenantId: string, id: string) {
-    if (!id) return null;
-
     try {
-      const data = await this.getPatientById(tenantId, id);
-      if (!data) return null;
+      if (!id || !tenantId) return this.getSafeFallback();
 
-      const age = data.dob ? Math.floor((new Date().getTime() - new Date(data.dob).getTime()) / 31557600000) : null
+      const data = await this.getPatientById(tenantId, id);
+      
+      const dobDate = data.dob ? new Date(data.dob) : null;
+      const age = dobDate ? Math.floor((new Date().getTime() - dobDate.getTime()) / 31557600000) : null
       
       const appointments = data.appointments || []
       const pastAppts = appointments
@@ -257,7 +339,6 @@ export class PatientService {
         return sum + (Number(inv.totalAmount) - totalPaid)
       }, 0)
 
-      // Helper for initials
       const getInitials = (name: string) => {
         if (!name) return '??';
         const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -266,7 +347,8 @@ export class PatientService {
         return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
       }
 
-      const avatar = data.avatarInitials || getInitials(data.name)
+      const name = this.normalizeString(data.name, "Unknown Patient");
+      const avatar = data.avatarInitials || getInitials(name)
 
       const colors = [
         'from-blue-500 to-cyan-500',
@@ -276,7 +358,7 @@ export class PatientService {
         'from-indigo-500 to-violet-500',
         'from-rose-500 to-red-500'
       ];
-      const colorIndex = (data.name || '').length % colors.length;
+      const colorIndex = (name || '').length % colors.length;
 
       const visitHistory = [
         ...(data.visitRecords || []).map((vr: any) => ({
@@ -303,25 +385,25 @@ export class PatientService {
 
       const result = {
         id: data.id,
-        displayId: data.displayId,
-        name: data.name,
-        phone: data.phone || '—',
-        phone2: data.phone2 || '—',
-        email: data.email || '—',
-        dob: data.dob ? `${new Date(data.dob).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${age} years)` : '—',
-        address: data.address || '—',
-        city: data.city || '—',
-        postCode: data.postCode || '—',
-        maritalStatus: data.maritalStatus || '—',
-        occupation: data.occupation || '—',
-        insurance: data.insurance || '—',
-        ssn: data.ssn || '—',
-        idNumber: data.idNumber || '—',
-        medicalAlert: data.medicalAlert || 'None',
-        referredBy: data.referredBy || 'Direct',
-        notes: data.notes || 'No notes',
-        isDeceased: data.isDeceased || false,
-        isSigned: data.isSigned || false,
+        displayId: data.displayId || "P-0000",
+        name: name,
+        phone: this.normalizeString(data.phone, "—"),
+        phone2: this.normalizeString(data.phone2, "—"),
+        email: this.normalizeString(data.email, "—"),
+        dob: dobDate ? `${dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${age} years)` : '—',
+        address: this.normalizeString(data.address, "—"),
+        city: this.normalizeString(data.city, "—"),
+        postCode: this.normalizeString(data.postCode, "—"),
+        maritalStatus: this.normalizeString(data.maritalStatus, "—"),
+        occupation: this.normalizeString(data.occupation, "—"),
+        insurance: this.normalizeString(data.insurance, "—"),
+        ssn: this.normalizeString(data.ssn, "—"),
+        idNumber: this.normalizeString(data.idNumber, "—"),
+        medicalAlert: this.normalizeString(data.medicalAlert, "None"),
+        referredBy: this.normalizeString(data.referredBy, "Direct"),
+        notes: this.normalizeString(data.notes, "No notes"),
+        isDeceased: !!data.isDeceased,
+        isSigned: !!data.isSigned,
         lastVisit: pastAppts.length > 0 ? new Date(pastAppts[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
         nextAppt: futureAppts.length > 0 ? new Date(futureAppts[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
         status: data.status || 'Active',
@@ -343,7 +425,7 @@ export class PatientService {
         periodontalMeasurements: (data.periodontalMeasurements || []).map((pm: any) => ({ ...pm })),
         oralConditions: (data.oralConditions || []).map((oc: any) => ({ ...oc })),
         visitHistory,
-        invoiceHistory: invoices.map((i: any) => {
+        invoiceHistory: (invoices || []).map((i: any) => {
           const paidAmount = Number(i.paidAmount || 0)
           const totalAmount = Number(i.totalAmount || 0)
           return {
@@ -378,113 +460,277 @@ export class PatientService {
         }))
       };
 
-      // CRITICAL: Final serialization pass to ensure 100% plain object compatibility with Client Components.
-      // This strips any hidden Prisma symbols, internal properties, or remaining Decimal objects.
       return JSON.parse(JSON.stringify(result));
     } catch (error) {
-      console.error('Error fetching patient profile:', error);
+      console.error('[PatientService.getPatientProfile] Error:', error);
+      return this.getSafeFallback(id);
+    }
+  }
+
+  // Sub-module methods
+  async updateOralCondition(tenantId: string, patientId: string, name: string, active: boolean) {
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.upsertOralCondition(tenantId, patientId, name, active);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updateOralCondition] Error:", error);
       return null;
     }
   }
 
-  async updateOralCondition(tenantId: string, patientId: string, name: string, active: boolean) {
-    return patientRepository.upsertOralCondition(tenantId, patientId, name, active);
-  }
-
   async updateOralTissue(tenantId: string, patientId: string, name: string, status: string, notes: string) {
-    return patientRepository.upsertOralTissue(tenantId, patientId, name, status, notes);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.upsertOralTissue(tenantId, patientId, name, status, notes);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updateOralTissue] Error:", error);
+      return null;
+    }
   }
 
   async addVisitRecord(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createVisitRecord(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createVisitRecord(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addVisitRecord] Error:", error);
+      return null;
+    }
   }
 
   async deleteVisitRecord(tenantId: string, id: string) {
-    return patientRepository.deleteVisitRecord(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteVisitRecord(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteVisitRecord] Error:", error);
+      return false;
+    }
   }
 
   async updateToothCondition(tenantId: string, patientId: string, toothNumber: number, condition: string, isMissing: boolean, notes: string) {
-    return patientRepository.upsertToothCondition(tenantId, patientId, toothNumber, condition, isMissing, notes);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.upsertToothCondition(tenantId, patientId, toothNumber, condition, isMissing, notes);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updateToothCondition] Error:", error);
+      return null;
+    }
   }
 
   async updatePeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createPeriodontalMeasurement(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createPeriodontalMeasurement(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updatePeriodontalMeasurement] Error:", error);
+      return null;
+    }
   }
 
   async clearPeriodontalMeasurements(tenantId: string, patientId: string) {
-    return patientRepository.deleteAllPeriodontalMeasurements(tenantId, patientId);
+    try {
+      if (!tenantId || !patientId) return false;
+      return await patientRepository.deleteAllPeriodontalMeasurements(tenantId, patientId);
+    } catch (error) {
+      console.error("[PatientService.clearPeriodontalMeasurements] Error:", error);
+      return false;
+    }
   }
 
   async addMedicalCondition(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createMedicalCondition(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createMedicalCondition(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addMedicalCondition] Error:", error);
+      return null;
+    }
   }
 
   async deleteMedicalCondition(tenantId: string, id: string) {
-    return patientRepository.deleteMedicalCondition(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteMedicalCondition(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteMedicalCondition] Error:", error);
+      return false;
+    }
   }
 
   async addAllergy(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createAllergy(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createAllergy(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addAllergy] Error:", error);
+      return null;
+    }
   }
 
   async deleteAllergy(tenantId: string, id: string) {
-    return patientRepository.deleteAllergy(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteAllergy(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteAllergy] Error:", error);
+      return false;
+    }
   }
 
   async addMedication(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createMedication(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createMedication(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addMedication] Error:", error);
+      return null;
+    }
   }
 
   async deleteMedication(tenantId: string, id: string) {
-    return patientRepository.deleteMedication(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteMedication(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteMedication] Error:", error);
+      return false;
+    }
   }
 
   async addSurgery(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createSurgery(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createSurgery(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addSurgery] Error:", error);
+      return null;
+    }
   }
 
   async deleteSurgery(tenantId: string, id: string) {
-    return patientRepository.deleteSurgery(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteSurgery(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteSurgery] Error:", error);
+      return false;
+    }
   }
 
   async addFamilyHistory(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createFamilyHistory(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createFamilyHistory(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addFamilyHistory] Error:", error);
+      return null;
+    }
   }
 
   async deleteFamilyHistory(tenantId: string, id: string) {
-    return patientRepository.deleteFamilyHistory(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteFamilyHistory(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteFamilyHistory] Error:", error);
+      return false;
+    }
   }
 
   async addPrescription(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createPrescription(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createPrescription(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addPrescription] Error:", error);
+      return null;
+    }
   }
 
   async deletePrescription(tenantId: string, id: string) {
-    return patientRepository.deletePrescription(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deletePrescription(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deletePrescription] Error:", error);
+      return false;
+    }
   }
 
   async addDocument(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createDocument(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createDocument(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addDocument] Error:", error);
+      return null;
+    }
   }
 
   async deleteDocument(tenantId: string, id: string) {
-    return patientRepository.deleteDocument(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteDocument(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteDocument] Error:", error);
+      return false;
+    }
   }
 
   async updateInvoiceStatus(tenantId: string, id: string, status: string) {
-    return patientRepository.updateInvoice(tenantId, id, { status });
+    try {
+      if (!tenantId || !id) return null;
+      const result = await patientRepository.updateInvoice(tenantId, id, { status });
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updateInvoiceStatus] Error:", error);
+      return null;
+    }
   }
 
   async createInvoice(tenantId: string, patientId: string, data: any) {
-    return patientRepository.createInvoice(tenantId, patientId, data);
+    try {
+      if (!tenantId || !patientId) return null;
+      const result = await patientRepository.createInvoice(tenantId, patientId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.createInvoice] Error:", error);
+      return null;
+    }
   }
 
   async addPayment(tenantId: string, invoiceId: string, data: any) {
-    return patientRepository.addPayment(tenantId, invoiceId, data);
+    try {
+      if (!tenantId || !invoiceId) return null;
+      const result = await patientRepository.addPayment(tenantId, invoiceId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.addPayment] Error:", error);
+      return null;
+    }
   }
 
   async deleteInvoice(tenantId: string, id: string) {
-    return patientRepository.deleteInvoice(tenantId, id);
+    try {
+      if (!tenantId || !id) return false;
+      return await patientRepository.deleteInvoice(tenantId, id);
+    } catch (error) {
+      console.error("[PatientService.deleteInvoice] Error:", error);
+      return false;
+    }
   }
 }
 

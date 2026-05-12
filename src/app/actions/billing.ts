@@ -13,9 +13,10 @@ const billingService = new BillingService();
  */
 export async function generateInvoiceFromAppointment(appointmentId: string) {
   try {
-    const result = await billingService.generateInvoiceFromAppointment(appointmentId);
+    const tenantId = await resolveTenantContext();
+    const result = await billingService.generateInvoiceFromAppointment(tenantId, appointmentId);
     
-    if (result) {
+    if (result && result.patientId) {
       revalidatePath(`/patients/${result.patientId}`);
       revalidatePath('/dashboard');
       revalidatePath('/billing');
@@ -45,7 +46,8 @@ export async function createInvoice(data: {
   }[];
 }) {
   try {
-    const result = await billingService.createInvoice(data);
+    const tenantId = await resolveTenantContext();
+    const result = await billingService.createInvoice(tenantId, data);
     
     revalidatePath(`/patients/${data.patientId}`);
     revalidatePath('/billing');
@@ -78,7 +80,7 @@ export async function recordPayment(invoiceId: string, data: {
 
     if (!invoice) throw new Error("Invoice not found or unauthorized access.");
 
-    const result = await billingService.recordPayment(invoiceId, data);
+    const result = await billingService.recordPayment(tenantId, invoiceId, data);
 
     revalidatePath(`/patients/${invoice.patientId}`);
     revalidatePath(`/billing`);
@@ -86,7 +88,7 @@ export async function recordPayment(invoiceId: string, data: {
 
     return { 
       success: true, 
-      data: JSON.parse(JSON.stringify(result)) 
+      data: result 
     };
   } catch (error: any) {
     console.error("[recordPayment] Action failed:", error);
@@ -102,7 +104,8 @@ export async function recordPayment(invoiceId: string, data: {
  */
 export async function deleteInvoice(patientId: string, invoiceId: string) {
   try {
-    await billingService.deleteInvoice(invoiceId);
+    const tenantId = await resolveTenantContext();
+    await billingService.deleteInvoice(tenantId, invoiceId);
     revalidatePath(`/patients/${patientId}`);
     revalidatePath(`/billing`);
     revalidatePath(`/billing/invoices`);
@@ -118,7 +121,8 @@ export async function deleteInvoice(patientId: string, invoiceId: string) {
  */
 export async function getInvoices() {
   try {
-    return await billingService.getInvoicesList();
+    const tenantId = await resolveTenantContext();
+    return await billingService.getInvoicesList(tenantId);
   } catch (error) {
     console.error("[getInvoices] Action failed:", error);
     return [];
@@ -130,14 +134,15 @@ export async function getInvoices() {
  */
 export async function getBillingStats() {
   try {
-    return await billingService.getBillingStats();
+    const tenantId = await resolveTenantContext();
+    return await billingService.getBillingStats(tenantId);
   } catch (error) {
     console.error("[getBillingStats] Action failed:", error);
     return {
       totalRevenue: 0,
-      pendingAmount: 0,
-      overdueAmount: 0,
-      overdueCount: 0
+      totalPaid: 0,
+      totalOutstanding: 0,
+      collectionRate: 0
     };
   }
 }
@@ -151,7 +156,8 @@ export async function getInvoice(id: string) {
     return null;
   }
   try {
-    return await billingService.getInvoiceDetails(id);
+    const tenantId = await resolveTenantContext();
+    return await billingService.getInvoiceDetails(tenantId, id);
   } catch (error) {
     console.error(`[getInvoice] Action failed for ID ${id}:`, error);
     return null;
