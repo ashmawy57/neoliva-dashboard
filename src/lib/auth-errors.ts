@@ -95,19 +95,10 @@ export const AUTH_ERRORS: Record<AuthErrorCode, AuthErrorDetails> = {
   }
 };
 
-import { logger } from "./logger";
-
 export function getAuthError(code: string | null): AuthErrorDetails {
   const error = (!code || !(code in AUTH_ERRORS)) 
     ? AUTH_ERRORS.UNKNOWN_ERROR 
     : AUTH_ERRORS[code as AuthErrorCode];
-
-  if (code) {
-    logger.warn(`Auth Error Resolved: ${code}`, { 
-      errorTitle: error.title,
-      severity: error.severity 
-    });
-  }
 
   return error;
 }

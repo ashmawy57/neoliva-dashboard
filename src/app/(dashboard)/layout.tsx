@@ -46,12 +46,12 @@ export default async function DashboardLayout({
     redirect("/unauthorized");
   }
 
-  const { user, tenant } = await getTenantContext();
+  const { user, tenantId } = await getTenantContext();
   const permissions = await getUserPermissions();
   
   let settings;
-  if (tenant) {
-    settings = await getClinicSettings(tenant.id);
+  if (tenantId) {
+    settings = await getClinicSettings(tenantId);
   }
 
   // Pass only plain serializable properties to Client Components

@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: 'Security-first immutable audit logging for clinical operations.',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function AuditLogsPage() {
   // Ensure the user has the required permission at the page level
   await requirePermission(PermissionCode.AUDIT_VIEW);
