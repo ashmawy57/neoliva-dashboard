@@ -8,6 +8,7 @@ export interface AuditLogOptions {
   action: string;
   entityType: string;
   entityId?: string;
+  tenantId?: string;
   metadata?: Record<string, any>;
 }
 
@@ -17,23 +18,25 @@ export class AuditService {
    * Auto-injects context (user, tenant, IP, UA, requestId).
    */
   static async logAudit(options: AuditLogOptions) {
-    const { action, entityType, entityId, metadata = {} } = options;
+    const { action, entityType, entityId, tenantId: explicitTenantId, metadata = {} } = options;
     const trace = getTraceContextSync();
     
-    let tenantId: string | undefined;
+    let tenantId = explicitTenantId;
     let userId: string | undefined;
     let ipAddress: string | undefined;
     let userAgent: string | undefined;
 
-    // 1. Resolve Auth Context
-    try {
-      const context = await getTenantContext();
-      tenantId = context.tenantId;
-      userId = context.user?.id;
-    } catch {
-      // Fallback to trace context (useful for background jobs where auth isn't available)
-      tenantId = trace?.tenantId;
-      userId = trace?.userId;
+    // 1. Resolve Context (if not explicitly provided)
+    if (!tenantId) {
+      try {
+        const context = await getTenantContext();
+        tenantId = context.tenantId;
+        userId = context.user?.id;
+      } catch {
+        // Fallback to trace context (useful for background jobs where auth isn't available)
+        tenantId = trace?.tenantId;
+        userId = trace?.userId;
+      }
     }
 
     // 2. Resolve Network Context

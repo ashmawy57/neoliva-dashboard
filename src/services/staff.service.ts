@@ -45,10 +45,33 @@ export class StaffService {
   async getStaffList(tenantId: string) {
     try {
       this.validateTenant(tenantId);
-      const staff = await this.repository.findMany(tenantId, {
-        orderBy: { name: 'asc' }
-      });
-      return (staff || []).map(s => this.serializeStaff(s));
+      
+      const [members, invitations] = await Promise.all([
+        this.repository.findMembers(tenantId),
+        this.repository.findInvitations(tenantId)
+      ]);
+
+      const activeStaff = members.map(m => ({
+        id: m.id,
+        name: m.staffProfile?.name || m.user.email.split('@')[0],
+        email: m.user.email,
+        role: m.role,
+        status: 'Active',
+        isPending: false,
+        joinedAt: m.joinedAt
+      }));
+
+      const pendingStaff = invitations.map(i => ({
+        id: i.id,
+        name: i.fullName,
+        email: i.email,
+        role: i.role,
+        status: 'Pending',
+        isPending: true,
+        createdAt: i.createdAt
+      }));
+
+      return [...activeStaff, ...pendingStaff];
     } catch (error) {
       console.error("[StaffService.getStaffList] Error:", error);
       return [];
@@ -56,29 +79,9 @@ export class StaffService {
   }
 
   async createStaffMember(tenantId: string, data: any) {
-    try {
-      this.validateTenant(tenantId);
-      const inviteToken = crypto.randomUUID();
-      const inviteExpiresAt = new Date();
-      inviteExpiresAt.setDate(inviteExpiresAt.getDate() + 7); // 7 days expiry
-
-      const result = await this.repository.create(tenantId, {
-        displayId: `STF-${Math.floor(1000 + Math.random() * 9000)}`,
-        name: this.normalizeString(data.name, "New Staff"),
-        role: (data.role || "STAFF").toUpperCase() as StaffRole,
-        title: this.normalizeString(data.title),
-        email: this.normalizeString(data.email).toLowerCase(),
-        phone: this.normalizeString(data.phone),
-        status: 'Offline',
-        inviteToken,
-        inviteExpiresAt,
-        inviteAccepted: false
-      });
-      return this.serializeStaff(result);
-    } catch (error) {
-      console.error("[StaffService.createStaffMember] Error:", error);
-      return this.getSafeStaffFallback();
-    }
+    // This now delegates to the secure invitation logic in auth actions
+    // but we can keep it here if needed for direct creation by superadmins
+    throw new Error("Use createStaffInvitation action for secure staff onboarding.");
   }
 
   async updateStaffMember(tenantId: string, id: string, updates: any) {

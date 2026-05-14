@@ -224,12 +224,17 @@ export class NotificationService {
 
     let userId = data.userId;
     if (!userId) {
-      const admins = await prisma.user.findMany({
-        where: { tenantId, role: { in: ['OWNER', 'ADMIN'] } },
-        select: { id: true },
+      const admins = await prisma.tenantMembership.findMany({
+        where: { 
+          tenantId, 
+          role: { in: ['OWNER', 'ADMIN'] },
+          isActive: true,
+          status: 'ACTIVE'
+        },
+        select: { userId: true },
         take: 1
       });
-      userId = admins[0]?.id;
+      userId = admins[0]?.userId;
     }
 
     if (!userId) return;

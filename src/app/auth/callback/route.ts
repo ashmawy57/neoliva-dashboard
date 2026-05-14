@@ -24,43 +24,46 @@ export async function GET(request: Request) {
         const dbUser = await prisma.user.findUnique({
           where: { supabaseId: user.id },
           include: {
-            tenant: true,
-            staff: true
+            memberships: {
+              where: { status: 'ACTIVE' },
+              include: { tenant: true },
+              take: 1
+            }
           }
         });
 
-        if (!dbUser) {
-          console.error('[AuthCallback] No DB User record found for supabaseId:', user.id);
-          // Self-healing attempt or redirect to registration
-          return NextResponse.redirect(new URL('/auth/error?type=UNKNOWN_ERROR', request.url));
+        if (!dbUser || dbUser.memberships.length === 0) {
+          console.error('[AuthCallback] No active membership found for user:', user.id);
+          // If no membership, maybe check for invitations
+          return NextResponse.redirect(new URL('/auth/error?type=UNAUTHORIZED', request.url));
         }
 
+        const primaryMembership = dbUser.memberships[0];
+        const tenant = primaryMembership.tenant;
+        const role = primaryMembership.role;
+
         // 3. Redirect based on Tenant Status
-        if (dbUser.tenant.status === 'PENDING') {
+        if (tenant.status === 'PENDING') {
           return NextResponse.redirect(new URL('/auth/error?type=TENANT_PENDING', request.url));
         }
 
-        if (dbUser.tenant.status === 'REJECTED') {
+        if (tenant.status === 'REJECTED') {
           return NextResponse.redirect(new URL('/auth/error?type=ACCOUNT_SUSPENDED', request.url));
-        }
-
-        // 4. Check staff invitation for non-admins
-        if (dbUser.role !== 'ADMIN' && dbUser.role !== 'OWNER') {
-          if (!dbUser.staff || !dbUser.staff.inviteAccepted) {
-            return NextResponse.redirect(new URL('/auth/error?type=INVITE_EXPIRED', request.url));
-          }
         }
 
         // 5. Smart Role-Based Redirects
         let redirectPath = next;
         if (next === '/dashboard') {
-          switch (dbUser.role) {
+          switch (role) {
             case 'DOCTOR':
               redirectPath = '/dashboard/appointments';
               break;
             case 'ACCOUNTANT':
               redirectPath = '/dashboard/finance';
               break;
+            case 'OWNER':
+            case 'ADMIN':
+            case 'MANAGER':
             default:
               redirectPath = '/dashboard';
           }

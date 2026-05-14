@@ -36,6 +36,12 @@ export function Navbar() {
             <Link href="#pricing" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors">Pricing</Link>
             <div className="h-6 w-px bg-slate-200"></div>
             <Link 
+              href="/staff/sign-in" 
+              className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
+            >
+              Staff Sign In
+            </Link>
+            <Link 
               href="/signup" 
               className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
             >
@@ -72,6 +78,7 @@ export function Navbar() {
           <Link href="#how-it-works" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>How it Works</Link>
           <Link href="#pricing" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Pricing</Link>
           <hr className="border-slate-100" />
+          <Link href="/staff/sign-in" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Staff Sign In</Link>
           <Link href="/signup" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Staff Signup</Link>
           <Link href="/login" className="block text-base font-semibold text-slate-900" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
           <Link 

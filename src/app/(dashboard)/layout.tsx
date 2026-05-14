@@ -49,15 +49,15 @@ export default async function DashboardLayout({
   const { user, tenantId } = await getTenantContext();
   const permissions = await getUserPermissions();
   
-  let settings;
+  let tenantSettings;
   if (tenantId) {
-    settings = await getClinicSettings(tenantId);
+    tenantSettings = await getClinicSettings(tenantId);
   }
 
   // Pass only plain serializable properties to Client Components
   const sidebarSettings = {
-    clinicName: settings?.clinicName || "SmileCare",
-    logoUrl: settings?.logoUrl || null,
+    clinicName: tenantSettings?.clinicName || "SmileCare",
+    logoUrl: tenantSettings?.logoUrl || null,
   };
 
   return (

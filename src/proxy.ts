@@ -92,6 +92,10 @@ export async function proxy(request: NextRequest) {
                        pathname.startsWith('/login') || 
                        pathname.startsWith('/signup') ||
                        pathname.startsWith('/auth/') || 
+                       pathname.startsWith('/staff/sign-in') ||
+                       pathname.startsWith('/staff/accept-invitation') ||
+                       pathname.startsWith('/staff/forgot-password') ||
+                       pathname.startsWith('/staff/reset-password') ||
                        pathname.startsWith('/create-clinic') ||
                        pathname.startsWith('/pending-approval') ||
                        pathname.startsWith('/rejected') ||

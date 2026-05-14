@@ -2,16 +2,26 @@ import { prisma } from "@/lib/prisma";
 import { Staff, Prisma } from "@/generated/client";
 
 export class StaffRepository {
-  async findMany(tenantId: string, params?: {
-    skip?: number;
-    take?: number;
-    orderBy?: Prisma.StaffOrderByWithRelationInput;
-  }): Promise<Staff[]> {
-    return prisma.staff.findMany({
-      ...params,
-      where: {
-        tenantId,
+  async findMembers(tenantId: string): Promise<any[]> {
+    return prisma.tenantMembership.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          }
+        },
+        staffProfile: true
       },
+      orderBy: { joinedAt: 'desc' }
+    });
+  }
+
+  async findInvitations(tenantId: string): Promise<any[]> {
+    return prisma.staffInvitation.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' }
     });
   }
 
@@ -24,12 +34,12 @@ export class StaffRepository {
     });
   }
 
-  async create(tenantId: string, data: Omit<Prisma.StaffCreateInput, 'tenant'>): Promise<Staff> {
-    return prisma.staff.create({
+  async createInvitation(tenantId: string, data: any) {
+    return prisma.staffInvitation.create({
       data: {
         ...data,
-        tenant: { connect: { id: tenantId } },
-      },
+        tenantId
+      }
     });
   }
 

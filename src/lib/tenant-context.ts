@@ -36,77 +36,85 @@ export const getTenantContext = cache(async () => {
     throw new TenantContextError("Unauthorized: No active session found.", 'UNAUTHORIZED');
   }
 
-  let dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    select: {
-      id: true,
-      email: true,
-      tenantId: true,
-      role: true,
-      staffId: true,
+  // Get active tenant from session metadata
+  const activeTenantId = user.app_metadata?.active_tenant_id || user.user_metadata?.active_tenant_id;
+
+  if (!activeTenantId) {
+    // If no active tenant, try to find the primary membership
+    const membership = await prisma.tenantMembership.findFirst({
+      where: { 
+        user: { supabaseId: user.id },
+        isActive: true,
+        status: 'ACTIVE'
+      },
+      include: { 
+        tenant: { select: { status: true } },
+        user: true,
+        staffProfile: { select: { id: true } }
+      }
+    });
+
+    if (!membership) {
+      throw new TenantContextError("Access Denied: No active clinic membership found.", 'NO_TENANT');
+    }
+
+    // Return the found membership
+    return {
+      tenantId: membership.tenantId,
+      user: {
+        id: membership.user.id,
+        email: membership.user.email,
+        tenantId: membership.tenantId,
+        staffId: membership.staffProfile?.id,
+        role: normalizeRole(membership.role)!,
+        tenant: { status: membership.tenant.status }
+      },
+      authUser: user
+    };
+  }
+
+  // Find membership for the active tenant
+  const membership = await prisma.tenantMembership.findUnique({
+    where: {
+      userId_tenantId: {
+        userId: (await prisma.user.findUnique({ where: { supabaseId: user.id } }))?.id || '',
+        tenantId: activeTenantId
+      }
+    },
+    include: {
       tenant: { select: { status: true } },
-      staff: { select: { name: true, inviteAccepted: true } }
+      user: true,
+      staffProfile: { select: { id: true } }
     }
   });
 
-  if (!dbUser) {
-    // Self-healing: Search for Staff record by email
-    const staff = await prisma.staff.findUnique({
-      where: { email: user.email! }
-    });
-
-    if (staff) {
-      dbUser = await prisma.user.upsert({
-        where: { supabaseId: user.id },
-        update: {},
-        create: {
-          supabaseId: user.id,
-          email: user.email!,
-          tenantId: staff.tenantId,
-          staffId: staff.id,
-          role: staff.role
-        },
-        select: {
-          id: true,
-          email: true,
-          tenantId: true,
-          role: true,
-          staffId: true,
-          tenant: { select: { status: true } },
-          staff: { select: { name: true, inviteAccepted: true } }
-        }
-      });
-    } else {
-      throw new TenantContextError("Unauthorized: User record not found.", 'NO_USER_RECORD');
-    }
+  if (!membership || !membership.isActive || membership.status !== 'ACTIVE') {
+    throw new TenantContextError("Access Denied: You do not have an active membership in this clinic.", 'UNAUTHORIZED');
   }
 
   // Check tenant status
-  if (dbUser.tenant.status === 'PENDING') {
-    throw new TenantContextError("Access Denied: Tenant approval pending.", 'PENDING');
+  if (membership.tenant.status === 'PENDING') {
+    throw new TenantContextError("Access Denied: Clinic approval pending.", 'PENDING');
   }
 
-  if (dbUser.tenant.status === 'REJECTED') {
-    throw new TenantContextError("Access Denied: Tenant has been rejected.", 'REJECTED');
+  if (membership.tenant.status === 'REJECTED') {
+    throw new TenantContextError("Access Denied: Clinic has been rejected.", 'REJECTED');
   }
 
-  // Check staff invitation for non-admins
-  if (dbUser.role !== 'ADMIN') {
-    if (!dbUser.staff || !dbUser.staff.inviteAccepted) {
-      throw new TenantContextError("Access Denied: Invitation not accepted.", 'UNAUTHORIZED');
-    }
-  }
-
-  const normalizedRole = normalizeRole(dbUser.role);
+  const normalizedRole = normalizeRole(membership.role);
   if (!normalizedRole) {
-    throw new TenantContextError(`Access Denied: Invalid or unknown user role "${dbUser.role}".`, 'UNAUTHORIZED');
+    throw new TenantContextError(`Access Denied: Invalid or unknown user role "${membership.role}".`, 'UNAUTHORIZED');
   }
 
   return {
-    tenantId: dbUser.tenantId,
+    tenantId: membership.tenantId,
     user: {
-      ...dbUser,
-      role: normalizedRole
+      id: membership.user.id,
+      email: membership.user.email,
+      tenantId: membership.tenantId,
+      staffId: membership.staffProfile?.id,
+      role: normalizedRole,
+      tenant: { status: membership.tenant.status }
     },
     authUser: user
   };

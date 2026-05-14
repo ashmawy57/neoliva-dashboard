@@ -9,6 +9,13 @@ import { useState } from "react";
 import { EditStaffDialog } from "./EditStaffDialog";
 
 const roleConfig: Record<string, { bg: string; text: string; icon: string }> = {
+  OWNER: { bg: "bg-rose-100", text: "text-rose-700", icon: "💎" },
+  ADMIN: { bg: "bg-purple-100", text: "text-purple-700", icon: "👑" },
+  MANAGER: { bg: "bg-indigo-100", text: "text-indigo-700", icon: "📋" },
+  DOCTOR: { bg: "bg-blue-100", text: "text-blue-700", icon: "🩺" },
+  ACCOUNTANT: { bg: "bg-amber-100", text: "text-amber-700", icon: "💰" },
+  STAFF: { bg: "bg-slate-100", text: "text-slate-700", icon: "👥" },
+  // Fallbacks for legacy/UI display
   Admin: { bg: "bg-purple-100", text: "text-purple-700", icon: "👑" },
   Doctor: { bg: "bg-blue-100", text: "text-blue-700", icon: "🩺" },
   Assistant: { bg: "bg-emerald-100", text: "text-emerald-700", icon: "💉" },
@@ -59,8 +66,9 @@ export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
                         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${member.color} flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
                           {member.avatar}
                         </div>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${member.status === "Online" ? "bg-emerald-400" : "bg-gray-300"
-                          }`} />
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                          member.isPending ? "bg-amber-400" : (member.status === "Active" ? "bg-emerald-400" : "bg-gray-300")
+                        }`} />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{member.name}</p>
@@ -70,7 +78,7 @@ export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
                   </TableCell>
                   <TableCell>
                     <Badge className={`${config.bg} ${config.text} border-none text-[11px] font-semibold rounded-full px-2.5`}>
-                      <Shield className="w-2.5 h-2.5 mr-1" /> {member.role}
+                      <span className="mr-1">{config.icon}</span> {member.role}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -81,8 +89,17 @@ export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${member.status === "Online" ? "bg-emerald-400" : "bg-gray-300"}`} />
-                      <span className="text-xs text-gray-500">{member.status}</span>
+                      {member.isPending ? (
+                        <>
+                          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-xs text-amber-600 font-medium">Invited</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className={`w-2 h-2 rounded-full ${member.status === "Active" ? "bg-emerald-400" : "bg-gray-300"}`} />
+                          <span className="text-xs text-gray-500">{member.status}</span>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

@@ -38,7 +38,6 @@ model Tenant {
   toothConditions         ToothCondition[]
   treatmentPlanItems      TreatmentPlanItem[]
   treatmentPlans          TreatmentPlan[]
-  users                   User[]
   visitRecords            VisitRecord[]
   inventoryItems          InventoryItem[]
   stockEntries            StockEntry[]
@@ -47,6 +46,9 @@ model Tenant {
   ledgerAccounts          LedgerAccount[]
   journalEntries          JournalEntry[]
   businessEvents          BusinessEvent[]
+  
+  staffInvitations        StaffInvitation[]
+  memberships             TenantMembership[]
 
   @@index([createdAt])
   @@map("tenants")
@@ -59,21 +61,41 @@ model User {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   supabaseId String    @unique @map("supabase_id")
   email      String    @unique
-  tenantId   String    @map("tenant_id") @db.Uuid
-  role       String?   @default("USER")
   createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
-  staffId    String?   @unique @map("staff_id") @db.Uuid
-  staff      Staff?    @relation(fields: [staffId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  // A user can belong to multiple tenants
+  memberships TenantMembership[]
+  // Invitations sent by this user
+  sentInvitations StaffInvitation[] @relation("InvitedByUser")
+  
   notifications Notification[]
   notificationPreferences NotificationPreference[]
   businessEvents          BusinessEvent[]
   auditLogs               AuditLog[]
 
   @@index([supabaseId])
-  @@index([tenantId])
   @@map("users")
+}
+
+model TenantMembership {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  role         StaffRole        @default(RECEPTIONIST)
+  status       MembershipStatus @default(ACTIVE)
+  permissions  String[]         @default([])
+  isActive     Boolean          @default(true) @map("is_active")
+  joinedAt     DateTime         @default(now()) @map("joined_at") @db.Timestamptz(6)
+  
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffProfile Staff?
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@map("tenant_memberships")
 }
 
 model Staff {
@@ -89,18 +111,43 @@ model Staff {
   updatedAt       DateTime?      @default(now()) @map("updated_at") @db.Timestamptz(6)
   avatarUrl       String?        @map("avatar_url")
   tenantId        String         @map("tenant_id") @db.Uuid
-  inviteAccepted  Boolean        @default(false) @map("invite_accepted")
-  inviteExpiresAt DateTime?      @map("invite_expires_at")
-  inviteToken     String?        @unique @map("invite_token")
+  
+  // Relation to membership for active users
+  membershipId    String?        @unique @map("membership_id") @db.Uuid
+  membership      TenantMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
   appointments    Appointment[]
   prescriptions   Prescription[]
-  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user            User?
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, id])
   @@index([tenantId, createdAt])
-  @@index([inviteToken])
   @@map("staff")
+}
+
+model StaffInvitation {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  email        String
+  fullName     String           @map("full_name")
+  role         StaffRole
+  status       InvitationStatus @default(PENDING)
+  jobTitle     String?          @map("job_title")
+  permissions  String[]         @default([])
+  tokenHash    String           @unique @map("token_hash")
+  invitedById  String           @map("invited_by_id") @db.Uuid
+  expiresAt    DateTime         @map("expires_at") @db.Timestamptz(6)
+  acceptedAt   DateTime?        @map("accepted_at") @db.Timestamptz(6)
+  revokedAt    DateTime?        @map("revoked_at") @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedBy    User             @relation("InvitedByUser", fields: [invitedById], references: [id])
+
+  @@index([tenantId, email])
+  @@index([tokenHash])
+  @@map("staff_invitations")
 }
 
 model Patient {
@@ -648,12 +695,29 @@ enum TenantStatus {
 }
 
 enum StaffRole {
+  OWNER
+  MANAGER
   ADMIN
   DOCTOR
-  ASSISTANT
   RECEPTIONIST
+  ACCOUNTANT
+  NURSE
+  STAFF
 
   @@map("staff_role")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
 }
 
 enum AppointmentStatus {

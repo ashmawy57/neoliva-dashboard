@@ -42,7 +42,7 @@ export function NewStaffDialog() {
     
     try {
       await createStaff(formData);
-      toast.success("Staff member created successfully");
+      toast.success("Staff invitation sent successfully");
       setOpen(false);
       
       // Reset form
@@ -213,7 +213,7 @@ export function NewStaffDialog() {
               disabled={loading}
               className="px-8 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 h-11 font-semibold"
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Save Member'}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send Invitation'}
             </Button>
           </DialogFooter>
         </form>

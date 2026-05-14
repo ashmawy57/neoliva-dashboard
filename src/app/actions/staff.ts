@@ -11,6 +11,8 @@ import { wrapAction } from "@/lib/observability/wrap-action";
 
 const staffService = new StaffService();
 
+import { createStaffInvitation } from "./auth";
+
 /**
  * Server Action: Fetches all staff members.
  */
@@ -48,12 +50,11 @@ export async function getStaff() {
         id: member.id,
         name: member.name || 'Unknown',
         role: formatRole(member.role),
-        title: member.title || 'Staff',
-        phone: member.phone || '—',
         email: member.email || '—',
         avatar: getInitials(member.name),
         color: colors[colorIndex],
-        status: member.status || 'Offline'
+        status: member.status,
+        isPending: member.isPending
       }
     })
   } catch (error) {
@@ -63,25 +64,27 @@ export async function getStaff() {
 }
 
 /**
- * Server Action: Creates a new staff member.
+ * Server Action: Creates a new staff member via invitation.
  */
 export const createStaff = wrapAction(
   'STAFF_CREATE',
   async (formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) => {
     await requirePermission(PermissionCode.STAFF_MANAGE);
-    const tenantId = await resolveTenantContext();
-    const result = await staffService.createStaffMember(tenantId, formData);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: formData.invite ? 'STAFF_INVITED' : 'STAFF_ROLE_CHANGED', // Use role changed as fallback for non-invite creation
-      entityType: 'STAFF',
-      entityId: result.id,
-      metadata: { role: formData.role, invited: formData.invite }
+    
+    // We call the auth action which handles the token, hashing and secure DB creation
+    const result = await createStaffInvitation({
+      email: formData.email,
+      fullName: formData.name,
+      role: formData.role as any,
+      jobTitle: formData.title
     });
 
+    if (!result.success) {
+      throw new Error(result.error || "Failed to create invitation");
+    }
+
     revalidatePath('/staff');
-    return result;
+    return { id: result.invitationId, ...formData };
   },
   { module: 'staff', entityType: 'STAFF' }
 );
