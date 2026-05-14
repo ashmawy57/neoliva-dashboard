@@ -6,6 +6,7 @@ import { AppointmentStatus } from "@/generated/client";
 import { prisma } from "@/lib/prisma";
 
 import { NotificationService } from "./notification.service";
+import { RoomService } from "./room.service";
 
 const appointmentRepository = new AppointmentRepository();
 const inventoryService = new InventoryService();
@@ -189,6 +190,8 @@ export class AppointmentService {
     treatment: string;
     notes?: string;
     color?: string;
+    roomId?: string;
+    chairId?: string;
   }) {
     try {
       this.validateTenant(tenantId);
@@ -197,6 +200,18 @@ export class AppointmentService {
       const timeDate = new Date();
       const [hours, minutes] = (data.time || "09:00").split(':');
       timeDate.setHours(parseInt(hours || "9"), parseInt(minutes || "0"), 0, 0);
+
+      // --- Room Scheduling Engine Validation ---
+      if (data.roomId) {
+        await RoomService.validateRoomBooking(tenantId, {
+          roomId: data.roomId,
+          chairId: data.chairId,
+          doctorId: data.doctorId,
+          date: new Date(data.date),
+          time: timeDate,
+          duration: data.duration
+        });
+      }
 
       const result = await appointmentRepository.create(tenantId, {
         patientId: data.patientId,
@@ -208,6 +223,8 @@ export class AppointmentService {
         treatment: this.normalizeString(data.treatment, "Standard Treatment"),
         notes: data.notes || "",
         color: data.color || "from-blue-500 to-indigo-600",
+        roomId: data.roomId,
+        chairId: data.chairId,
         status: 'SCHEDULED'
       });
 

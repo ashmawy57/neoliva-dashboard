@@ -49,6 +49,7 @@ model Tenant {
   
   staffInvitations        StaffInvitation[]
   memberships             TenantMembership[]
+  rooms                   Room[]
 
   @@index([createdAt])
   @@map("tenants")
@@ -73,6 +74,7 @@ model User {
   notificationPreferences NotificationPreference[]
   businessEvents          BusinessEvent[]
   auditLogs               AuditLog[]
+  roomAssignments         RoomStaff[]
 
   @@index([supabaseId])
   @@map("users")
@@ -222,17 +224,95 @@ model Appointment {
   color     String?
   tenantId  String             @map("tenant_id") @db.Uuid
   status    AppointmentStatus? @default(SCHEDULED)
+  
+  roomId    String?            @map("room_id") @db.Uuid
+  chairId   String?            @map("chair_id") @db.Uuid
+
   doctor    Staff              @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   patient   Patient            @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   service   Service?           @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  room      Room?              @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  chair     RoomChair?         @relation(fields: [chairId], references: [id], onDelete: SetNull)
+  
   invoice   Invoice?
   labOrders LabOrder[]
 
   @@index([tenantId, id])
   @@index([tenantId, patientId])
   @@index([tenantId, createdAt])
+  @@index([roomId])
   @@map("appointments")
+}
+
+model Room {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String      @map("tenant_id") @db.Uuid
+  name        String
+  slug        String      
+  type        RoomType    @default(GENERAL)
+  description String?
+  status      RoomStatus  @default(AVAILABLE)
+  color       String?
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  roomStaff    RoomStaff[]
+  roomChairs   RoomChair[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("rooms")
+}
+
+model RoomStaff {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId     String   @map("room_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  role       String?
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@map("room_staff")
+}
+
+model RoomChair {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId   String  @map("room_id") @db.Uuid
+  name     String
+  code     String?
+  isActive Boolean @default(true) @map("is_active")
+
+  room         Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([roomId])
+  @@map("room_chairs")
+}
+
+enum RoomType {
+  GENERAL
+  SURGERY
+  XRAY
+  CONSULTATION
+  CLEANING
+  WHITENING
+}
+
+enum RoomStatus {
+  AVAILABLE
+  BUSY
+  CLEANING
+  MAINTENANCE
+  OFFLINE
 }
 
 model Service {

@@ -38,6 +38,8 @@ export class AppointmentRepository {
             name: true,
           }
         },
+        roomId: true,
+        chairId: true,
         invoice: {
           select: {
             id: true,
@@ -69,6 +71,8 @@ export class AppointmentRepository {
         serviceId: true,
         patientId: true,
         doctorId: true,
+        roomId: true,
+        chairId: true,
         patient: true,
         doctor: true,
         service: true,

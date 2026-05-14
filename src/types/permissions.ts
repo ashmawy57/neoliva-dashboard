@@ -63,6 +63,12 @@ export enum PermissionCode {
 
   // --- FINANCE ---
   FINANCE_VIEW = 'finance:view',
+
+  // --- ROOMS ---
+  ROOM_VIEW = 'rooms:view',
+  ROOM_MANAGE = 'rooms:manage',
+  ROOM_STAFF_ASSIGN = 'rooms:staff_assign',
+  ROOM_SCHEDULE_MANAGE = 'rooms:schedule_manage',
 }
 
 export type Permission = keyof typeof PermissionCode;

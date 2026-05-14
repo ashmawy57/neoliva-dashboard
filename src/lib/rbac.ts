@@ -54,7 +54,8 @@ const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PermissionCode.CLINICAL_CHART_VIEW, PermissionCode.CLINICAL_CHART_EDIT,
     PermissionCode.CLINICAL_PRESCRIPTION_MANAGE, PermissionCode.CLINICAL_LAB_ORDER_MANAGE, PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE,
     PermissionCode.ADMIN_FULL_ACCESS,
-    PermissionCode.AUDIT_VIEW
+    PermissionCode.AUDIT_VIEW,
+    PermissionCode.ROOM_VIEW, PermissionCode.ROOM_MANAGE, PermissionCode.ROOM_STAFF_ASSIGN, PermissionCode.ROOM_SCHEDULE_MANAGE
   ],
   
   ADMIN: [
@@ -69,7 +70,8 @@ const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PermissionCode.CLINICAL_NOTES_VIEW, PermissionCode.CLINICAL_CHART_VIEW, PermissionCode.CLINICAL_CHART_EDIT,
     PermissionCode.CLINICAL_LAB_ORDER_MANAGE, PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE,
     PermissionCode.ADMIN_FULL_ACCESS,
-    PermissionCode.AUDIT_VIEW
+    PermissionCode.AUDIT_VIEW,
+    PermissionCode.ROOM_VIEW, PermissionCode.ROOM_MANAGE, PermissionCode.ROOM_STAFF_ASSIGN, PermissionCode.ROOM_SCHEDULE_MANAGE
   ],
 
   DOCTOR: [
@@ -81,7 +83,8 @@ const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PermissionCode.APPOINTMENT_VIEW, PermissionCode.APPOINTMENT_CREATE, PermissionCode.APPOINTMENT_EDIT,
     PermissionCode.BILLING_VIEW,
     PermissionCode.INVENTORY_VIEW,
-    PermissionCode.STAFF_REPORTS_VIEW
+    PermissionCode.STAFF_REPORTS_VIEW,
+    PermissionCode.ROOM_VIEW, PermissionCode.ROOM_SCHEDULE_MANAGE
   ],
 
   ASSISTANT: [
