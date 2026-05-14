@@ -72,9 +72,13 @@ interface SidebarProps {
       name: string;
     } | null;
   };
+  settings?: {
+    clinicName: string;
+    logoUrl: string | null;
+  };
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, settings }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -120,14 +124,18 @@ export function Sidebar({ user }: SidebarProps) {
         collapsed && "justify-center px-0"
       )}>
         <div className="relative flex-shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Stethoscope className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 overflow-hidden">
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="Clinic Logo" className="w-full h-full object-cover" />
+            ) : (
+              <Stethoscope className="w-5 h-5 text-white" />
+            )}
           </div>
           <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[oklch(0.14_0.025_255)] animate-pulse-soft" />
         </div>
         {!collapsed && (
           <div className="animate-slide-in overflow-hidden">
-            <h2 className="text-[15px] font-bold tracking-tight whitespace-nowrap">SmileCare</h2>
+            <h2 className="text-[15px] font-bold tracking-tight whitespace-nowrap">{settings?.clinicName || "SmileCare"}</h2>
             <p className="text-[10px] text-blue-300/70 font-medium tracking-widest uppercase">Pro Dashboard</p>
           </div>
         )}

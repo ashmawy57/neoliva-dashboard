@@ -7,9 +7,7 @@
     "build": "next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint",
-    "queue:worker": "tsx src/lib/queue/workers/notification.worker.ts",
-    "queue:email": "tsx src/lib/queue/workers/email.worker.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

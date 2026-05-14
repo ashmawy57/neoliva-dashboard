@@ -8,7 +8,13 @@ import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileSidebar } from "./MobileSidebar";
 
-export function TopBanner({ user }: { user?: any }) {
+export function TopBanner({ 
+  user,
+  settings 
+}: { 
+  user?: any;
+  settings?: { clinicName: string; logoUrl: string | null }
+}) {
   const [searchFocused, setSearchFocused] = useState(false);
 
   return (
@@ -21,7 +27,7 @@ export function TopBanner({ user }: { user?: any }) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-[280px] bg-[oklch(0.14_0.025_255)] border-none">
-          <MobileSidebar />
+          <MobileSidebar settings={settings} />
         </SheetContent>
       </Sheet>
 

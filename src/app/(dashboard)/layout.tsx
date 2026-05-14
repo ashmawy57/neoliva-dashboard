@@ -5,12 +5,19 @@ import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { PermissionProvider } from "@/components/providers/permission-provider";
 import { getUserPermissions } from "@/lib/rbac";
+import { getClinicSettings } from "@/services/settings.service";
+import { runDailyJobsIfNeeded } from "@/services/job.service";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Trigger daily maintenance jobs (Lazy execution)
+  // This runs once per day on the first request of the day.
+  // We don't await it to avoid blocking the initial page load.
+  runDailyJobsIfNeeded().catch(err => console.error('[DashboardLayout] Daily jobs error:', err));
+
   try {
     // Force tenant resolution - this will throw/redirect if not APPROVED
     await resolveTenantContext();
@@ -39,15 +46,26 @@ export default async function DashboardLayout({
     redirect("/unauthorized");
   }
 
-  const { user } = await getTenantContext();
+  const { user, tenant } = await getTenantContext();
   const permissions = await getUserPermissions();
+  
+  let settings;
+  if (tenant) {
+    settings = await getClinicSettings(tenant.id);
+  }
+
+  // Pass only plain serializable properties to Client Components
+  const sidebarSettings = {
+    clinicName: settings?.clinicName || "SmileCare",
+    logoUrl: settings?.logoUrl || null,
+  };
 
   return (
     <PermissionProvider initialPermissions={Array.from(permissions)}>
       <div className="flex h-screen overflow-hidden bg-slate-50">
-        <Sidebar user={user} />
+        <Sidebar user={user} settings={sidebarSettings} />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <TopBanner user={user} />
+          <TopBanner user={user} settings={sidebarSettings} />
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             {children}
           </main>

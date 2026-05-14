@@ -35,7 +35,10 @@ export async function fetchSettingsAction() {
   await requirePermission(PermissionCode.SETTINGS_CLINIC_EDIT);
 
   const settings = await getClinicSettings(ctx.tenantId);
-  return settings;
+  return {
+    ...settings,
+    taxRate: settings.taxRate ? Number(settings.taxRate) : 0,
+  };
 }
 
 export async function updateClinicAction(data: z.infer<typeof clinicSchema>) {
@@ -46,7 +49,7 @@ export async function updateClinicAction(data: z.infer<typeof clinicSchema>) {
   const parsed = clinicSchema.parse(data);
 
   await updateClinicSettings(ctx.tenantId, parsed, ctx.user.id);
-  revalidatePath('/dashboard/settings');
+  revalidatePath('/dashboard', 'layout');
   return { success: true };
 }
 
@@ -63,7 +66,7 @@ export async function updateBillingAction(data: z.infer<typeof billingSchema>) {
     invoiceNote: parsed.invoiceNote,
   }, ctx.user.id);
   
-  revalidatePath('/dashboard/settings');
+  revalidatePath('/dashboard', 'layout');
   return { success: true };
 }
 
@@ -78,6 +81,6 @@ export async function updateNotificationsAction(data: z.infer<typeof notificatio
     notificationsConfig: parsed as NotificationsConfig,
   }, ctx.user.id);
   
-  revalidatePath('/dashboard/settings');
+  revalidatePath('/dashboard', 'layout');
   return { success: true };
 }

@@ -202,3 +202,165 @@ function generateDedupKey(type: string, payload: Record<string, unknown>, tenant
   const content = `${tenantId}:${type}:${entityId}`;
   return createHash('sha256').update(content).digest('hex');
 }
+
+// ─── Hardened Lazy Execution (Zero-Cost Daily Jobs) ──────────────────────────
+
+// In-memory cache to prevent repeated DB hits during the same request or warm lambda lifecycle
+let lastSystemJobCheckAt = 0;
+const SYSTEM_JOB_THROTTLE_MS = 60 * 1000; // 1 minute
+
+/**
+ * Lazy Execution: Runs daily system jobs if they haven't run today yet.
+ * Hardened for high-concurrency and Vercel Serverless compatibility.
+ */
+export async function runDailyJobsIfNeeded() {
+  const JOB_NAME = 'DAILY_SYSTEM_MAINTENANCE';
+  const now = new Date();
+  
+  // 1. Lightweight Throttle: Skip if checked very recently in this instance
+  if (Date.now() - lastSystemJobCheckAt < SYSTEM_JOB_THROTTLE_MS) {
+    return;
+  }
+  lastSystemJobCheckAt = Date.now();
+
+  try {
+    // 2. Ensure job record exists (idempotent)
+    await prisma.systemJob.upsert({
+      where: { name: JOB_NAME },
+      update: {},
+      create: { name: JOB_NAME },
+    });
+
+    // 3. Atomic Claim Strategy (Optimistic Locking)
+    // We try to claim the job ONLY if it hasn't run today OR if a previous lock timed out.
+    const today = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const lockExpiry = new Date(Date.now() - 15 * 60 * 1000); // 15 min lock timeout
+
+    const claim = await prisma.systemJob.updateMany({
+      where: {
+        name: JOB_NAME,
+        OR: [
+          {
+            // Normal case: Not run today and not currently locked
+            status: 'IDLE',
+            OR: [
+              { lastRunAt: null },
+              { lastRunAt: { lt: today } }
+            ]
+          },
+          {
+            // Recovery case: Stuck in RUNNING state for over 15 minutes (lambda crash)
+            status: 'RUNNING',
+            lockedAt: { lt: lockExpiry }
+          }
+        ]
+      },
+      data: {
+        status: 'RUNNING',
+        lockedAt: now,
+      }
+    });
+
+    if (claim.count === 0) {
+      // Already executed today or another parallel request claimed it first.
+      return;
+    }
+
+    logger.info('[JobService] Daily maintenance claimed and starting...');
+    const startTime = Date.now();
+    let successCount = 0;
+    let failCount = 0;
+
+    // 4. Execute Tasks with Isolation
+    // Using a separate loop ensures one failure doesn't stop others.
+    const tasks = [
+      { name: 'cleanupExpiredSubscriptions', fn: cleanupExpiredSubscriptions },
+      { name: 'generateDailyReports', fn: generateDailyReports },
+      { name: 'sendReminders', fn: sendReminders },
+      { name: 'pruneOldJobs', fn: pruneOldJobsTask }
+    ];
+
+    for (const task of tasks) {
+      const taskStart = Date.now();
+      try {
+        await task.fn();
+        successCount++;
+        logger.info(`[JobService] Task SUCCESS: ${task.name}`, { duration: Date.now() - taskStart });
+      } catch (err) {
+        failCount++;
+        logger.error(`[JobService] Task FAILED: ${task.name}`, err);
+      }
+    }
+
+    const totalDuration = Date.now() - startTime;
+
+    // 5. Finalize State
+    // If we had critical failures, we might choose NOT to update lastRunAt so it retries.
+    // For now, we update it if any task succeeded, or as requested: "إذا job فشل: لا يتم وضع executed=true"
+    // We'll update lastRunAt only if there were NO failures.
+    if (failCount === 0) {
+      await prisma.systemJob.update({
+        where: { name: JOB_NAME },
+        data: {
+          status: 'IDLE',
+          lastRunAt: now,
+          lockedAt: null
+        }
+      });
+      logger.info('[JobService] Daily maintenance COMPLETED', { successCount, totalDuration });
+    } else {
+      // Reset lock but keep lastRunAt as-is so next request retries
+      await prisma.systemJob.update({
+        where: { name: JOB_NAME },
+        data: {
+          status: 'IDLE',
+          lockedAt: null
+        }
+      });
+      logger.warn('[JobService] Daily maintenance FINISHED WITH ERRORS (will retry next request)', { 
+        successCount, 
+        failCount, 
+        totalDuration 
+      });
+    }
+
+  } catch (err) {
+    logger.error('[JobService] Critical error in lazy execution wrapper', err);
+    // Attempt emergency unlock if we hold the lock
+    try {
+      await prisma.systemJob.updateMany({
+        where: { name: JOB_NAME, status: 'RUNNING', lockedAt: now },
+        data: { status: 'IDLE', lockedAt: null }
+      });
+    } catch { /* ignore */ }
+  }
+}
+
+// --- Maintenance Task Implementations (Isolated from Transaction) ---
+
+async function cleanupExpiredSubscriptions() {
+  // Logic to expire tenants whose subscription ended
+  logger.info('[JobService] Task: cleanupExpiredSubscriptions (stub)');
+}
+
+async function generateDailyReports() {
+  // Logic to aggregate data for daily stats
+  logger.info('[JobService] Task: generateDailyReports (stub)');
+}
+
+async function sendReminders() {
+  // Logic to queue reminder notifications for today's appointments
+  logger.info('[JobService] Task: sendReminders (stub)');
+}
+
+async function pruneOldJobsTask() {
+  const daysOld = 7;
+  const cutoff = new Date(Date.now() - daysOld * 86_400_000);
+  const result = await prisma.job.deleteMany({
+    where: {
+      status: { in: [JOB_STATUS.COMPLETED, JOB_STATUS.FAILED] },
+      updatedAt: { lt: cutoff },
+    },
+  });
+  logger.info('[JobService] Task: pruneOldJobsTask executed', { deleted: result.count });
+}

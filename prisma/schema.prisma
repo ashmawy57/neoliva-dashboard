@@ -959,3 +959,15 @@ model ClinicSettings {
   @@map("clinic_settings")
 }
 
+model SystemJob {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  lastRunAt DateTime?
+  status    String   @default("IDLE") // IDLE | RUNNING
+  lockedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_jobs")
+}
+

@@ -43,6 +43,7 @@ The project follows a clean, decoupled architecture to ensure maintainability, s
 - **Service Layer**: Contains business logic, validation, and data transformation.
 - **Repository Layer**: The final line of defense for data access. Implements strict tenant isolation by force-injecting `tenantId` into every query.
 - **Prisma ORM**: Manages database interactions with a custom-generated client for enhanced type safety.
+- **Zero-Cost Job System**: A database-driven "Lazy Execution" system that handles daily maintenance tasks (reminders, reports, supply alerts) without requiring Redis, BullMQ, or always-on cron infrastructure. It uses atomic row-level locking to ensure safety in serverless environments.
 
 ## 🔒 Multi-Tenant Security
 

@@ -29,7 +29,7 @@ import { useState } from "react";
 import { LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export function MobileSidebar() {
+export function MobileSidebar({ settings }: { settings?: { clinicName: string; logoUrl: string | null } }) {
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -50,11 +50,15 @@ export function MobileSidebar() {
   return (
     <div className="flex flex-col h-full text-white">
       <div className="flex items-center gap-3 px-5 h-16 border-b border-white/[0.06]">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <Stethoscope className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 overflow-hidden">
+          {settings?.logoUrl ? (
+            <img src={settings.logoUrl} alt="Clinic Logo" className="w-full h-full object-cover" />
+          ) : (
+            <Stethoscope className="w-5 h-5 text-white" />
+          )}
         </div>
         <div>
-          <h2 className="text-[15px] font-bold tracking-tight">SmileCare</h2>
+          <h2 className="text-[15px] font-bold tracking-tight">{settings?.clinicName || "SmileCare"}</h2>
           <p className="text-[10px] text-blue-300/70 font-medium tracking-widest uppercase">Pro Dashboard</p>
         </div>
       </div>
