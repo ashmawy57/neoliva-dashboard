@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Stethoscope, Printer, FileDown, ArrowLeft } from "lucide-react";
+import { Stethoscope, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { getInvoice } from "@/app/actions/billing";
 import { notFound } from "next/navigation";
@@ -22,8 +22,13 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const patient = invoice.patient || { name: "Unknown Patient", address: "N/A" };
   const items = invoice.items || [];
   const total = Number(invoice.totalAmount);
-  const subtotal = items.reduce((sum: number, item: any) => sum + (Number(item.price) * item.quantity), 0);
+  const subtotal = items.reduce((sum: number, item: { price: string | number, quantity: number, description: string }) => sum + (Number(item.price) * item.quantity), 0);
   const tax = total - subtotal;
+  const currency = invoice.settings?.currency || 'USD';
+  const clinicName = invoice.settings?.clinicName || 'Neoliva Dental';
+  const address = invoice.settings?.address || '123 Clinic Street';
+  const email = invoice.settings?.email || 'contact@neoliva.com';
+  const invoiceNote = invoice.settings?.invoiceNote || 'Thank you for choosing Neoliva Dental. Please keep this invoice for your records.';
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in-up">
@@ -53,10 +58,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
                   <Stethoscope className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold tracking-tight text-gray-900">Neoliva Dental</span>
+                <span className="text-xl font-bold tracking-tight text-gray-900">{clinicName}</span>
               </div>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                123 Clinic Street<br />Cairo, Egypt<br />contact@neoliva.com
+              <p className="text-gray-500 text-sm leading-relaxed whitespace-pre-line">
+                {address}<br />{email}
               </p>
             </div>
             <div className="sm:text-right">
@@ -84,12 +89,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item: any, i: number) => (
+              {items.map((item: { description: string, quantity: number, price: string | number }, i: number) => (
                 <TableRow key={i} className="hover:bg-gray-50/50">
                   <TableCell className="text-sm font-medium text-gray-900">{item.description}</TableCell>
                   <TableCell className="text-sm text-gray-500 text-center">{item.quantity}</TableCell>
-                  <TableCell className="text-sm text-gray-500 text-right">${Number(item.price).toFixed(2)}</TableCell>
-                  <TableCell className="text-sm font-semibold text-gray-900 text-right">${(Number(item.price) * item.quantity).toFixed(2)}</TableCell>
+                  <TableCell className="text-sm text-gray-500 text-right">{currency} {Number(item.price).toFixed(2)}</TableCell>
+                  <TableCell className="text-sm font-semibold text-gray-900 text-right">{currency} {(Number(item.price) * item.quantity).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
               {items.length === 0 && (
@@ -103,22 +108,22 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           {/* Totals */}
           <div className="mt-8 flex justify-end">
             <div className="w-72 space-y-3 text-sm">
-              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span className="text-gray-800">${subtotal.toFixed(2)}</span></div>
-              {tax > 0 && <div className="flex justify-between text-gray-500"><span>Tax</span><span className="text-gray-800">${tax.toFixed(2)}</span></div>}
+              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span className="text-gray-800">{currency} {subtotal.toFixed(2)}</span></div>
+              {tax > 0 && <div className="flex justify-between text-gray-500"><span>Tax</span><span className="text-gray-800">{currency} {tax.toFixed(2)}</span></div>}
               <div className="flex justify-between border-t border-gray-200 pt-3 text-base">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent text-lg">${total.toFixed(2)}</span>
+                <span className="font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent text-lg">{currency} {total.toFixed(2)}</span>
               </div>
               {invoice.paidAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
                   <span>Amount Paid</span>
-                  <span>-${Number(invoice.paidAmount).toFixed(2)}</span>
+                  <span>-{currency} {Number(invoice.paidAmount).toFixed(2)}</span>
                 </div>
               )}
               {invoice.status !== 'PAID' && (
                 <div className="flex justify-between border-t border-gray-100 pt-2 text-red-600 font-bold">
                   <span>Balance Due</span>
-                  <span>${(total - Number(invoice.paidAmount)).toFixed(2)}</span>
+                  <span>{currency} {(total - Number(invoice.paidAmount)).toFixed(2)}</span>
                 </div>
               )}
             </div>
@@ -126,7 +131,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
           {/* Footer */}
           <div className="mt-10 pt-6 border-t border-gray-100 text-center">
-            <p className="text-xs text-gray-400 italic">Thank you for choosing Neoliva Dental. Please keep this invoice for your records.</p>
+            <p className="text-xs text-gray-400 italic whitespace-pre-line">{invoiceNote}</p>
           </div>
         </CardContent>
       </Card>

@@ -23,7 +23,7 @@ export default function UnauthorizedPage() {
         <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
           <p className="font-medium">Why am I seeing this?</p>
           <ul className="mt-2 list-inside list-disc space-y-1 text-left opacity-90">
-            <li>You haven't been invited to a clinic yet.</li>
+            <li>You haven&apos;t been invited to a clinic yet.</li>
             <li>Your invitation might have expired.</li>
             <li>You are logged in with the wrong email.</li>
           </ul>
@@ -42,7 +42,10 @@ export default function UnauthorizedPage() {
               Back to Login
             </Link>
             
-            <form action={signOut}>
+            <form action={async () => {
+              "use server";
+              await signOut();
+            }}>
               <button
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"

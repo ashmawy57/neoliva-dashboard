@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle, RotateCcw } from "lucide-react";
 
 export default function BillingError({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   error,
   reset,
 }: {
@@ -22,7 +23,7 @@ export default function BillingError({
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-gray-900">Financial Data Unavailable</h2>
             <p className="text-sm text-gray-500 leading-relaxed">
-              We couldn't retrieve your billing information at this moment. This might be a temporary connection issue.
+              We couldn&apos;t retrieve your billing information at this moment. This might be a temporary connection issue.
             </p>
           </div>
 

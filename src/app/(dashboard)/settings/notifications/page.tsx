@@ -9,7 +9,7 @@ import { Bell, Calendar, DollarSign, Package, FlaskConical, Mail, MessageSquare,
 import { toast } from "sonner";
 
 export default function NotificationSettingsPage() {
-  const [preferences, setPreferences] = useState<any[]>([]);
+  const [preferences, setPreferences] = useState<{ type: NotificationType, channel: NotificationChannelType, enabled: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +39,8 @@ export default function NotificationSettingsPage() {
         throw new Error();
       }
       toast.success(`${type} notifications via ${channel} updated.`);
-    } catch (err) {
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to save preference");
       // Revert if failed
       setPreferences(prev => prev.map(p => p.type === type && p.channel === channel ? { ...p, enabled: currentEnabled } : p));

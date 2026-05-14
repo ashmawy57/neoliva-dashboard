@@ -52,6 +52,7 @@ model Tenant {
   @@map("tenants")
 
   auditLogs AuditLog[]
+  clinicSettings          ClinicSettings?
 }
 
 model User {
@@ -936,3 +937,25 @@ model Job {
   @@index([tenantId, status, runAt])
   @@map("jobs")
 }
+
+model ClinicSettings {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @unique @db.Uuid @map("tenant_id")
+  clinicName          String   @map("clinic_name")
+  logoUrl             String?  @map("logo_url")
+  email               String?
+  phone               String?
+  address             String?
+  workingHours        Json?    @map("working_hours")
+  currency            String   @default("USD")
+  taxRate             Decimal  @default(0) @db.Decimal(5, 2) @map("tax_rate")
+  invoiceNote         String?  @map("invoice_note")
+  notificationsConfig Json?    @map("notifications_config")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("clinic_settings")
+}
+

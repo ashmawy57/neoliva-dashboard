@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DollarSign, CreditCard, ArrowDownRight,
-  Download, Printer, TrendingUp, Receipt
+  TrendingUp, Receipt
 } from "lucide-react";
 import Link from "next/link";
 import { getInvoices, getBillingStats } from "@/app/actions/billing";

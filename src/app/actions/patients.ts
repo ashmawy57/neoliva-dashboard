@@ -885,7 +885,7 @@ export const updateInvoiceStatus = wrapAction(
 
     await EventService.trackEvent({
       tenantId,
-      eventType: 'INVOICE_STATUS_UPDATE',
+      eventType: 'INVOICE_UPDATED',
       entityType: 'INVOICE',
       entityId: invoiceId,
       metadata: { status, patientId }
