@@ -4,6 +4,9 @@ import { PatientService } from "@/services/patient.service"
 import { resolveTenantContext } from "@/lib/tenant-context"
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermission } from "@/lib/rbac";
+import { requireRecordAccess } from "@/lib/abac";
+import { PermissionCode } from "@/types/permissions";
 
 const patientService = new PatientService()
 
@@ -14,6 +17,9 @@ export async function uploadDocument(patientId: string, documentData: {
   fileUrl: string 
 }) {
   const tenantId = await resolveTenantContext()
+  await requirePermission(PermissionCode.PATIENT_DOCUMENT_MANAGE);
+  await requireRecordAccess('patient', patientId);
+
   if (!patientId || !documentData.fileUrl) {
     return { success: false, error: 'Missing required data' }
   }
@@ -37,6 +43,9 @@ export async function uploadDocument(patientId: string, documentData: {
 
 export async function deleteDocument(patientId: string, documentId: string, fileUrl: string) {
   const tenantId = await resolveTenantContext()
+  await requirePermission(PermissionCode.PATIENT_DOCUMENT_MANAGE);
+  await requireRecordAccess('patient', patientId);
+
   try {
     const supabase = await createClient()
 

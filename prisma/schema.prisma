@@ -42,9 +42,16 @@ model Tenant {
   visitRecords            VisitRecord[]
   inventoryItems          InventoryItem[]
   stockEntries            StockEntry[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  ledgerAccounts          LedgerAccount[]
+  journalEntries          JournalEntry[]
+  businessEvents          BusinessEvent[]
 
   @@index([createdAt])
   @@map("tenants")
+
+  auditLogs AuditLog[]
 }
 
 model User {
@@ -58,6 +65,10 @@ model User {
   staffId    String?   @unique @map("staff_id") @db.Uuid
   staff      Staff?    @relation(fields: [staffId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  notifications Notification[]
+  notificationPreferences NotificationPreference[]
+  businessEvents          BusinessEvent[]
+  auditLogs               AuditLog[]
 
   @@index([supabaseId])
   @@index([tenantId])
@@ -135,6 +146,7 @@ model Patient {
   patientMedications      PatientMedication[]
   patientSurgeries        PatientSurgery[]
   tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments                Payment[]
   periodontalMeasurements PeriodontalMeasurement[]
   prescriptions           Prescription[]
   toothConditions         ToothCondition[]
@@ -239,16 +251,19 @@ model InvoiceItem {
 
 model Payment {
   id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId String        @map("invoice_id") @db.Uuid
+  invoiceId String?       @map("invoice_id") @db.Uuid
+  patientId String?       @map("patient_id") @db.Uuid
   amount    Decimal       @db.Decimal
   notes     String?
   tenantId  String        @map("tenant_id") @db.Uuid
   paidAt    DateTime      @default(now()) @map("paid_at") @db.Timestamptz(6)
   method    PaymentMethod
-  invoice   Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  patient   Patient?      @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, invoiceId])
+  @@index([tenantId, patientId])
   @@map("payments")
 }
 
@@ -646,6 +661,7 @@ enum AppointmentStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  NO_SHOW
 
   @@map("appointment_status")
 }
@@ -737,4 +753,186 @@ model StockEntry {
 enum StockType {
   IN
   OUT
+}
+
+enum NotificationType {
+  APPOINTMENT
+  BILLING
+  INVENTORY
+  LAB
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NotificationChannelType {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+model NotificationPreference {
+  id        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String                  @map("tenant_id") @db.Uuid
+  userId    String                  @map("user_id") @db.Uuid
+  type      NotificationType
+  channel   NotificationChannelType
+  enabled   Boolean                 @default(true)
+  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, type, channel])
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  userId           String?              @map("user_id") @db.Uuid
+  type             NotificationType     @default(SYSTEM)
+  priority         NotificationPriority @default(LOW)
+  title            String
+  message          String
+  isRead           Boolean              @default(false) @map("is_read")
+  readAt           DateTime?            @map("read_at")
+  actionUrl        String?              @map("action_url")
+  deduplicationKey String?              @map("deduplication_key")
+  entityId         String?              @map("entity_id")
+  archivedAt       DateTime?            @map("archived_at")
+  metadata         Json?
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, isRead])
+  @@index([tenantId, deduplicationKey])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model LedgerAccount {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  name      String
+  type      AccountType
+  isSystem  Boolean     @default(false) @map("is_system")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  journalLines JournalLine[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("ledger_accounts")
+}
+
+model JournalEntry {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  reference   String?
+  description String?
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  JournalLine[]
+
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  journalEntryId String  @map("journal_entry_id") @db.Uuid
+  accountId      String  @map("account_id") @db.Uuid
+  debit          Decimal @default(0) @db.Decimal
+  credit         Decimal @default(0) @db.Decimal
+
+  journalEntry JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      LedgerAccount @relation(fields: [accountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model BusinessEvent {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  eventType  String   @map("event_type")
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, eventType])
+  @@index([tenantId, entityType, entityId])
+  @@index([createdAt])
+  @@map("business_events")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  requestId  String?  @map("request_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Database Job Queue (replaces Redis + BullMQ) ────────────────────────────
+
+model Job {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id") @db.Uuid
+  type       String
+  payload    Json     @default("{}")
+  runAt      DateTime @map("run_at") @db.Timestamptz(6)
+  status     String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  attempts   Int      @default(0)
+  lastError  String?  @map("last_error")
+  dedupKey   String?  @unique @map("dedup_key")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, runAt])
+  @@index([tenantId, status, runAt])
+  @@map("jobs")
 }

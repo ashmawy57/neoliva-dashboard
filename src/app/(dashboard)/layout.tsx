@@ -1,8 +1,10 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBanner } from "@/components/layout/TopBanner";
-import { resolveTenantContext, TenantContextError } from "@/lib/tenant-context";
+import { resolveTenantContext, getTenantContext, TenantContextError } from "@/lib/tenant-context";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { PermissionProvider } from "@/components/providers/permission-provider";
+import { getUserPermissions } from "@/lib/rbac";
 
 export default async function DashboardLayout({
   children,
@@ -37,15 +39,20 @@ export default async function DashboardLayout({
     redirect("/unauthorized");
   }
 
+  const { user } = await getTenantContext();
+  const permissions = await getUserPermissions();
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <TopBanner />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {children}
-        </main>
+    <PermissionProvider initialPermissions={Array.from(permissions)}>
+      <div className="flex h-screen overflow-hidden bg-slate-50">
+        <Sidebar user={user} />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <TopBanner user={user} />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </PermissionProvider>
   );
 }

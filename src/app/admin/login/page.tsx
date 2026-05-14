@@ -18,22 +18,33 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
       });
 
-      const data = await res.json();
+      if (loginError) {
+        setError(loginError.message);
+        return;
+      }
 
-      if (!res.ok) {
-        setError(data.error || "Invalid credentials");
+      // Check if user has admin role in metadata
+      const { data: { user } } = await supabase.auth.getUser();
+      const role = (user?.app_metadata?.role || user?.user_metadata?.role || '')?.toString().toUpperCase();
+      
+      if (role !== 'SUPER_ADMIN') {
+        await supabase.auth.signOut();
+        setError("Unauthorized: Platform Admin access only.");
         return;
       }
 
       router.push("/admin/clinics");
       router.refresh();
-    } catch {
+    } catch (err) {
+      console.error("Admin login error:", err);
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);

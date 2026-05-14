@@ -2,8 +2,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
+
+import { wrapAction } from "@/lib/observability/wrap-action";
 
 export async function getAllTenants() {
+  await requirePermission(PermissionCode.ADMIN_SYSTEM_VIEW);
   return await prisma.tenant.findMany({
     include: {
       _count: {
@@ -14,19 +19,19 @@ export async function getAllTenants() {
   });
 }
 
-export async function updateTenantStatus(tenantId: string, status: 'APPROVED' | 'REJECTED') {
-  console.log(`[ADMIN] Updating tenant ${tenantId} to ${status}...`);
-  try {
+export const updateTenantStatus = wrapAction(
+  'updateTenantStatus',
+  async (tenantId: string, status: 'APPROVED' | 'REJECTED') => {
+    await requirePermission(PermissionCode.ADMIN_TENANT_MANAGE);
+    
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { status }
     });
-    console.log(`[ADMIN] Tenant ${tenantId} updated successfully.`);
     
     revalidatePath('/admin/clinics');
     return { success: true };
-  } catch (error) {
-    console.error(`[ADMIN] Failed to update tenant:`, error);
-    throw error;
-  }
-}
+  },
+  { module: 'admin', entityType: 'TENANT' }
+);
+

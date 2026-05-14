@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Calendar, Users, Stethoscope,
   FileText, Package, UserCog, BarChart3, Settings,
-  Truck, Wallet
+  Truck, Wallet, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,11 +20,32 @@ const navItems = [
   { name: "Inventory", href: "/inventory", icon: Package },
   { name: "Staff", href: "/staff", icon: UserCog },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Operations", href: "/dashboard/operations", icon: Activity },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+import { signOut } from "@/app/actions/signout";
+import { useState } from "react";
+import { LogOut, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
 export function MobileSidebar() {
   const pathname = usePathname();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } catch (error: any) {
+      if (error?.digest?.includes('NEXT_REDIRECT') || error?.message === 'NEXT_REDIRECT') {
+        throw error;
+      }
+      console.error('Logout error:', error);
+      toast.error("Failed to log out");
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full text-white">
@@ -60,6 +81,22 @@ export function MobileSidebar() {
           );
         })}
       </nav>
+
+      {/* Logout in mobile sidebar */}
+      <div className="p-4 border-t border-white/[0.06]">
+        <button
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/70 hover:text-white"
+        >
+          {isLoggingOut ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <LogOut className="w-5 h-5 text-rose-400" />
+          )}
+          <span className="font-semibold text-sm">Log Out</span>
+        </button>
+      </div>
     </div>
   );
 }

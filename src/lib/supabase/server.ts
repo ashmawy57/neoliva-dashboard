@@ -1,6 +1,10 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cache } from 'react'
 
-export async function createClient() {
+/**
+ * Creates a memoized Supabase client instance for the current request.
+ */
+export const createClient = cache(async () => {
   const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
 
@@ -24,7 +28,7 @@ export async function createClient() {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
             // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
+            // This can be ignored if you have proxy refreshing
             // user sessions.
           }
         },
@@ -33,11 +37,11 @@ export async function createClient() {
             cookieStore.set({ name, value: '', ...options })
           } catch (error) {
             // The `delete` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
+            // This can be ignored if you have proxy refreshing
             // user sessions.
           }
         },
       },
     }
   )
-}
+})

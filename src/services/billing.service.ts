@@ -4,8 +4,13 @@ import { AppointmentRepository } from "@/repositories/appointment.repository";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { PaymentMethod } from "@/generated/client";
 
+import { NotificationService } from "./notification.service";
+import { TreasuryService } from "./treasury.service";
+
 const billingRepository = new BillingRepository();
 const appointmentRepository = new AppointmentRepository();
+const notificationService = new NotificationService();
+const treasuryService = new TreasuryService();
 
 export class BillingService {
   private normalizeString(val: string | null | undefined, fallback: string = "-"): string {
@@ -191,7 +196,24 @@ export class BillingService {
         }
       });
 
-      return this.serializeInvoice(result);
+      const serialized = this.serializeInvoice(result);
+
+      // Trigger Notification
+      await notificationService.notifyEvent(tenantId, 'INVOICE_UNPAID', {
+          invoiceId: serialized.displayId,
+          patientName: serialized.patientName,
+          metadata: { invoiceId: result.id }
+      });
+
+      // Record in Treasury (Double-Entry)
+      await treasuryService.recordInvoiceCreation(tenantId, {
+        id: result.id,
+        displayId: serialized.displayId,
+        totalAmount: serialized.totalAmount,
+        patientName: serialized.patientName,
+      }).catch(err => console.error("[BillingService] Treasury record failed:", err));
+
+      return serialized;
     } catch (error) {
       console.error("[BillingService] Failed to create invoice:", error);
       throw error;
@@ -210,6 +232,14 @@ export class BillingService {
     try {
       this.validateTenant(tenantId);
       const result = await billingRepository.recordPayment(tenantId, invoiceId, data);
+      
+      // Record in Treasury (Double-Entry)
+      await treasuryService.recordPayment(tenantId, {
+        amount: data.amount,
+        method: data.method,
+        invoiceId: invoiceId,
+      }).catch(err => console.error("[BillingService] Treasury payment record failed:", err));
+
       return JSON.parse(JSON.stringify(result));
     } catch (error) {
       console.error(`[BillingService] Failed to record payment for invoice ${invoiceId}:`, error);

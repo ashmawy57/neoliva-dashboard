@@ -1,9 +1,11 @@
 import "server-only";
 import { ExpenseRepository } from "@/repositories/expense.repository";
 import { Prisma } from "@/generated/client";
+import { TreasuryService } from "./treasury.service";
 
 export class ExpenseService {
   private repository = new ExpenseRepository();
+  private treasuryService = new TreasuryService();
 
   private normalizeString(val: string | undefined | null): string {
     return (val || "").trim();
@@ -92,6 +94,17 @@ export class ExpenseService {
         status: data.status?.toUpperCase() || 'PAID',
         notes: this.normalizeString(data.notes)
       });
+
+      // Record in Treasury (Double-Entry)
+      if (result.status === 'PAID') {
+        await this.treasuryService.recordExpense(tenantId, {
+          id: result.id,
+          title: result.title,
+          amount: Number(result.amount),
+          method: result.method || 'CASH'
+        }).catch(err => console.error("[ExpenseService] Treasury record failed:", err));
+      }
+
       return this.mapToUI(result);
     } catch (error) {
       console.error("[ExpenseService.createExpense] Error:", error);

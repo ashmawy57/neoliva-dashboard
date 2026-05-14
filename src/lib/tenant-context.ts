@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { cache } from "react";
+import { normalizeRole } from "./rbac";
 
 export class TenantContextError extends Error {
   constructor(message: string, public code: 'UNAUTHORIZED' | 'NO_USER_RECORD' | 'NO_TENANT' | 'PENDING' | 'REJECTED') {
@@ -21,104 +23,109 @@ export class TenantContextError extends Error {
  *    - APPROVED  → return tenantId ✅
  * 4. For non-ADMIN users, also verify that inviteAccepted = true on their Staff record
  */
-export async function resolveTenantContext(): Promise<string> {
+/**
+ * Core logic to retrieve tenant context without redirecting.
+ * Useful for API routes and background tasks.
+ * Memoized per request.
+ */
+export const getTenantContext = cache(async () => {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {
-    console.error('[TenantContext] No active session:', error?.message);
     throw new TenantContextError("Unauthorized: No active session found.", 'UNAUTHORIZED');
   }
 
-  console.log('[TenantContext] Resolving tenant for supabaseId:', user.id, 'email:', user.email);
-
-  // 1. Find the user record with tenant status and staff invitation status
   let dbUser = await prisma.user.findUnique({
     where: { supabaseId: user.id },
     select: {
       id: true,
       email: true,
-      supabaseId: true,
       tenantId: true,
       role: true,
-      tenant: {
-        select: { id: true, status: true, name: true }
-      },
-      staff: {
-        select: { inviteAccepted: true, role: true }
-      }
+      staffId: true,
+      tenant: { select: { status: true } },
+      staff: { select: { name: true, inviteAccepted: true } }
     }
   });
 
   if (!dbUser) {
-    console.log('[TenantContext] No DB User record found for supabaseId:', user.id, '| Checking for Staff by email:', user.email);
-    
     // Self-healing: Search for Staff record by email
     const staff = await prisma.staff.findUnique({
       where: { email: user.email! }
     });
 
     if (staff) {
-      console.log('[Auth] Creating missing user mapping for:', user.email);
       dbUser = await prisma.user.upsert({
         where: { supabaseId: user.id },
-        update: {}, // No updates needed if it already exists
+        update: {},
         create: {
           supabaseId: user.id,
           email: user.email!,
           tenantId: staff.tenantId,
           staffId: staff.id,
-          role: staff.role // Assign the role from staff record
+          role: staff.role
         },
         select: {
           id: true,
           email: true,
-          supabaseId: true,
           tenantId: true,
           role: true,
-          tenant: {
-            select: { id: true, status: true, name: true }
-          },
-          staff: {
-            select: { inviteAccepted: true, role: true }
-          }
+          staffId: true,
+          tenant: { select: { status: true } },
+          staff: { select: { name: true, inviteAccepted: true } }
         }
       });
     } else {
-      console.error('[TenantContext] No Staff record found for email:', user.email);
-      throw new TenantContextError(
-        `Access Denied: No account record found for ${user.email}. Please contact your clinic administrator.`,
-        'UNAUTHORIZED'
-      );
+      throw new TenantContextError("Unauthorized: User record not found.", 'NO_USER_RECORD');
     }
   }
 
-  console.log('[TenantContext] Found User:', dbUser.id, '| Role:', dbUser.role, '| TenantStatus:', dbUser.tenant.status, '| Staff:', dbUser.staff ? `inviteAccepted=${dbUser.staff.inviteAccepted}` : 'null');
-
-  // 2. Check tenant status first — this applies to ALL users
+  // Check tenant status
   if (dbUser.tenant.status === 'PENDING') {
-    console.log('[TenantContext] Tenant PENDING → redirecting to /pending-approval');
-    redirect('/pending-approval');
+    throw new TenantContextError("Access Denied: Tenant approval pending.", 'PENDING');
   }
 
   if (dbUser.tenant.status === 'REJECTED') {
-    console.log('[TenantContext] Tenant REJECTED → redirecting to /rejected');
-    redirect('/rejected');
+    throw new TenantContextError("Access Denied: Tenant has been rejected.", 'REJECTED');
   }
 
-  // 3. Tenant is APPROVED. For non-ADMIN users, verify invite was accepted.
-  //    Clinic owners (created via createClinicRequest) have role='ADMIN' and
-  //    their staff record is created with inviteAccepted=true, so this is safe.
+  // Check staff invitation for non-admins
   if (dbUser.role !== 'ADMIN') {
     if (!dbUser.staff || !dbUser.staff.inviteAccepted) {
-      console.error('[TenantContext] Non-admin user has not accepted invite. Staff:', dbUser.staff);
-      throw new TenantContextError(
-        `Access Denied: You must accept your invitation before logging in.`,
-        'UNAUTHORIZED'
-      );
+      throw new TenantContextError("Access Denied: Invitation not accepted.", 'UNAUTHORIZED');
     }
   }
 
-  console.log('[TenantContext] ✅ Access granted. TenantId:', dbUser.tenantId);
-  return dbUser.tenantId;
+  const normalizedRole = normalizeRole(dbUser.role);
+  if (!normalizedRole) {
+    throw new TenantContextError(`Access Denied: Invalid or unknown user role "${dbUser.role}".`, 'UNAUTHORIZED');
+  }
+
+  return {
+    tenantId: dbUser.tenantId,
+    user: {
+      ...dbUser,
+      role: normalizedRole
+    },
+    authUser: user
+  };
+});
+
+/**
+ * Resolves the current tenant context and handles UI redirects.
+ * Use this in Server Components and Pages.
+ */
+export async function resolveTenantContext(): Promise<string> {
+  try {
+    const { tenantId } = await getTenantContext();
+    return tenantId;
+  } catch (error) {
+    if (error instanceof TenantContextError) {
+      if (error.code === 'PENDING') redirect('/auth/error?type=TENANT_PENDING');
+      if (error.code === 'REJECTED') redirect('/auth/error?type=ACCOUNT_SUSPENDED');
+      if (error.code === 'UNAUTHORIZED' || error.code === 'NO_USER_RECORD') redirect('/auth/error?type=SESSION_EXPIRED');
+    }
+    throw error;
+  }
 }

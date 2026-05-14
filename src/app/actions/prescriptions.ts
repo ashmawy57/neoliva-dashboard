@@ -3,9 +3,19 @@
 import { prisma } from "@/lib/prisma"
 import { resolveTenantContext } from '@/lib/tenant-context'
 import { revalidatePath } from 'next/cache'
+import { requirePermission } from "@/lib/rbac";
+import { requireRecordAccess } from "@/lib/abac";
+import { PermissionCode } from "@/types/permissions";
 
+import { wrapAction } from "@/lib/observability/wrap-action";
+
+/**
+ * Server Action: Fetches all prescriptions for a patient.
+ */
 export async function getPrescriptions(patientId: string) {
   const tenantId = await resolveTenantContext()
+  await requirePermission(PermissionCode.PATIENT_VIEW);
+  await requireRecordAccess('patient', patientId);
   
   return prisma.prescription.findMany({
     where: {
@@ -22,20 +32,26 @@ export async function getPrescriptions(patientId: string) {
   })
 }
 
-export async function createPrescription(patientId: string, data: {
-  notes?: string,
-  doctorName?: string,
-  doctorId?: string,
-  items: {
-    medicationName: string,
-    dosage?: string,
-    frequency?: string,
-    duration?: string
-  }[]
-}) {
-  const tenantId = await resolveTenantContext()
+/**
+ * Server Action: Creates a new prescription.
+ */
+export const createPrescription = wrapAction(
+  'PRESCRIPTION_CREATE',
+  async (patientId: string, data: {
+    notes?: string,
+    doctorName?: string,
+    doctorId?: string,
+    items: {
+      medicationName: string,
+      dosage?: string,
+      frequency?: string,
+      duration?: string
+    }[]
+  }) => {
+    const tenantId = await resolveTenantContext()
+    await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
+    await requireRecordAccess('patient', patientId);
 
-  try {
     const prescription = await prisma.prescription.create({
       data: {
         tenantId,
@@ -56,21 +72,21 @@ export async function createPrescription(patientId: string, data: {
     })
 
     revalidatePath(`/patients/${patientId}`)
-    return { success: true, data: prescription }
-  } catch (error) {
-    console.error('Failed to create prescription:', error)
-    return { success: false, error: 'Failed to create prescription' }
-  }
-}
+    return prescription;
+  },
+  { module: 'clinical', entityType: 'PRESCRIPTION' }
+);
 
-export async function deletePrescription(id: string, patientId: string) {
-  const tenantId = await resolveTenantContext()
+/**
+ * Server Action: Deletes a prescription.
+ */
+export const deletePrescription = wrapAction(
+  'PRESCRIPTION_DELETE',
+  async (id: string, patientId: string) => {
+    const tenantId = await resolveTenantContext()
+    await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
+    await requireRecordAccess('patient', patientId);
 
-  try {
-    // Delete items first if not using cascade delete in prisma (checking schema...)
-    // Schema shows: prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-    // So we need to delete items manually or update schema. For now, manual.
-    
     await prisma.prescriptionItem.deleteMany({
       where: {
         prescriptionId: id,
@@ -86,23 +102,27 @@ export async function deletePrescription(id: string, patientId: string) {
     })
 
     revalidatePath(`/patients/${patientId}`)
-    return { success: true }
-  } catch (error) {
-    console.error('Failed to delete prescription:', error)
-    return { success: false, error: 'Failed to delete prescription' }
-  }
-}
+    return { success: true };
+  },
+  { module: 'clinical', entityType: 'PRESCRIPTION' }
+);
 
-export async function duplicatePrescription(id: string, patientId: string) {
-  const tenantId = await resolveTenantContext()
+/**
+ * Server Action: Duplicates an existing prescription.
+ */
+export const duplicatePrescription = wrapAction(
+  'PRESCRIPTION_DUPLICATE',
+  async (id: string, patientId: string) => {
+    const tenantId = await resolveTenantContext()
+    await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
+    await requireRecordAccess('patient', patientId);
 
-  try {
     const source = await prisma.prescription.findUnique({
       where: { id, tenantId },
       include: { items: true }
     })
 
-    if (!source) return { success: false, error: 'Prescription not found' }
+    if (!source) throw new Error('Prescription not found');
 
     const newPrescription = await prisma.prescription.create({
       data: {
@@ -124,9 +144,8 @@ export async function duplicatePrescription(id: string, patientId: string) {
     })
 
     revalidatePath(`/patients/${patientId}`)
-    return { success: true, data: newPrescription }
-  } catch (error) {
-    console.error('Failed to duplicate prescription:', error)
-    return { success: false, error: 'Failed to duplicate prescription' }
-  }
-}
+    return newPrescription;
+  },
+  { module: 'clinical', entityType: 'PRESCRIPTION' }
+);
+

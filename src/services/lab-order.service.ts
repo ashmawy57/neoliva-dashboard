@@ -2,7 +2,10 @@ import "server-only";
 import { LabOrderRepository } from "@/repositories/lab-order.repository";
 import { LabOrderStatus } from "@/generated/client";
 
+import { NotificationService } from "./notification.service";
+
 const repository = new LabOrderRepository();
+const notificationService = new NotificationService();
 
 export class LabOrderService {
   private normalizeString(val: string | undefined | null, fallback: string = ""): string {
@@ -133,7 +136,17 @@ export class LabOrderService {
     try {
       this.validateTenant(tenantId);
       const updated = await repository.updateStatus(tenantId, id, status);
-      return this.serializeLabOrder(updated);
+      const serialized = this.serializeLabOrder(updated);
+
+      if (status === 'RECEIVED') {
+          await notificationService.notifyEvent(tenantId, 'LAB_READY', {
+              patientName: serialized.patientName || "Patient",
+              itemType: serialized.itemType,
+              metadata: { orderId: serialized.id }
+          });
+      }
+
+      return serialized;
     } catch (error) {
       console.error("[LabOrderService.updateLabOrderStatus] Error:", error);
       return this.getSafeOrderFallback(id);

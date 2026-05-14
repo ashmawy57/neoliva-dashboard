@@ -122,6 +122,119 @@ export class DashboardRepository {
       },
       select: {
         date: true,
+        status: true,
+      },
+    });
+  }
+
+  async getYesterdayRevenue(tenantId: string) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const result = await prisma.invoice.aggregate({
+      where: {
+        tenantId,
+        status: "PAID",
+        createdAt: {
+          gte: startOfDay(yesterday),
+          lte: endOfDay(yesterday),
+        },
+      },
+      _sum: {
+        totalAmount: true,
+      },
+    });
+    return result._sum.totalAmount;
+  }
+
+  async getDoctorPerformance(tenantId: string) {
+    const start = startOfMonth(new Date());
+    return await prisma.staff.findMany({
+      where: {
+        tenantId,
+        role: "DOCTOR",
+      },
+      select: {
+        name: true,
+        id: true,
+        appointments: {
+          where: {
+            date: { gte: start },
+          },
+          select: {
+            status: true,
+            invoice: {
+              select: {
+                totalAmount: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async getFinancialStats(tenantId: string) {
+    const today = new Date();
+    const invoices = await prisma.invoice.findMany({
+      where: { tenantId },
+      select: {
+        totalAmount: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        tenantId,
+        date: {
+          gte: startOfDay(today),
+          lte: endOfDay(today),
+        },
+      },
+      select: {
+        amount: true,
+      },
+    });
+
+    return { invoices, expenses };
+  }
+
+  async getActivityFeed(tenantId: string) {
+    const appointments = await prisma.appointment.findMany({
+      where: { tenantId },
+      include: { patient: true, doctor: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    const payments = await prisma.invoice.findMany({
+      where: { tenantId, status: "PAID" },
+      include: { patient: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+    });
+
+    return { appointments, payments };
+  }
+
+  async getPatientQueue(tenantId: string) {
+    return await prisma.appointment.findMany({
+      where: {
+        tenantId,
+        date: {
+          gte: startOfDay(new Date()),
+          lte: endOfDay(new Date()),
+        },
+        status: { in: ["WAITING", "IN_PROGRESS", "SCHEDULED"] },
+      },
+      include: {
+        patient: true,
+        doctor: true,
+      },
+      orderBy: {
+        date: "asc",
       },
     });
   }

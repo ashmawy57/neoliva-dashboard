@@ -3,13 +3,20 @@
 import { revalidatePath } from 'next/cache'
 import { StaffService } from "@/services/staff.service";
 import { resolveTenantContext } from "@/lib/tenant-context";
-import { ensurePermission } from "@/lib/permissions";
+import { requirePermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
+import { EventService } from "@/services/event.service";
+
+import { wrapAction } from "@/lib/observability/wrap-action";
 
 const staffService = new StaffService();
 
+/**
+ * Server Action: Fetches all staff members.
+ */
 export async function getStaff() {
   try {
-    await ensurePermission('VIEW_STAFF');
+    await requirePermission(PermissionCode.STAFF_VIEW);
     const tenantId = await resolveTenantContext();
     const data = await staffService.getStaffList(tenantId);
 
@@ -55,45 +62,77 @@ export async function getStaff() {
   }
 }
 
-export async function createStaff(formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) {
-  try {
-    await ensurePermission('MANAGE_STAFF');
+/**
+ * Server Action: Creates a new staff member.
+ */
+export const createStaff = wrapAction(
+  'STAFF_CREATE',
+  async (formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) => {
+    await requirePermission(PermissionCode.STAFF_MANAGE);
     const tenantId = await resolveTenantContext();
-    const data = await staffService.createStaffMember(tenantId, formData);
+    const result = await staffService.createStaffMember(tenantId, formData);
+
+    await EventService.trackEvent({
+      tenantId,
+      eventType: formData.invite ? 'STAFF_INVITED' : 'STAFF_ROLE_CHANGED', // Use role changed as fallback for non-invite creation
+      entityType: 'STAFF',
+      entityId: result.id,
+      metadata: { role: formData.role, invited: formData.invite }
+    });
 
     revalidatePath('/staff');
-    return data;
-  } catch (error: any) {
-    console.error('Error creating staff:', error);
-    throw new Error('Failed to create staff member');
-  }
-}
+    return result;
+  },
+  { module: 'staff', entityType: 'STAFF' }
+);
 
-export async function updateStaff(id: string, updates: Partial<{ name: string; role: string; title: string; email: string; phone: string; status: string }>) {
-  try {
-    await ensurePermission('MANAGE_STAFF');
+/**
+ * Server Action: Updates a staff member.
+ */
+export const updateStaff = wrapAction(
+  'STAFF_UPDATE',
+  async (id: string, updates: Partial<{ name: string; role: string; title: string; email: string; phone: string; status: string }>) => {
+    await requirePermission(PermissionCode.STAFF_MANAGE);
     const tenantId = await resolveTenantContext();
-    const data = await staffService.updateStaffMember(tenantId, id, updates);
+    const result = await staffService.updateStaffMember(tenantId, id, updates);
+
+    if (updates.role) {
+      await EventService.trackEvent({
+        tenantId,
+        eventType: 'STAFF_ROLE_CHANGED',
+        entityType: 'STAFF',
+        entityId: id,
+        metadata: { newRole: updates.role }
+      });
+    }
 
     revalidatePath('/staff');
-    return data;
-  } catch (error: any) {
-    console.error('Error updating staff:', error);
-    throw new Error('Failed to update staff member');
-  }
-}
+    return result;
+  },
+  { module: 'staff', entityType: 'STAFF' }
+);
 
-export async function deleteStaff(id: string) {
-  try {
-    await ensurePermission('MANAGE_STAFF');
+/**
+ * Server Action: Deletes a staff member.
+ */
+export const deleteStaff = wrapAction(
+  'STAFF_DELETE',
+  async (id: string) => {
+    await requirePermission(PermissionCode.STAFF_MANAGE);
     const tenantId = await resolveTenantContext();
     await staffService.deleteStaffMember(tenantId, id);
 
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'STAFF_DELETED',
+      entityType: 'STAFF',
+      entityId: id
+    });
+
     revalidatePath('/staff');
-    return true;
-  } catch (error: any) {
-    console.error('Error deleting staff:', error);
-    throw new Error('Failed to delete staff member');
-  }
-}
+    return { success: true };
+  },
+  { module: 'staff', entityType: 'STAFF' }
+);
+
 

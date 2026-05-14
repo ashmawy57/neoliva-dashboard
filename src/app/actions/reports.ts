@@ -2,6 +2,8 @@
 
 import { ReportsService } from "@/services/reports.service";
 import { resolveTenantContext } from "@/lib/tenant-context";
+import { requirePermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
 import { 
   ActionResponse, 
   FinancialTrend, 
@@ -16,7 +18,7 @@ const reportsService = new ReportsService();
 
 async function getTenant() {
   const tenantId = await resolveTenantContext();
-  if (!tenantId) throw new Error("Unauthorized");
+  await requirePermission(PermissionCode.STAFF_REPORTS_VIEW);
   return tenantId;
 }
 

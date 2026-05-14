@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
+import { TreasuryService } from "@/services/treasury.service";
+
+const treasuryService = new TreasuryService();
 
 export async function createClinicRequest(formData: FormData) {
   const name = formData.get('name') as string;
@@ -65,6 +70,9 @@ export async function createClinicRequest(formData: FormData) {
           staffId: staff.id
         }
       });
+
+      // 3. Initialize Ledger Accounts for Treasury
+      await treasuryService.ensureSystemAccounts(tenant.id, tx);
     });
 
     // 3. Success -> Redirect
@@ -80,8 +88,7 @@ export async function createClinicRequest(formData: FormData) {
 }
 
 export async function updateTenantStatus(tenantId: string, status: 'APPROVED' | 'REJECTED') {
-  // TODO: Check if current user is a SUPER_ADMIN
-  // For now, we assume simple access
+  await requirePermission(PermissionCode.ADMIN_TENANT_MANAGE);
   
   try {
     await prisma.tenant.update({

@@ -186,6 +186,7 @@ export class BillingRepository {
       const payment = await tx.payment.create({
         data: {
           invoiceId,
+          patientId: invoice.patientId,
           amount: data.amount,
           method: data.method,
           notes: data.notes,

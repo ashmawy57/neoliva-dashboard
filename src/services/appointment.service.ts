@@ -5,8 +5,11 @@ import { InventoryService } from "./inventory.service";
 import { AppointmentStatus } from "@/generated/client";
 import { prisma } from "@/lib/prisma";
 
+import { NotificationService } from "./notification.service";
+
 const appointmentRepository = new AppointmentRepository();
 const inventoryService = new InventoryService();
+const notificationService = new NotificationService();
 
 export class AppointmentService {
   private normalizeString(val: string | null | undefined, fallback: string = "-"): string {
@@ -208,7 +211,17 @@ export class AppointmentService {
         status: 'SCHEDULED'
       });
 
-      return this.serializeAppointment(result);
+      const serialized = this.serializeAppointment(result);
+
+      // Trigger Notification
+      await notificationService.notifyEvent(tenantId, 'APPOINTMENT_REMINDER', {
+        userId: data.doctorId,
+        patientName: serialized.patient || "Patient",
+        time: data.time,
+        metadata: { appointmentId: result.id }
+      });
+
+      return serialized;
     } catch (error) {
       console.error("[AppointmentService] Failed to create appointment:", error);
       throw error;

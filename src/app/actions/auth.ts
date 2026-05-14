@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { AuditService } from "@/services/audit.service";
 
 export async function login(formData: FormData) {
   const email = formData.get('email') as string;
@@ -16,11 +17,94 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
+    // We can't log to DB here easily if we don't have a tenantId yet,
+    // but we can try to find the tenant by email if possible.
     return { success: false, error: error.message };
   }
 
+  if (!data.user) {
+    return { success: false, error: "Authentication failed." };
+  }
+
+  // Get user role for smart redirect
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseId: data.user.id },
+    select: { id: true, role: true, tenantId: true }
+  });
+
+  if (dbUser) {
+    await AuditService.logAudit({
+      action: 'USER_LOGIN_SUCCESS',
+      entityType: 'USER',
+      entityId: dbUser.id,
+      metadata: { email: data.user.email }
+    });
+  }
+
   revalidatePath('/', 'layout');
-  redirect('/dashboard');
+
+  if (!dbUser) {
+    redirect('/dashboard');
+  }
+
+  // Smart Redirect System
+  switch (dbUser.role) {
+    case 'OWNER':
+    case 'ADMIN':
+      redirect('/dashboard');
+    case 'DOCTOR':
+      redirect('/dashboard/appointments');
+    case 'ACCOUNTANT':
+      redirect('/dashboard/finance');
+    default:
+      redirect('/dashboard');
+  }
+}
+
+export async function resendVerificationEmail(email: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: email,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+export async function forgotPassword(formData: FormData) {
+  const email = formData.get('email') as string;
+  const supabase = await createClient();
+  
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl}/auth/callback?next=/auth/reset-password`,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+export async function resetPassword(formData: FormData) {
+  const password = formData.get('password') as string;
+  const supabase = await createClient();
+
+  const { error } = await supabase.auth.updateUser({
+    password: password
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
 }
 
 

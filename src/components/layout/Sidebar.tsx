@@ -5,12 +5,27 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Calendar, Users, Stethoscope,
   FileText, Package, UserCog, BarChart3, Settings,
-  ChevronLeft, LogOut, Moon, Sun, Truck, Wallet
+  ChevronLeft, LogOut, Moon, Sun, Truck, Wallet, Loader2, DollarSign, Activity
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const navGroups = [
+import { usePermission } from "@/components/providers/permission-provider";
+import { PermissionCode } from "@/types/permissions";
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  permission?: PermissionCode;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
     label: "Overview",
     items: [
@@ -20,33 +35,76 @@ const navGroups = [
   {
     label: "Clinical",
     items: [
-      { name: "Appointments", href: "/appointments", icon: Calendar },
-      { name: "Patients", href: "/patients", icon: Users },
-      { name: "Services", href: "/services", icon: Stethoscope },
-      { name: "Lab Orders", href: "/lab-orders", icon: Truck },
+      { name: "Appointments", href: "/appointments", icon: Calendar, permission: PermissionCode.APPOINTMENT_VIEW },
+      { name: "Patients", href: "/patients", icon: Users, permission: PermissionCode.PATIENT_VIEW },
+      { name: "Services", href: "/services", icon: Stethoscope, permission: PermissionCode.SETTINGS_SERVICES_MANAGE },
+      { name: "Lab Orders", href: "/lab-orders", icon: Truck, permission: PermissionCode.CLINICAL_LAB_ORDER_MANAGE },
     ],
   },
   {
     label: "Financial",
     items: [
-      { name: "Billing", href: "/billing", icon: FileText },
-      { name: "Expenses", href: "/expenses", icon: Wallet },
-      { name: "Inventory", href: "/inventory", icon: Package },
+      { name: "Financial Dashboard", href: "/dashboard/finance", icon: DollarSign, permission: PermissionCode.FINANCE_VIEW },
+      { name: "Billing", href: "/billing", icon: FileText, permission: PermissionCode.BILLING_VIEW },
+      { name: "Expenses", href: "/expenses", icon: Wallet, permission: PermissionCode.BILLING_VIEW },
+      { name: "Inventory", href: "/inventory", icon: Package, permission: PermissionCode.INVENTORY_VIEW },
     ],
   },
   {
     label: "Management",
     items: [
-      { name: "Staff", href: "/staff", icon: UserCog },
-      { name: "Reports", href: "/reports", icon: BarChart3 },
-      { name: "Settings", href: "/settings", icon: Settings },
+      { name: "Staff", href: "/staff", icon: UserCog, permission: PermissionCode.STAFF_MANAGE },
+      { name: "Reports", href: "/reports", icon: BarChart3, permission: PermissionCode.STAFF_REPORTS_VIEW },
+      { name: "Operations", href: "/dashboard/operations", icon: Activity, permission: PermissionCode.ADMIN_FULL_ACCESS },
+      { name: "Settings", href: "/settings", icon: Settings, permission: PermissionCode.SETTINGS_CLINIC_EDIT },
     ],
   },
 ];
 
-export function Sidebar() {
+import { signOut } from "@/app/actions/signout";
+import { toast } from "sonner";
+
+interface SidebarProps {
+  user?: {
+    email: string;
+    role: string;
+    staff?: {
+      name: string;
+    } | null;
+  };
+}
+
+export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { hasPermission, permissions } = usePermission();
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      // In Next.js, redirect() throws a special error. 
+      // We should only catch actual errors.
+      if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+        throw error;
+      }
+      console.error('Logout error:', error);
+      toast.error("Failed to log out. Please try again.");
+      setIsLoggingOut(false);
+    }
+  };
+
+  const userName = user?.staff?.name || user?.email?.split('@')[0] || "User";
+  const userRole = user?.role || "Staff";
+  const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  // Filter groups and items based on permissions
+  const filteredGroups = navGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => !item.permission || hasPermission(item.permission))
+  })).filter(group => group.items.length > 0);
 
   return (
     <aside
@@ -85,7 +143,7 @@ export function Sidebar() {
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-6 scrollbar-none">
-        {navGroups.map((group) => (
+        {filteredGroups.map((group) => (
           <div key={group.label}>
             {!collapsed && (
               <p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-blue-300/40 mb-2 px-3">
@@ -141,22 +199,38 @@ export function Sidebar() {
         collapsed && "flex flex-col items-center"
       )}>
         {!collapsed ? (
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] transition-colors cursor-pointer group">
+          <div 
+            onClick={handleLogout}
+            className={cn(
+              "flex items-center gap-3 p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] transition-all cursor-pointer group active:scale-95",
+              isLoggingOut && "opacity-50 pointer-events-none"
+            )}
+          >
             <div className="relative">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
-                DS
+                {initials}
               </div>
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[oklch(0.14_0.025_255)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-white/90 truncate">Dr. Roufida Attia</p>
-              <p className="text-[11px] text-white/40 truncate">Administrator</p>
+              <p className="text-[13px] font-semibold text-white/90 truncate">{userName}</p>
+              <p className="text-[11px] text-white/40 truncate">{userRole}</p>
             </div>
-            <LogOut className="w-4 h-4 text-white/25 group-hover:text-white/60 transition-colors flex-shrink-0" />
+            {isLoggingOut ? (
+              <Loader2 className="w-4 h-4 text-white/40 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 text-white/25 group-hover:text-white/60 transition-colors flex-shrink-0" />
+            )}
           </div>
         ) : (
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg cursor-pointer">
-            DS
+          <div 
+            onClick={handleLogout}
+            className={cn(
+              "w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-lg cursor-pointer hover:scale-110 transition-all active:scale-90",
+              isLoggingOut && "opacity-50 animate-pulse"
+            )}
+          >
+            {isLoggingOut ? "..." : initials}
           </div>
         )}
       </div>

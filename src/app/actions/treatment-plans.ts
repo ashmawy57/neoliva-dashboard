@@ -3,12 +3,24 @@
 import { revalidatePath } from 'next/cache'
 import { TreatmentPlanService } from "@/services/treatment-plan.service";
 import { resolveTenantContext } from "@/lib/tenant-context";
+import { requirePermission } from "@/lib/rbac";
+import { requireRecordAccess } from "@/lib/abac";
+import { PermissionCode } from "@/types/permissions";
+import { EventService } from "@/services/event.service";
+
+import { wrapAction } from "@/lib/observability/wrap-action";
 
 const treatmentPlanService = new TreatmentPlanService();
 
+/**
+ * Server Action: Fetches all treatment plans for a patient.
+ */
 export async function getTreatmentPlans(patientId: string) {
   try {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.PATIENT_VIEW);
+    await requireRecordAccess('patient', patientId);
+    
     const data = await treatmentPlanService.getTreatmentPlans(tenantId, patientId);
 
     return data.map((plan) => {
@@ -45,81 +57,164 @@ export async function getTreatmentPlans(patientId: string) {
   }
 }
 
-export async function createTreatmentPlan(patientId: string, planData: any) {
-  try {
+/**
+ * Server Action: Creates a new treatment plan.
+ */
+export const createTreatmentPlan = wrapAction(
+  'TREATMENT_PLAN_CREATE',
+  async (patientId: string, planData: any) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     const plan = await treatmentPlanService.createTreatmentPlan(tenantId, patientId, planData);
 
-    revalidatePath(`/patients/${patientId}`);
-    return { success: true, data: plan };
-  } catch (error: any) {
-    console.error('Error creating plan:', error);
-    return { success: false, error: error.message };
-  }
-}
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'TREATMENT_PLAN_CREATED',
+      entityType: 'TREATMENT',
+      entityId: plan.id,
+      metadata: { patientId, title: plan.title }
+    });
 
-export async function deleteTreatmentPlan(planId: string, patientId: string) {
-  try {
+    revalidatePath(`/patients/${patientId}`);
+    return plan;
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PLAN' }
+);
+
+/**
+ * Server Action: Deletes a treatment plan.
+ */
+export const deleteTreatmentPlan = wrapAction(
+  'TREATMENT_PLAN_DELETE',
+  async (planId: string, patientId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     await treatmentPlanService.deleteTreatmentPlan(tenantId, planId);
+    
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'TREATMENT_PLAN_DELETED',
+      entityType: 'TREATMENT',
+      entityId: planId,
+      metadata: { patientId }
+    });
 
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting plan:', error);
-    return { success: false, error: error.message };
-  }
-}
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PLAN' }
+);
 
-export async function updatePlanStatus(planId: string, status: string, patientId: string) {
-  try {
+/**
+ * Server Action: Updates treatment plan status.
+ */
+export const updatePlanStatus = wrapAction(
+  'TREATMENT_PLAN_STATUS_UPDATE',
+  async (planId: string, status: string, patientId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     await treatmentPlanService.updatePlanStatus(tenantId, planId, status);
 
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'TREATMENT_PLAN_STATUS_CHANGED',
+      entityType: 'TREATMENT',
+      entityId: planId,
+      metadata: { status, patientId }
+    });
+
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating plan status:', error);
-    return { success: false, error: error.message };
-  }
-}
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PLAN' }
+);
 
-export async function addTreatmentPhase(planId: string, phaseData: any, step: number, patientId: string) {
-  try {
+/**
+ * Server Action: Adds a phase to a treatment plan.
+ */
+export const addTreatmentPhase = wrapAction(
+  'TREATMENT_PHASE_ADD',
+  async (planId: string, phaseData: any, step: number, patientId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     await treatmentPlanService.addTreatmentPhase(tenantId, planId, phaseData, step);
 
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'TREATMENT_PLAN_STATUS_CHANGED',
+      entityType: 'TREATMENT',
+      entityId: planId,
+      metadata: { patientId, action: 'PHASE_ADDED', serviceName: phaseData.serviceName }
+    });
+
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
-  } catch (error: any) {
-    console.error('Error adding phase:', error);
-    return { success: false, error: error.message };
-  }
-}
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PHASE' }
+);
 
-export async function updatePhaseStatus(phaseId: string, status: string, patientId: string) {
-  try {
+/**
+ * Server Action: Updates a treatment phase status.
+ */
+export const updatePhaseStatus = wrapAction(
+  'TREATMENT_PHASE_STATUS_UPDATE',
+  async (phaseId: string, status: string, patientId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     await treatmentPlanService.updatePhaseStatus(tenantId, phaseId, status);
 
+    let eventType: any = 'TREATMENT_UPDATED';
+    if (status === 'In Progress') eventType = 'TREATMENT_STARTED';
+    if (status === 'Completed') eventType = 'TREATMENT_COMPLETED';
+
+    await EventService.trackEvent({
+      tenantId,
+      eventType,
+      entityType: 'TREATMENT',
+      entityId: phaseId,
+      metadata: { status, patientId }
+    });
+
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating phase status:', error);
-    return { success: false, error: error.message };
-  }
-}
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PHASE' }
+);
 
-export async function deleteTreatmentPhase(phaseId: string, patientId: string) {
-  try {
+/**
+ * Server Action: Deletes a treatment phase.
+ */
+export const deleteTreatmentPhase = wrapAction(
+  'TREATMENT_PHASE_DELETE',
+  async (phaseId: string, patientId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
+    await requireRecordAccess('patient', patientId);
+    
     await treatmentPlanService.deleteTreatmentPhase(tenantId, phaseId);
 
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'TREATMENT_PLAN_STATUS_CHANGED',
+      entityType: 'TREATMENT',
+      entityId: phaseId,
+      metadata: { patientId, action: 'PHASE_DELETED' }
+    });
+
     revalidatePath(`/patients/${patientId}`);
     return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting phase:', error);
-    return { success: false, error: error.message };
-  }
-}
+  },
+  { module: 'clinical', entityType: 'TREATMENT_PHASE' }
+);
+
 

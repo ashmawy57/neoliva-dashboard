@@ -4,18 +4,34 @@ import { prisma } from "@/lib/prisma";
 import { resolveTenantContext } from "@/lib/tenant-context";
 import { revalidatePath } from "next/cache";
 import { BillingService } from "@/services/billing.service";
+import { requirePermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
 import { PaymentMethod } from "@/generated/client";
+import { requireRecordAccess, canAccessPatient } from "@/lib/abac";
+import { EventService } from "@/services/event.service";
 
+import { wrapAction } from "@/lib/observability/wrap-action";
 const billingService = new BillingService();
 
 /**
  * Server Action: Generates an invoice from an appointment.
  */
-export async function generateInvoiceFromAppointment(appointmentId: string) {
-  try {
+export const generateInvoiceFromAppointment = wrapAction(
+  'INVOICE_GENERATE',
+  async (appointmentId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
+    await requireRecordAccess('appointment', appointmentId);
     const result = await billingService.generateInvoiceFromAppointment(tenantId, appointmentId);
     
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      entityType: 'INVOICE',
+      entityId: result.id,
+      metadata: { appointmentId, patientId: result.patientId, amount: result.totalAmount }
+    });
+
     if (result && result.patientId) {
       revalidatePath(`/patients/${result.patientId}`);
       revalidatePath('/dashboard');
@@ -24,55 +40,68 @@ export async function generateInvoiceFromAppointment(appointmentId: string) {
       revalidatePath('/appointments');
     }
     
-    return { success: true, data: result };
-  } catch (error: any) {
-    console.error("[generateInvoiceFromAppointment] Action failed:", error);
-    return { success: false, error: error.message || "Failed to generate invoice." };
-  }
-}
+    return result;
+  },
+  { module: 'billing', entityType: 'INVOICE' }
+);
 
 /**
  * Server Action: Creates a new invoice with line items.
  */
-export async function createInvoice(data: { 
-  patientId: string;
-  appointmentId?: string;
-  dueDate?: Date;
-  items: {
-    description: string;
-    quantity: number;
-    price: number;
-    serviceId?: string;
-  }[];
-}) {
-  try {
+export const createInvoice = wrapAction(
+  'INVOICE_CREATE',
+  async (data: { 
+    patientId: string;
+    appointmentId?: string;
+    dueDate?: Date;
+    items: {
+      description: string;
+      quantity: number;
+      price: number;
+      serviceId?: string;
+    }[];
+  }) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
+    
+    if (!(await canAccessPatient(data.patientId))) {
+      throw new Error("ABAC Denial: You do not have access to this patient.");
+    }
+    
     const result = await billingService.createInvoice(tenantId, data);
     
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      entityType: 'INVOICE',
+      entityId: result.id,
+      metadata: { patientId: data.patientId, amount: result.totalAmount }
+    });
+
     revalidatePath(`/patients/${data.patientId}`);
     revalidatePath('/billing');
     revalidatePath('/billing/invoices');
     
-    return { success: true, data: result };
-  } catch (error: any) {
-    console.error("[createInvoice] Action failed:", error);
-    return { success: false, error: error.message || "Failed to create invoice." };
-  }
-}
+    return result;
+  },
+  { module: 'billing', entityType: 'INVOICE' }
+);
 
 /**
  * Server Action: Records a payment for an invoice.
  */
-export async function recordPayment(invoiceId: string, data: {
-  amount: number;
-  method: PaymentMethod;
-  notes?: string;
-  paidAt?: Date;
-}) {
-  try {
+export const recordPayment = wrapAction(
+  'PAYMENT_RECORD',
+  async (invoiceId: string, data: {
+    amount: number;
+    method: PaymentMethod;
+    notes?: string;
+    paidAt?: Date;
+  }) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_PAYMENT_RECORD);
+    await requireRecordAccess('invoice', invoiceId);
     
-    // Fetch patientId for revalidation
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       select: { patientId: true }
@@ -82,39 +111,49 @@ export async function recordPayment(invoiceId: string, data: {
 
     const result = await billingService.recordPayment(tenantId, invoiceId, data);
 
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'INVOICE_PAID',
+      entityType: 'INVOICE',
+      entityId: invoiceId,
+      metadata: { amount: data.amount, method: data.method }
+    });
+
     revalidatePath(`/patients/${invoice.patientId}`);
     revalidatePath(`/billing`);
     revalidatePath(`/billing/invoices`);
 
-    return { 
-      success: true, 
-      data: result 
-    };
-  } catch (error: any) {
-    console.error("[recordPayment] Action failed:", error);
-    return { 
-      success: false, 
-      error: error.message || "Failed to record payment." 
-    };
-  }
-}
+    return result;
+  },
+  { module: 'billing', entityType: 'PAYMENT' }
+);
 
 /**
  * Server Action: Deletes an invoice.
  */
-export async function deleteInvoice(patientId: string, invoiceId: string) {
-  try {
+export const deleteInvoice = wrapAction(
+  'INVOICE_DELETE',
+  async (patientId: string, invoiceId: string) => {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
+    await requireRecordAccess('invoice', invoiceId);
     await billingService.deleteInvoice(tenantId, invoiceId);
+
+    await EventService.trackEvent({
+      tenantId,
+      eventType: 'INVOICE_DELETED',
+      entityType: 'INVOICE',
+      entityId: invoiceId,
+      metadata: { patientId }
+    });
     revalidatePath(`/patients/${patientId}`);
     revalidatePath(`/billing`);
     revalidatePath(`/billing/invoices`);
     return { success: true };
-  } catch (error: any) {
-    console.error("[deleteInvoice] Action failed:", error);
-    return { success: false, error: error.message || "Failed to delete invoice." };
-  }
-}
+  },
+  { module: 'billing', entityType: 'INVOICE' }
+);
+
 
 /**
  * Server Action: Fetches all invoices.
@@ -122,6 +161,7 @@ export async function deleteInvoice(patientId: string, invoiceId: string) {
 export async function getInvoices() {
   try {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_VIEW);
     return await billingService.getInvoicesList(tenantId);
   } catch (error) {
     console.error("[getInvoices] Action failed:", error);
@@ -135,6 +175,7 @@ export async function getInvoices() {
 export async function getBillingStats() {
   try {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_VIEW);
     return await billingService.getBillingStats(tenantId);
   } catch (error) {
     console.error("[getBillingStats] Action failed:", error);
@@ -157,6 +198,8 @@ export async function getInvoice(id: string) {
   }
   try {
     const tenantId = await resolveTenantContext();
+    await requirePermission(PermissionCode.BILLING_VIEW);
+    await requireRecordAccess('invoice', id);
     return await billingService.getInvoiceDetails(tenantId, id);
   } catch (error) {
     console.error(`[getInvoice] Action failed for ID ${id}:`, error);

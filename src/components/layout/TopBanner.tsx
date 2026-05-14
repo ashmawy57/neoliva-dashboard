@@ -1,13 +1,14 @@
 "use client";
 
-import { Bell, Search, Menu } from "lucide-react";
+import { Search, Menu } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileSidebar } from "./MobileSidebar";
 
-export function TopBanner() {
+export function TopBanner({ user }: { user?: any }) {
   const [searchFocused, setSearchFocused] = useState(false);
 
   return (
@@ -43,17 +44,7 @@ export function TopBanner() {
 
       {/* Right actions */}
       <div className="flex items-center gap-1 ml-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl h-10 w-10"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute top-2 right-2 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-          </span>
-        </Button>
+        <NotificationBell userId={user?.id} tenantId={user?.tenantId} />
 
         {/* Date */}
         <div className="hidden lg:flex items-center gap-2 ml-2 px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-100">

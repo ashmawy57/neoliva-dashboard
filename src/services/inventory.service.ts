@@ -2,7 +2,10 @@ import "server-only";
 import { InventoryRepository } from "@/repositories/inventory.repository";
 import { prisma } from "@/lib/prisma";
 
+import { NotificationService } from "./notification.service";
+
 const inventoryRepository = new InventoryRepository();
+const notificationService = new NotificationService();
 
 export class InventoryService {
   private normalizeString(val: string | undefined | null, fallback: string = ""): string {
@@ -121,6 +124,21 @@ export class InventoryService {
         ...data,
         reason: this.normalizeString(data.reason, "Stock Out")
       });
+
+      // Check for low stock alert
+      const updatedItem = await inventoryRepository.findUnique(tenantId, data.itemId);
+      if (updatedItem) {
+          const newStock = this.calculateCurrentStock(updatedItem.stockEntries || []);
+          if (newStock <= (updatedItem.minimumStock || 0)) {
+              await notificationService.notifyEvent(tenantId, 'LOW_STOCK_ALERT', {
+                  itemName: updatedItem.name,
+                  currentStock: newStock,
+                  unit: updatedItem.unit,
+                  metadata: { itemId: updatedItem.id }
+              });
+          }
+      }
+
       return JSON.parse(JSON.stringify(result));
     } catch (error) {
       console.error("[InventoryService.deductStock] Error:", error);

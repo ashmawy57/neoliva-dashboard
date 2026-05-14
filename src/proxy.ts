@@ -1,21 +1,38 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { randomUUID } from "node:crypto";
 
+/**
+ * Global Proxy for Dental Clinic Dashboard (Next.js 16.2+ Replacement for Middleware)
+ * 
+ * Handles:
+ * 1. Request Tracing (RequestId)
+ * 2. Auth Proxy (Supabase Session Management)
+ * 3. Protected Route Guards
+ */
 export async function proxy(request: NextRequest) {
+  // --- 1. Request Tracing ---
+  const requestId = request.headers.get("x-request-id") || randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+
+  // --- 2. Initialize Response with Tracing Headers ---
   let response = NextResponse.next({
     request: {
-      headers: request.headers,
+      headers: requestHeaders,
     },
-  })
+  });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // If Supabase keys are missing, allow public pages and let protected pages fail gracefully later
   if (!supabaseUrl || !supabaseKey) {
+    response.headers.set("x-request-id", requestId);
     return response;
   }
 
+  // --- 3. Supabase Auth Logic ---
   const supabase = createServerClient(
     supabaseUrl,
     supabaseKey,
@@ -32,7 +49,7 @@ export async function proxy(request: NextRequest) {
           })
           response = NextResponse.next({
             request: {
-              headers: request.headers,
+              headers: requestHeaders,
             },
           })
           response.cookies.set({
@@ -49,7 +66,7 @@ export async function proxy(request: NextRequest) {
           })
           response = NextResponse.next({
             request: {
-              headers: request.headers,
+              headers: requestHeaders,
             },
           })
           response.cookies.set({
@@ -62,46 +79,94 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // ── Admin route protection ──────────────────────────────────────────────
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
-  const isAdminLoginPage = request.nextUrl.pathname === '/admin/login';
+  // Refresh/Get User Session
+  const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname;
 
-  if (isAdminRoute && !isAdminLoginPage) {
-    const adminSession = request.cookies.get('admin_session')?.value;
-    const adminSecret = process.env.ADMIN_SECRET;
+  // --- 4. Route Protection Logic ---
+  const isApiRequest = pathname.startsWith('/api/');
+  const isAdminRoute = pathname.startsWith('/admin');
+  
+  // Public Page Bypass
+  const isPublicPage = pathname === '/' ||
+                       pathname.startsWith('/login') || 
+                       pathname.startsWith('/signup') ||
+                       pathname.startsWith('/auth/') || 
+                       pathname.startsWith('/create-clinic') ||
+                       pathname.startsWith('/pending-approval') ||
+                       pathname.startsWith('/rejected') ||
+                       pathname.startsWith('/unauthorized') ||
+                       (isAdminRoute && pathname === '/admin/login');
 
-    if (!adminSession || adminSession !== adminSecret) {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
-    }
-    // Admin is authenticated — allow through without further Supabase checks
+  if (isPublicPage) {
+    response.headers.set("x-request-id", requestId);
     return response;
   }
-  // ── End admin route protection ──────────────────────────────────────────
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // AuthN Gate
+  if (!user) {
+    if (isApiRequest) {
+      const apiResponse = NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+      apiResponse.headers.set("x-request-id", requestId);
+      return apiResponse;
+    }
 
-  const isPublicPage = request.nextUrl.pathname === '/' ||
-                       request.nextUrl.pathname.startsWith('/login') || 
-                       request.nextUrl.pathname.startsWith('/signup') ||
-                       request.nextUrl.pathname.startsWith('/create-clinic') ||
-                       request.nextUrl.pathname.startsWith('/pending-approval') ||
-                       request.nextUrl.pathname.startsWith('/rejected') ||
-                       request.nextUrl.pathname.startsWith('/unauthorized') ||
-                       request.nextUrl.pathname.startsWith('/forgot-password') ||
-                       request.nextUrl.pathname.startsWith('/reset-password') ||
-                       request.nextUrl.pathname.startsWith('/auth/callback') ||
-                       request.nextUrl.pathname.startsWith('/admin') // admin login is public to Supabase auth
-
-  // Redirect to login if no user and not on a public page
-  if (!user && !isPublicPage && !request.nextUrl.pathname.startsWith('/api')) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    // Redirect to appropriate login page
+    const loginPath = isAdminRoute ? '/admin/login' : '/login';
+    const redirectUrl = new URL(loginPath, request.url);
+    redirectUrl.searchParams.set('type', 'SESSION_EXPIRED');
+    if (!isAdminRoute) {
+      redirectUrl.searchParams.set('next', pathname);
+    }
+    
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    redirectResponse.headers.set("x-request-id", requestId);
+    return redirectResponse;
   }
 
-  return response
+  // --- 5. Admin RBAC & Tenant Bypass ---
+  if (isAdminRoute) {
+    const role = (user.app_metadata?.role || user.user_metadata?.role || '')?.toString().toUpperCase();
+    
+    // STRICT CHECK: Only SUPER_ADMIN can access any /admin route
+    if (role !== 'SUPER_ADMIN') {
+      console.warn(`[Proxy] Unauthorized admin access attempt by ${user.email} (Role: ${role})`);
+      const unauthorizedUrl = new URL('/unauthorized', request.url);
+      const unauthorizedResponse = NextResponse.redirect(unauthorizedUrl);
+      unauthorizedResponse.headers.set("x-request-id", requestId);
+      return unauthorizedResponse;
+    }
+
+    // Authorized Super Admin: Bypass tenant check
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
+
+  // --- 6. Tenant-Scoped Route Protection ---
+  // For all other private routes, we conceptually require a tenantId.
+  // In this system, the tenantId is resolved from the database.
+  // We'll let the application layer (tenant-context) handle the specific DB lookup,
+  // but the proxy ensures that we aren't accidentally allowing non-admins into /admin.
+  
+  // Note: If you want to strictly block users without a tenantId in the proxy, 
+  // you would need to check user.app_metadata.tenantId or similar here.
+
+
+  // Finalize Response with Tracing
+  response.headers.set("x-request-id", requestId);
+  return response;
 }
 
 export const config = {
   matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - images/ (public images)
+     * - public (public files)
+     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}
+};

@@ -1,110 +1,114 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   TrendingUp, 
-  Users, 
-  CreditCard, 
-  AlertTriangle,
+  Target,
   ChevronUp,
   ChevronDown,
-  CalendarCheck2
+  PieChart,
+  Wallet
 } from "lucide-react";
 
 interface KPIProps {
   data: {
-    dailyRevenue: number;
-    appointments: {
-      total: number;
-      completed: number;
-      pending: number;
-    };
-    pendingPayments: number;
-    lowInventory: number;
+    revenueToday: { value: number; change: number };
+    monthlyGrowth: number;
+    profitMargin: number;
+    collectionRate: number;
   };
 }
 
 export function DashboardKPIs({ data }: KPIProps) {
   const kpis = [
     {
-      title: "Daily Revenue",
-      value: `$${data.dailyRevenue.toLocaleString()}`,
-      sub: "Total paid today",
+      title: "Revenue Today",
+      value: `$${data.revenueToday.value.toLocaleString()}`,
+      sub: `${data.revenueToday.change >= 0 ? '+' : ''}${data.revenueToday.change.toFixed(1)}% vs yesterday`,
       icon: TrendingUp,
-      color: "blue",
-      trend: "up"
+      gradient: "from-blue-600 to-indigo-600",
+      shadow: "shadow-blue-200",
+      trend: data.revenueToday.change >= 0 ? "up" : "down",
+      percentage: data.revenueToday.change
     },
     {
-      title: "Today's Appointments",
-      value: data.appointments.total,
-      sub: `${data.appointments.completed} completed · ${data.appointments.pending} pending`,
-      icon: CalendarCheck2,
-      color: "indigo",
-      trend: "none"
+      title: "Monthly Growth",
+      value: `${data.monthlyGrowth.toFixed(1)}%`,
+      sub: "Revenue growth MoM",
+      icon: Target,
+      gradient: "from-indigo-600 to-purple-600",
+      shadow: "shadow-indigo-200",
+      trend: data.monthlyGrowth >= 0 ? "up" : "down",
+      percentage: data.monthlyGrowth
     },
     {
-      title: "Pending Payments",
-      value: `$${data.pendingPayments.toLocaleString()}`,
-      sub: "Unpaid invoices",
-      icon: CreditCard,
-      color: "amber",
-      trend: "none"
+      title: "Profit Margin",
+      value: `${data.profitMargin.toFixed(1)}%`,
+      sub: "Net profit after expenses",
+      icon: PieChart,
+      gradient: "from-emerald-500 to-teal-500",
+      shadow: "shadow-emerald-200",
+      trend: data.profitMargin >= 20 ? "up" : "none",
+      percentage: data.profitMargin
     },
     {
-      title: "Low Inventory",
-      value: data.lowInventory,
-      sub: "Items needing restock",
-      icon: AlertTriangle,
-      color: "red",
-      trend: data.lowInventory > 0 ? "up" : "none"
+      title: "Collection Rate",
+      value: `${data.collectionRate.toFixed(1)}%`,
+      sub: "Paid vs invoiced amount",
+      icon: Wallet,
+      gradient: "from-amber-500 to-orange-500",
+      shadow: "shadow-amber-200",
+      trend: data.collectionRate >= 90 ? "up" : "down",
+      percentage: data.collectionRate
     }
   ];
 
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case "blue": return "bg-blue-50 text-blue-600 border-blue-100";
-      case "indigo": return "bg-indigo-50 text-indigo-600 border-indigo-100";
-      case "amber": return "bg-amber-50 text-amber-600 border-amber-100";
-      case "red": return "bg-red-50 text-red-600 border-red-100";
-      default: return "bg-gray-50 text-gray-600 border-gray-100";
-    }
-  };
-
-  const getIconColor = (color: string) => {
-    switch (color) {
-      case "blue": return "text-blue-500";
-      case "indigo": return "text-indigo-500";
-      case "amber": return "text-amber-500";
-      case "red": return "text-red-500";
-      default: return "text-gray-500";
-    }
-  };
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
       {kpis.map((kpi, i) => (
-        <Card key={i} className="border-0 shadow-sm overflow-hidden group hover:ring-1 hover:ring-blue-200 transition-all">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div className={`p-2.5 rounded-xl border ${getColorClasses(kpi.color)}`}>
-                <kpi.icon className="w-5 h-5" />
-              </div>
-              {kpi.trend !== "none" && (
-                <div className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  kpi.trend === "up" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                }`}>
-                  {kpi.trend === "up" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  12%
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.1 }}
+          whileHover={{ y: -5 }}
+          className="group"
+        >
+          <Card className="border-0 shadow-xl shadow-gray-100/50 bg-white hover:shadow-2xl hover:shadow-indigo-100 transition-all duration-300 rounded-3xl overflow-hidden relative">
+            <CardContent className="p-6 relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-2xl bg-gradient-to-br ${kpi.gradient} text-white shadow-lg ${kpi.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                  <kpi.icon className="w-5 h-5" />
                 </div>
-              )}
-            </div>
-            <div className="mt-4">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{kpi.title}</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</h3>
-              <p className="text-xs text-gray-400 mt-1">{kpi.sub}</p>
-            </div>
-          </CardContent>
-        </Card>
+                {kpi.trend !== "none" && (
+                  <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full ${
+                    kpi.trend === "up" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                  }`}>
+                    {kpi.trend === "up" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {Math.abs(kpi.percentage).toFixed(0)}%
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">
+                  {kpi.title}
+                </p>
+                <h3 className="text-3xl font-black text-gray-900 tracking-tight">
+                  {kpi.value}
+                </h3>
+                <p className="text-[10px] font-medium text-gray-400 mt-2 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-1 h-1 rounded-full bg-gray-200" />
+                  {kpi.sub}
+                </p>
+              </div>
+            </CardContent>
+            
+            {/* Subtle background decoration */}
+            <div className={`absolute -right-4 -bottom-4 w-24 h-24 bg-gradient-to-br ${kpi.gradient} opacity-[0.03] rounded-full blur-2xl group-hover:opacity-[0.08] transition-opacity`} />
+          </Card>
+        </motion.div>
       ))}
     </div>
   );

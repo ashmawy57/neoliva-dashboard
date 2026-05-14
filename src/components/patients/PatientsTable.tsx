@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Search, ExternalLink, Trash2 } from "lucide-react";
 import { deletePatient } from "@/app/actions/patients";
 import { toast } from "sonner";
+import { Can } from "@/components/providers/permission-provider";
+import { PermissionCode } from "@/types/permissions";
 
 interface PatientTableProps {
   initialPatients: any[];
@@ -117,15 +119,17 @@ export function PatientsTable({ initialPatients }: PatientTableProps) {
                           View <ExternalLink className="ml-1.5 w-3 h-3" />
                         </Button>
                       </Link>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => handleDelete(patient.id, patient.name)}
-                        disabled={isDeleting === patient.id}
-                        className="rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs h-8 px-2"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      <Can permission={PermissionCode.PATIENT_DELETE}>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleDelete(patient.id, patient.name)}
+                          disabled={isDeleting === patient.id}
+                          className="rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs h-8 px-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </Can>
                     </div>
                   </TableCell>
                 </TableRow>

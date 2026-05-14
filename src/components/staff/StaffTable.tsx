@@ -6,6 +6,7 @@ import { Search, UserPen, Shield, Mail, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { EditStaffDialog } from "./EditStaffDialog";
 
 const roleConfig: Record<string, { bg: string; text: string; icon: string }> = {
   Admin: { bg: "bg-purple-100", text: "text-purple-700", icon: "👑" },
@@ -16,6 +17,7 @@ const roleConfig: Record<string, { bg: string; text: string; icon: string }> = {
 
 export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
   const [search, setSearch] = useState("");
+  const [editingMember, setEditingMember] = useState<any>(null);
 
   const filteredStaff = initialStaff.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -84,7 +86,12 @@ export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 rounded-lg">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
+                      onClick={() => setEditingMember(member)}
+                    >
                       <UserPen className="w-4 h-4" />
                     </Button>
                   </TableCell>
@@ -101,6 +108,14 @@ export function StaffTable({ initialStaff }: { initialStaff: any[] }) {
           </TableBody>
         </Table>
       </div>
+
+      {editingMember && (
+        <EditStaffDialog 
+          member={editingMember} 
+          open={!!editingMember} 
+          onOpenChange={(open) => !open && setEditingMember(null)} 
+        />
+      )}
     </div>
   );
 }
