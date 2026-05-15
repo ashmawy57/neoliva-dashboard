@@ -10,7 +10,7 @@ interface PageProps {
 }
 
 export default async function AcceptInvitationPage({ searchParams }: PageProps) {
-  const token = searchParams.token;
+  const { token } = await searchParams;
 
   if (!token) {
     return (

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBanner } from "@/components/layout/TopBanner";
 import { resolveTenantContext, getTenantContext, TenantContextError } from "@/lib/tenant-context";

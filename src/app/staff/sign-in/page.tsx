@@ -1,7 +1,8 @@
 
 import { StaffAuthForm } from "@/components/auth/StaffAuthForm";
-import { Building2, ShieldCheck } from "lucide-react";
+import { Building2, ShieldCheck, Loader2 } from "lucide-react";
 import Link from "next/link";
+import React, { Suspense } from "react";
 
 export default function StaffSignInPage() {
   return (
@@ -28,7 +29,9 @@ export default function StaffSignInPage() {
           </p>
         </div>
 
-        <StaffAuthForm />
+        <Suspense fallback={<div className="h-48 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500/20" /></div>}>
+          <StaffAuthForm />
+        </Suspense>
 
         <div className="mt-10 pt-8 border-t border-white/5 text-center flex flex-col gap-4">
           <p className="text-xs text-white/30">
