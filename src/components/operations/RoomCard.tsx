@@ -11,7 +11,8 @@ import {
   Play, 
   CheckCircle2, 
   ArrowRightLeft,
-  AlertTriangle
+  AlertTriangle,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
