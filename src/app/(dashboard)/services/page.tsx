@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { resolveTenantContext } from "@/lib/tenant-context";
 
 export default async function ServicesPage() {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   const serviceService = new ServiceService();
   const services = await serviceService.getServices(tenantId);
 

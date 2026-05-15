@@ -12,7 +12,7 @@ const labOrderService = new LabOrderService();
 const patientService = new PatientService();
 
 export default async function LabOrdersPage() {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   
   // Fetch data in parallel
   const [labOrders, stats, patients] = await Promise.all([

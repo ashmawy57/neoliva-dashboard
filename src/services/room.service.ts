@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 export const RoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
-  slug: z.string().min(1, "Slug is required"),
+  slug: z.string().optional(), // Make slug optional for auto-generation
   type: z.nativeEnum(RoomType),
   description: z.string().optional(),
   color: z.string().optional(),
@@ -43,9 +43,13 @@ export class RoomService {
   static async createRoom(tenantId: string, data: z.infer<typeof RoomSchema>) {
     await requirePermission(PermissionCode.ROOM_MANAGE);
 
+    // Auto-generate slug if not provided
+    const slug = data.slug || await this.generateUniqueRoomSlug(tenantId, data.name);
+
     const room = await prisma.room.create({
       data: {
         ...data,
+        slug,
         tenantId,
       },
     });
@@ -318,7 +322,23 @@ export class RoomService {
       include: {
         roomStaff: { 
           include: { 
-            user: { select: { id: true, name: true } } 
+            user: { 
+              select: { 
+                id: true, 
+                email: true,
+                memberships: {
+                  where: { tenantId },
+                  select: {
+                    role: true,
+                    staffProfile: {
+                      select: {
+                        name: true
+                      }
+                    }
+                  }
+                }
+              } 
+            } 
           } 
         },
         roomChairs: {
@@ -334,5 +354,38 @@ export class RoomService {
         }
       }
     });
+  }
+
+  /**
+   * HELPERS: Slug generation
+   */
+  private static slugify(text: string): string {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')     // Replace spaces with -
+      .replace(/[^\w\u0621-\u064A-]+/g, '') // Remove all non-word chars (except Arabic and hyphens)
+      .replace(/--+/g, '-')     // Replace multiple - with single -
+      .replace(/^-+/, '')       // Trim - from start of text
+      .replace(/-+$/, '');      // Trim - from end of text
+  }
+
+  private static async generateUniqueRoomSlug(tenantId: string, name: string): Promise<string> {
+    const baseSlug = this.slugify(name) || 'room';
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      const existing = await prisma.room.findFirst({
+        where: { tenantId, slug },
+        select: { id: true }
+      });
+
+      if (!existing) return slug;
+
+      counter++;
+      slug = `${baseSlug}-${counter}`;
+    }
   }
 }

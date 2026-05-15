@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -105,26 +106,28 @@ export function ExpenseRowActions({ expense }: { expense: Expense }) {
       </Button>
     </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48 p-1 rounded-xl shadow-xl border-gray-100">
-        <DropdownMenuLabel className="text-xs font-semibold text-gray-400 px-2 py-1.5 uppercase">Actions</DropdownMenuLabel>
-        <DropdownMenuItem 
-          onClick={toggleStatus}
-          className="rounded-lg gap-2 cursor-pointer focus:bg-gray-50 focus:text-gray-900"
-        >
-          {expense.status === "PAID" ? (
-            <Clock className="w-4 h-4 text-amber-500" />
-          ) : (
-            <CheckCircle className="w-4 h-4 text-emerald-500" />
-          )}
-          Mark as {expense.status === "PAID" ? "Pending" : "Paid"}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-gray-50" />
-        <DropdownMenuItem 
-          onClick={handleDelete}
-          className="text-red-600 rounded-lg gap-2 cursor-pointer focus:bg-red-50 focus:text-red-600"
-        >
-          <Trash2 className="w-4 h-4" />
-          Delete Expense
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs font-semibold text-gray-400 px-2 py-1.5 uppercase">Actions</DropdownMenuLabel>
+          <DropdownMenuItem 
+            onClick={toggleStatus}
+            className="rounded-lg gap-2 cursor-pointer focus:bg-gray-50 focus:text-gray-900"
+          >
+            {expense.status === "PAID" ? (
+              <Clock className="w-4 h-4 text-amber-500" />
+            ) : (
+              <CheckCircle className="w-4 h-4 text-emerald-500" />
+            )}
+            Mark as {expense.status === "PAID" ? "Pending" : "Paid"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator className="bg-gray-50" />
+          <DropdownMenuItem 
+            onClick={handleDelete}
+            className="text-red-600 rounded-lg gap-2 cursor-pointer focus:bg-red-50 focus:text-red-600"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Expense
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

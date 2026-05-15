@@ -5,8 +5,6 @@ import { getUserPermissions } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 import { RoomList } from "@/components/rooms/RoomList";
 import { redirect } from "next/navigation";
-import { DoorOpen, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = {
@@ -20,16 +18,17 @@ export default async function RoomsPage() {
     redirect("/auth/sign-in");
   }
 
-  const { hasPermission } = await getUserPermissions(user.id, tenantId);
+  const permissions = await getUserPermissions();
   
-  if (!hasPermission(PermissionCode.ROOM_VIEW)) {
+  // Ensure we use the correct Set method .has() for RSC RBAC checks
+  if (!permissions.has(PermissionCode.ROOM_VIEW)) {
     redirect("/dashboard");
   }
 
-  const canManageRooms = hasPermission(PermissionCode.ROOM_MANAGE);
-  const canAssignStaff = hasPermission(PermissionCode.ROOM_STAFF_ASSIGN);
+  const canManageRooms = permissions.has(PermissionCode.ROOM_MANAGE);
+  const canAssignStaff = permissions.has(PermissionCode.ROOM_STAFF_ASSIGN);
   
-  // We'll fetch initial data, but the component itself will refresh it periodically
+  // Fetch initial data
   const initialRooms = await RoomService.getRoomsLiveStatus(tenantId);
 
   return (

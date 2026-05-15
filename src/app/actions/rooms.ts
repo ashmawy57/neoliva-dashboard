@@ -10,9 +10,15 @@ import prisma from '@/lib/prisma';
 export async function createRoomAction(data: any) {
   try {
     const { tenantId } = await getTenantContext();
-    const validated = RoomSchema.parse(data);
     
-    await RoomService.createRoom(tenantId, validated);
+    // Parse data with RoomSchema (slug is now optional)
+    const result = RoomSchema.safeParse(data);
+    if (!result.success) {
+      const errorMsg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      return { success: false, error: `Invalid input: ${errorMsg}` };
+    }
+
+    await RoomService.createRoom(tenantId, result.data);
     
     revalidatePath('/dashboard/settings/rooms');
     return { success: true };
@@ -28,9 +34,14 @@ export async function createRoomAction(data: any) {
 export async function updateRoomAction(roomId: string, data: any) {
   try {
     const { tenantId } = await getTenantContext();
-    const validated = RoomSchema.partial().parse(data);
     
-    await RoomService.updateRoom(tenantId, roomId, validated);
+    const result = RoomSchema.partial().safeParse(data);
+    if (!result.success) {
+      const errorMsg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      return { success: false, error: `Invalid input: ${errorMsg}` };
+    }
+    
+    await RoomService.updateRoom(tenantId, roomId, result.data);
     
     revalidatePath('/dashboard/settings/rooms');
     return { success: true };
@@ -118,14 +129,14 @@ export async function getStaffOptionsAction() {
     const staff = await prisma.tenantMembership.findMany({
       where: { tenantId, isActive: true },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, email: true } },
         staffProfile: { select: { name: true } }
       }
     });
 
     const mapped = staff.map(s => ({
       userId: s.userId,
-      name: s.staffProfile?.name || s.user?.name || s.user?.email || 'Unknown',
+      name: s.staffProfile?.name || s.user?.email || 'Unknown',
       role: s.role,
     }));
 

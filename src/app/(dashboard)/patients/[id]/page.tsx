@@ -9,7 +9,7 @@ const patientService = new PatientService();
 
 export default async function PatientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   const patient = await patientService.getPatientProfile(tenantId, resolvedParams.id);
 
   if (!patient) {

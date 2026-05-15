@@ -228,6 +228,9 @@ model Appointment {
   roomId    String?            @map("room_id") @db.Uuid
   chairId   String?            @map("chair_id") @db.Uuid
 
+  actualStartTime DateTime?    @map("actual_start_time") @db.Timestamptz(6)
+  actualEndTime   DateTime?    @map("actual_end_time") @db.Timestamptz(6)
+
   doctor    Staff              @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   patient   Patient            @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   service   Service?           @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)

@@ -2,13 +2,13 @@
 
 import { Button } from '@/components/ui/button';
 import { Plus, LayoutGrid, ListFilter } from 'lucide-react';
-import { usePermissions } from '@/hooks/use-permissions';
+import { usePermission } from '@/components/providers/permission-provider';
 import { PermissionCode } from '@/types/permissions';
 import { useState } from 'react';
 import { CreateRoomModal } from './CreateRoomModal';
 
 export function RoomDashboardHeader() {
-  const { hasPermission } = usePermissions();
+  const { hasPermission } = usePermission();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   return (

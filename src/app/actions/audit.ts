@@ -61,8 +61,13 @@ export async function getAuditLogs(filters: AuditFilterOptions = {}) {
             select: {
               id: true,
               email: true,
-              staff: {
-                select: { name: true }
+              memberships: {
+                where: { tenantId },
+                include: {
+                  staffProfile: {
+                    select: { name: true }
+                  }
+                }
               }
             }
           }

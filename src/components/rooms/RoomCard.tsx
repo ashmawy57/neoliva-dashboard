@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DoorOpen, Stethoscope, Users, Clock, Settings, MoreVertical, Trash, Edit2, Wrench, Ban, CheckCircle2 } from "lucide-react";
+import { DoorOpen, Stethoscope, Users, Clock, Settings, MoreVertical, Edit2, Wrench, Ban, CheckCircle2, Plus, Activity } from "lucide-react";
 import { format } from "date-fns";
 import { 
   Card, 
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -83,63 +84,69 @@ export function RoomCard({
 
   return (
     <>
-      <Card className="flex flex-col overflow-hidden transition-all hover:shadow-md border-border/50">
-        {/* Top color bar */}
-        <div className={`h-1.5 w-full ${statusDotColors[room.status] || "bg-gray-200"}`} />
+      <Card className="group flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-border/40 bg-card/50 backdrop-blur-sm relative">
+        {/* Animated Glow Effect on Hover */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
         
-        <CardHeader className="pb-3 pt-4 px-4">
-          <div className="flex justify-between items-start">
-            <div className="space-y-1 w-full">
-              <div className="flex justify-between items-center w-full">
-                <CardTitle className="text-lg font-bold flex items-center gap-2">
-                  <DoorOpen className="w-5 h-5 text-muted-foreground" />
-                  {room.name}
+        {/* Status Indicator Bar */}
+        <div className={`h-1.5 w-full transition-colors duration-300 ${statusDotColors[room.status] || "bg-gray-200"}`} />
+        
+        <CardHeader className="pb-3 pt-5 px-5 relative">
+          <div className="flex justify-between items-start gap-4">
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <div className="flex justify-between items-start w-full gap-2">
+                <CardTitle className="text-xl font-bold flex items-center gap-2.5 text-foreground/90 tracking-tight truncate">
+                  <div className={`p-2 rounded-xl bg-muted/50 group-hover:bg-primary/10 transition-colors duration-300`}>
+                    <DoorOpen className="w-5 h-5 text-primary/70 group-hover:text-primary transition-colors duration-300" />
+                  </div>
+                  <span className="truncate">{room.name}</span>
                 </CardTitle>
                 
                 {canManageRooms && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
-                        <MoreVertical className="h-4 w-4" />
+                      <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/5 opacity-60 hover:opacity-100 transition-all">
+                        <MoreVertical className="h-5 w-5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuLabel>Room Actions</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      
-                      {/* Status Quick Actions */}
-                      <DropdownMenuItem onClick={() => handleStatusUpdate('AVAILABLE')} disabled={isUpdatingStatus || room.status === 'AVAILABLE'}>
-                        <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" /> Mark Available
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleStatusUpdate('BUSY')} disabled={isUpdatingStatus || room.status === 'BUSY'}>
-                        <Users className="w-4 h-4 mr-2 text-red-500" /> Mark Busy
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleStatusUpdate('CLEANING')} disabled={isUpdatingStatus || room.status === 'CLEANING'}>
-                        <Ban className="w-4 h-4 mr-2 text-yellow-500" /> Start Cleaning
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleStatusUpdate('MAINTENANCE')} disabled={isUpdatingStatus || room.status === 'MAINTENANCE'}>
-                        <Wrench className="w-4 h-4 mr-2 text-orange-500" /> Maintenance Mode
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
-                        <Edit2 className="w-4 h-4 mr-2" /> Edit Room
-                      </DropdownMenuItem>
-                      {canAssignStaff && (
-                        <DropdownMenuItem onClick={() => setIsAssignStaffOpen(true)}>
-                          <Users className="w-4 h-4 mr-2" /> Manage Staff
+                    <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-2xl shadow-2xl border-primary/10 backdrop-blur-md">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 px-2 py-2">Quick Status</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate('AVAILABLE')} disabled={isUpdatingStatus || room.status === 'AVAILABLE'} className="rounded-xl py-2.5">
+                          <CheckCircle2 className="w-4 h-4 mr-2.5 text-emerald-500" /> <span className="font-medium">Available</span>
                         </DropdownMenuItem>
-                      )}
+                        <DropdownMenuItem onClick={() => handleStatusUpdate('BUSY')} disabled={isUpdatingStatus || room.status === 'BUSY'} className="rounded-xl py-2.5">
+                          <Users className="w-4 h-4 mr-2.5 text-red-500" /> <span className="font-medium">Occupied</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleStatusUpdate('CLEANING')} disabled={isUpdatingStatus || room.status === 'CLEANING'} className="rounded-xl py-2.5">
+                          <Ban className="w-4 h-4 mr-2.5 text-amber-500" /> <span className="font-medium">Cleaning</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                      
+                      <DropdownMenuSeparator className="my-1.5 bg-primary/5" />
+                      
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 px-2 py-2">Management</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setIsEditOpen(true)} className="rounded-xl py-2.5">
+                          <Edit2 className="w-4 h-4 mr-2.5 text-blue-500" /> <span className="font-medium">Edit Details</span>
+                        </DropdownMenuItem>
+                        {canAssignStaff && (
+                          <DropdownMenuItem onClick={() => setIsAssignStaffOpen(true)} className="rounded-xl py-2.5">
+                            <Users className="w-4 h-4 mr-2.5 text-indigo-500" /> <span className="font-medium">Manage Staff</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs font-normal">
+              
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <Badge variant="secondary" className="text-[10px] font-bold tracking-wider uppercase bg-primary/5 text-primary/70 border-primary/10 px-2 py-0.5 rounded-lg">
                   {room.type}
                 </Badge>
-                <Badge variant="outline" className={`text-xs font-medium border ${statusColors[room.status]}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusDotColors[room.status]}`} />
+                <Badge className={`text-[10px] font-bold tracking-wider uppercase border px-2 py-0.5 rounded-lg shadow-sm ${statusColors[room.status]}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full mr-2 ${statusDotColors[room.status]} animate-pulse`} />
                   {room.status}
                 </Badge>
               </div>
@@ -147,35 +154,47 @@ export function RoomCard({
           </div>
         </CardHeader>
 
-        <CardContent className="px-4 py-3 flex-1 space-y-4">
+        <CardContent className="px-5 py-2 flex-1 space-y-5 relative">
           {/* Staff Assignment */}
-          <div className="space-y-2">
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Stethoscope className="w-3.5 h-3.5 mr-1.5" />
-              <span className="font-medium text-foreground text-xs uppercase tracking-wider">Assigned Staff</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                <Stethoscope className="w-3.5 h-3.5 mr-2" />
+                Medical Staff
+              </div>
+              {assignedDoctors.length + assignedAssistants.length > 0 && (
+                <span className="text-[10px] font-bold text-primary/60 bg-primary/5 px-2 py-0.5 rounded-full">
+                  {assignedDoctors.length + assignedAssistants.length} Active
+                </span>
+              )}
             </div>
+            
             {assignedDoctors.length === 0 && assignedAssistants.length === 0 ? (
-              <div className="text-xs text-muted-foreground italic bg-muted/30 p-2 rounded-md">
-                No staff assigned.
+              <div className="text-xs text-muted-foreground/50 italic bg-muted/20 p-3 rounded-xl border border-dashed border-border/50 text-center">
+                Waiting for assignment...
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="flex flex-wrap gap-2">
                 {assignedDoctors.map((rs: any) => (
-                  <div key={rs.user.id} className="text-sm flex items-center gap-2 bg-blue-50 dark:bg-blue-900/10 p-1.5 rounded-md text-blue-700 dark:text-blue-400">
-                    <div className="w-5 h-5 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-[10px] font-bold">
+                  <div key={rs.user.id} className="group/staff flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 px-2 py-1.5 rounded-xl border border-blue-100/50 dark:border-blue-800/30 transition-all cursor-default">
+                    <div className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm shadow-blue-200">
                       {rs.user.name?.charAt(0) || 'D'}
                     </div>
-                    <span className="font-medium truncate">{rs.user.name}</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5 bg-blue-100 dark:bg-blue-800">Doctor</Badge>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-blue-900 dark:text-blue-300 leading-none">{rs.user.name}</span>
+                      <span className="text-[9px] text-blue-500/70 font-semibold uppercase tracking-tighter mt-0.5">Doctor</span>
+                    </div>
                   </div>
                 ))}
                 {assignedAssistants.map((rs: any) => (
-                  <div key={rs.user.id} className="text-sm flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-md text-slate-700 dark:text-slate-300">
-                    <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold">
+                  <div key={rs.user.id} className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-800/40 px-2 py-1.5 rounded-xl border border-slate-100/50 dark:border-slate-700/30">
+                    <div className="w-6 h-6 rounded-lg bg-slate-400 text-white flex items-center justify-center text-[10px] font-bold">
                       {rs.user.name?.charAt(0) || 'A'}
                     </div>
-                    <span className="truncate">{rs.user.name}</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1.5">Assistant</Badge>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-none">{rs.user.name}</span>
+                      <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-tighter mt-0.5">Assistant</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -185,57 +204,77 @@ export function RoomCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="w-full text-xs h-7 text-muted-foreground hover:text-foreground mt-1"
+                className="w-full text-[10px] font-bold uppercase tracking-widest h-8 text-muted-foreground/60 hover:text-primary hover:bg-primary/5 border border-transparent hover:border-primary/10 rounded-xl transition-all"
                 onClick={() => setIsAssignStaffOpen(true)}
               >
-                <Plus className="w-3 h-3 mr-1" /> Add Staff
+                <Plus className="w-3.5 h-3.5 mr-2" /> Assign Staff
               </Button>
             )}
           </div>
 
           {/* Current Activity */}
-          <div className="space-y-2 pt-2 border-t border-border/50">
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Activity className="w-3.5 h-3.5 mr-1.5" />
-              <span className="font-medium text-foreground text-xs uppercase tracking-wider">Current Activity</span>
+          <div className="space-y-3 pt-4 border-t border-primary/5">
+            <div className="flex items-center text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+              <Activity className="w-3.5 h-3.5 mr-2" />
+              Real-time Activity
             </div>
             
             {currentPatient ? (
-              <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-900/10 p-2 rounded-md border border-emerald-100 dark:border-emerald-900/30">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-sm font-medium text-emerald-800 dark:text-emerald-400 truncate max-w-[140px]">{currentPatient}</span>
+              <div className="group/activity flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-900/10 p-3 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/30 transition-all hover:bg-emerald-100/50">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 animate-pulse" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 truncate max-w-[120px]">{currentPatient}</span>
+                    <span className="text-[9px] font-bold text-emerald-600/70 uppercase tracking-wider">In Progress</span>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-[10px] h-4 px-1 border-emerald-200 bg-emerald-100 text-emerald-700">IN PROGRESS</Badge>
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground py-1">
-                Room is currently empty.
+              <div className="text-[11px] font-medium text-muted-foreground/40 text-center py-2">
+                Currently No Active Patient
               </div>
             )}
             
             {waitingPatientsCount > 0 && (
-              <div className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5 mt-1">
-                <Clock className="w-3.5 h-3.5" /> 
-                {waitingPatientsCount} patient{waitingPatientsCount > 1 ? 's' : ''} waiting
+              <div className="flex items-center justify-center gap-2 py-1.5 px-3 bg-amber-50/50 dark:bg-amber-900/10 rounded-xl border border-amber-100/30">
+                <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin-slow" /> 
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                  {waitingPatientsCount} Patient{waitingPatientsCount > 1 ? 's' : ''} Next in Queue
+                </span>
               </div>
             )}
           </div>
         </CardContent>
 
-        <CardFooter className="px-4 py-3 bg-muted/30 border-t border-border/50 flex gap-2">
-          <Button variant="outline" size="sm" className="w-full text-xs h-8" onClick={onViewSchedule}>
-            <Clock className="w-3.5 h-3.5 mr-1.5" />
+        <CardFooter className="px-5 py-4 bg-muted/10 border-t border-border/30 flex gap-2.5">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex-1 text-[10px] font-bold uppercase tracking-widest h-9 rounded-xl border-border/50 hover:bg-primary/5 hover:text-primary transition-all shadow-sm" 
+            onClick={onViewSchedule}
+          >
+            <Clock className="w-3.5 h-3.5 mr-2" />
             Schedule
           </Button>
           <Button 
             variant={room.status === 'AVAILABLE' ? 'default' : 'secondary'} 
             size="sm" 
-            className="w-full text-xs h-8"
+            className={`flex-1 text-[10px] font-bold uppercase tracking-widest h-9 rounded-xl transition-all shadow-md active:scale-95 ${
+              room.status === 'AVAILABLE' ? 'bg-primary hover:bg-primary/90 shadow-primary/20' : ''
+            }`}
             onClick={() => handleStatusUpdate(room.status === 'AVAILABLE' ? 'BUSY' : 'AVAILABLE')}
             disabled={isUpdatingStatus}
           >
-            {room.status === 'AVAILABLE' ? 'Mark Busy' : 'Make Available'}
+            {isUpdatingStatus ? (
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              room.status === 'AVAILABLE' ? 'Mark Busy' : 'Available'
+            )}
           </Button>
         </CardFooter>
       </Card>

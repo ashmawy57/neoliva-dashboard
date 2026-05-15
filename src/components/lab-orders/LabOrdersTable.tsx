@@ -201,9 +201,11 @@ export function LabOrdersTable({ initialOrders }: { initialOrders: any[] }) {
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator className="bg-gray-50" />
-                    <DropdownMenuItem onClick={() => handleDelete(order.id)} className="flex items-center gap-2 cursor-pointer rounded-lg text-rose-500 font-medium py-2">
-                      <Trash2 className="w-4 h-4" /> Delete Order
-                    </DropdownMenuItem>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem onClick={() => handleDelete(order.id)} className="flex items-center gap-2 cursor-pointer rounded-lg text-rose-500 font-medium py-2">
+                        <Trash2 className="w-4 h-4" /> Delete Order
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>

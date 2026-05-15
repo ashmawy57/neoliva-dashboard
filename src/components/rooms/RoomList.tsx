@@ -6,7 +6,7 @@ import { RoomCard } from "./RoomCard";
 import { CreateRoomModal } from "./CreateRoomModal";
 import { RoomScheduleDialog } from "./RoomScheduleDialog";
 import { Button } from "@/components/ui/button";
-import { DoorOpen, Plus, Activity, Search } from "lucide-react";
+import { DoorOpen, Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export function RoomList({ 
@@ -51,50 +51,56 @@ export function RoomList({
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full sm:w-96">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between bg-card/30 p-4 rounded-2xl border border-border/40 backdrop-blur-sm">
+        <div className="relative w-full md:max-w-md group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
           <Input
-            placeholder="Search rooms..."
-            className="pl-8"
+            placeholder="Search by name or type..."
+            className="pl-10 h-11 bg-background/50 border-border/40 rounded-xl focus:ring-primary/20 focus:border-primary/30 transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 rounded-lg border border-border/30 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            {rooms.length} Total Rooms
+          </div>
           {canManageRooms && (
-            <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Room
+            <Button onClick={() => setIsCreateModalOpen(true)} className="h-11 px-6 rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all font-bold">
+              <Plus className="mr-2 h-5 w-5" />
+              New Room
             </Button>
           )}
         </div>
       </div>
 
       {rooms.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-muted/20">
-          <div className="h-16 w-16 bg-blue-100/50 rounded-full flex items-center justify-center mb-4">
-            <DoorOpen className="h-8 w-8 text-blue-500" />
+        <div className="flex flex-col items-center justify-center p-20 border-2 border-dashed rounded-3xl bg-muted/5 border-border/40">
+          <div className="h-24 w-24 bg-primary/5 rounded-3xl flex items-center justify-center mb-6 rotate-3">
+            <DoorOpen className="h-12 w-12 text-primary/40" />
           </div>
-          <h3 className="text-xl font-semibold mb-2">No rooms configured</h3>
-          <p className="text-muted-foreground text-center max-w-md mb-6">
-            You haven't set up any rooms yet. Create a room to start managing appointments, staff, and equipment.
+          <h3 className="text-2xl font-bold mb-3 tracking-tight">No rooms configured</h3>
+          <p className="text-muted-foreground text-center max-w-sm mb-8 font-medium leading-relaxed">
+            Organize your clinic by adding rooms. Monitor staff assignments and patient activity in real-time.
           </p>
           {canManageRooms && (
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Room
+            <Button onClick={() => setIsCreateModalOpen(true)} size="lg" className="rounded-2xl px-8 font-bold h-12 shadow-xl shadow-primary/10">
+              <Plus className="mr-2 h-5 w-5" />
+              Configure Your First Room
             </Button>
           )}
         </div>
       ) : filteredRooms.length === 0 ? (
-        <div className="text-center p-12 text-muted-foreground">
-          No rooms match your search query.
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-muted/5 rounded-3xl border border-border/20">
+          <Search className="h-10 w-10 mb-4 opacity-20" />
+          <p className="text-lg font-semibold tracking-tight">No matching rooms found</p>
+          <p className="text-sm">Try adjusting your search query</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {filteredRooms.map((room) => (
             <RoomCard 
               key={room.id} 

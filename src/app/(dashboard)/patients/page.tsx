@@ -6,7 +6,7 @@ import { resolveTenantContext } from "@/lib/tenant-context";
 const patientService = new PatientService();
 
 export default async function PatientsPage() {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   const patientsData = await patientService.getPatientsList(tenantId);
 
   return (
