@@ -63,13 +63,11 @@ export async function getStaff() {
   }
 }
 
-/**
- * Server Action: Creates a new staff member via invitation.
- */
 export const createStaff = wrapAction(
   'STAFF_CREATE',
   async (formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) => {
     await requirePermission(PermissionCode.STAFF_MANAGE);
+    const { tenantId } = await resolveTenantContext();
     
     // We call the auth action which handles the token, hashing and secure DB creation
     const result = await createStaffInvitation({
@@ -77,7 +75,7 @@ export const createStaff = wrapAction(
       fullName: formData.name,
       role: formData.role as any,
       jobTitle: formData.title
-    });
+    }, tenantId);
 
     if (!result.success) {
       throw new Error(result.error || "Failed to create invitation");

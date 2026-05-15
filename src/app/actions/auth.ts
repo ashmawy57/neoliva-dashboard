@@ -245,11 +245,8 @@ export async function acceptStaffInvitation(formData: FormData) {
 export const login = staffLogin;
 export const signupWithInvite = acceptStaffInvitation;
 
-export async function createStaffInvitation(formData: FormData, tenantId: string) {
-  const email = formData.get('email') as string;
-  const fullName = formData.get('fullName') as string;
-  const role = formData.get('role') as StaffRole;
-  const jobTitle = formData.get('jobTitle') as string;
+export async function createStaffInvitation(data: { email: string; fullName: string; role: StaffRole; jobTitle?: string }, tenantId: string) {
+  const { email, fullName, role, jobTitle } = data;
 
   const supabase = await createClient();
   const { data: { user: invitedByUser } } = await supabase.auth.getUser();
