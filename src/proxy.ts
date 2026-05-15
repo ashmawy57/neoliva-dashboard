@@ -31,6 +31,7 @@ export async function proxy(request: NextRequest) {
     '/register',
     '/auth/callback',
     '/unauthorized',
+    '/admin/login',
   ];
 
   const isPublicRoute = publicRoutes.some(route => 
