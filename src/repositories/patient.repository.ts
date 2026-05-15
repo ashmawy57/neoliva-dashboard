@@ -270,7 +270,7 @@ export class PatientRepository {
         items: true,
         updatedAt: true,
         tenantId: true,
-        appointments: true,
+        appointment: true,
       }
     });
   }
