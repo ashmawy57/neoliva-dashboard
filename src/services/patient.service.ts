@@ -1,5 +1,6 @@
 import "server-only";
 import { PatientRepository } from "@/repositories/patient.repository";
+import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/client";
 
 const patientRepository = new PatientRepository();
