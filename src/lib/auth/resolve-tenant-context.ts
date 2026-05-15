@@ -80,6 +80,7 @@ function validateMembership(membership: {
 }): void {
   // 1. Membership must be active
   if (!membership.isActive || membership.status !== 'ACTIVE') {
+    console.warn(`[Security][INACTIVE_ACCOUNT] User ${membership.user.email} attempted access with inactive membership (Status: ${membership.status})`);
     throw new TenantContextError(
       'MEMBERSHIP_INACTIVE',
       `Membership for user ${membership.user.email} is not active (isActive=${membership.isActive}, status=${membership.status})`
@@ -88,6 +89,10 @@ function validateMembership(membership: {
 
   // 2. Tenant status checks — FAIL-CLOSED on any non-APPROVED state
   const tenantStatus = membership.tenant.status;
+
+  if (tenantStatus !== 'APPROVED') {
+    console.warn(`[Security][TENANT_BLOCKED] User ${membership.user.email} blocked due to tenant status: ${tenantStatus}`);
+  }
 
   if (tenantStatus === 'PENDING') {
     throw new TenantContextError(

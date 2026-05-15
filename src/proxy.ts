@@ -52,7 +52,7 @@ export async function proxy(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error("[Proxy] Critical Error: Supabase environment variables missing");
+    console.error("[Proxy][CRITICAL] Supabase environment variables missing. Request dropped.");
     return response;
   }
 
@@ -86,7 +86,7 @@ export async function proxy(request: NextRequest) {
 
   // --- 5. Auth Gate ---
   if (!user && !isPublicRoute) {
-    console.log(`[Proxy] Unauthenticated access to protected route: ${pathname}`);
+    console.warn(`[Proxy][AUTH_REQUIRED] Unauthenticated access to protected route: ${pathname} (RID: ${requestId})`);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
