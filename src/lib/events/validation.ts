@@ -13,7 +13,7 @@ export function validateEvent(eventType: string, metadata: any): { success: bool
     schema.parse(metadata);
     return { success: true };
   } catch (err: any) {
-    const errorMessage = err.errors?.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') || err.message;
+    const errorMessage = err.issues?.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') || err.message;
     logger.warn('Event validation failed', { eventType, metadata, error: errorMessage });
     return { success: false, error: errorMessage };
   }

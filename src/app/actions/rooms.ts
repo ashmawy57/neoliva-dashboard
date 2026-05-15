@@ -14,7 +14,7 @@ export async function createRoomAction(data: any) {
     // Parse data with RoomSchema (slug is now optional)
     const result = RoomSchema.safeParse(data);
     if (!result.success) {
-      const errorMsg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
       return { success: false, error: `Invalid input: ${errorMsg}` };
     }
 
@@ -37,7 +37,7 @@ export async function updateRoomAction(roomId: string, data: any) {
     
     const result = RoomSchema.partial().safeParse(data);
     if (!result.success) {
-      const errorMsg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
       return { success: false, error: `Invalid input: ${errorMsg}` };
     }
     
