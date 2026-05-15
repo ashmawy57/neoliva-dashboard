@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { AddPatientDialog } from "@/components/patients/AddPatientDialog";
 import { PatientsTable } from "@/components/patients/PatientsTable";
 import { PatientService } from "@/services/patient.service";

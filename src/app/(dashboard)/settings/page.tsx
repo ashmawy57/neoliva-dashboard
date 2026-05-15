@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Bell, CreditCard } from "lucide-react";
 import { fetchSettingsAction } from "@/app/actions/settings";

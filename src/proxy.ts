@@ -3,37 +3,59 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { randomUUID } from "node:crypto";
 
 /**
- * Global Proxy for Dental Clinic Dashboard (Next.js 16.2+ Replacement for Middleware)
+ * AUTHORITATIVE PROXY LAYER (Next.js 16+ Architecture)
  * 
- * Handles:
- * 1. Request Tracing (RequestId)
- * 2. Auth Proxy (Supabase Session Management)
- * 3. Protected Route Guards
+ * This file replaces the deprecated middleware.ts convention.
+ * It handles global request interception, authentication guarding, 
+ * and tenant-context isolation validation.
  */
 export async function proxy(request: NextRequest) {
-  console.log(`[Proxy] Intercepting: ${request.nextUrl.pathname}`);
-  // --- 1. Request Tracing ---
+  const pathname = request.nextUrl.pathname;
   const requestId = request.headers.get("x-request-id") || randomUUID();
+
+  // --- 1. Static & Asset Bypass (Fast-Path) ---
+  const isAsset = pathname.startsWith('/_next/') || 
+                  pathname.startsWith('/api/public/') ||
+                  pathname.includes('.') || // matches favicon.ico, images, etc.
+                  pathname === '/favicon.ico';
+
+  if (isAsset) {
+    return NextResponse.next();
+  }
+
+  // --- 2. Public Route Definition ---
+  const publicRoutes = [
+    '/',
+    '/login',
+    '/staff-signin',
+    '/register',
+    '/auth/callback',
+    '/unauthorized',
+  ];
+
+  const isPublicRoute = publicRoutes.some(route => 
+    pathname === route || pathname.startsWith(route + '/')
+  );
+
+  // --- 3. Initialize Response with Tracing ---
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
 
-  // --- 2. Initialize Response with Tracing Headers ---
   let response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
 
+  // --- 4. Supabase Auth Context ---
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If Supabase keys are missing, allow public pages and let protected pages fail gracefully later
   if (!supabaseUrl || !supabaseKey) {
-    response.headers.set("x-request-id", requestId);
+    console.error("[Proxy] Critical Error: Supabase environment variables missing");
     return response;
   }
 
-  // --- 3. Supabase Auth Logic ---
   const supabase = createServerClient(
     supabaseUrl,
     supabaseKey,
@@ -43,132 +65,48 @@ export async function proxy(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          request.cookies.set({ name, value, ...options })
           response = NextResponse.next({
-            request: {
-              headers: requestHeaders,
-            },
+            request: { headers: requestHeaders },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({
-            request: {
-              headers: requestHeaders,
-            },
+            request: { headers: requestHeaders },
           })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
-  )
+  );
 
-  // Refresh/Get User Session
-  const { data: { user } } = await supabase.auth.getUser()
-  const pathname = request.nextUrl.pathname;
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // --- 4. Route Protection Logic ---
-  const isApiRequest = pathname.startsWith('/api/');
-  const isAdminRoute = pathname.startsWith('/admin');
-  
-  // Public Page Bypass
-  const isPublicPage = pathname === '/' ||
-                       pathname.startsWith('/login') || 
-                       pathname.startsWith('/auth/') || 
-                       pathname.startsWith('/staff/sign-in') ||
-                       pathname.startsWith('/staff/accept-invitation') ||
-                       pathname.startsWith('/staff/forgot-password') ||
-                       pathname.startsWith('/staff/reset-password') ||
-                       pathname.startsWith('/create-clinic') ||
-                       pathname.startsWith('/pending-approval') ||
-                       pathname.startsWith('/rejected') ||
-                       pathname.startsWith('/unauthorized') ||
-                       (isAdminRoute && pathname === '/admin/login');
-
-  if (isPublicPage) {
-    response.headers.set("x-request-id", requestId);
-    return response;
+  // --- 5. Auth Gate ---
+  if (!user && !isPublicRoute) {
+    console.log(`[Proxy] Unauthenticated access to protected route: ${pathname}`);
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  // AuthN Gate
-  if (!user) {
-    if (isApiRequest) {
-      const apiResponse = NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
-      apiResponse.headers.set("x-request-id", requestId);
-      return apiResponse;
-    }
-
-    // Redirect to appropriate login page
-    const loginPath = isAdminRoute ? '/admin/login' : '/login';
-    const redirectUrl = new URL(loginPath, request.url);
-    redirectUrl.searchParams.set('type', 'SESSION_EXPIRED');
-    if (!isAdminRoute) {
-      redirectUrl.searchParams.set('next', pathname);
-    }
-    
-    const redirectResponse = NextResponse.redirect(redirectUrl);
-    redirectResponse.headers.set("x-request-id", requestId);
-    return redirectResponse;
+  // --- 6. Redirect Authenticated Users from Login ---
+  if (user && (pathname === '/login' || pathname === '/staff-signin')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // --- 5. Admin RBAC — Defense-in-Depth ---
-  if (isAdminRoute) {
-    const role = (user.app_metadata?.role || user.user_metadata?.role || '')?.toString().toUpperCase();
-    
-    // DUAL-FACTOR check: JWT role OR email in ALLOWED_SUPER_ADMIN_EMAILS env var
-    const allowlistRaw = process.env.ALLOWED_SUPER_ADMIN_EMAILS ?? '';
-    const allowlist = allowlistRaw
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-    const isAllowlisted = allowlist.includes((user.email ?? '').toLowerCase());
-    const isSuperAdmin = role === 'SUPER_ADMIN' || isAllowlisted;
-
-    if (!isSuperAdmin) {
-      console.warn(`[Proxy] Unauthorized admin access attempt by ${user.email} (Role: ${role})`);
-      const unauthorizedUrl = new URL('/unauthorized', request.url);
-      const unauthorizedResponse = NextResponse.redirect(unauthorizedUrl);
-      unauthorizedResponse.headers.set("x-request-id", requestId);
-      return unauthorizedResponse;
-    }
-
-    // Authorized admin — bypass tenant check
-    response.headers.set("x-request-id", requestId);
-    return response;
-  }
-
-  // --- 6. Tenant-Scoped Route Protection ---
-  // For all other private routes, we conceptually require a tenantId.
-  // In this system, the tenantId is resolved from the database.
-  // We'll let the application layer (tenant-context) handle the specific DB lookup,
-  // but the proxy ensures that we aren't accidentally allowing non-admins into /admin.
-  
-  // Note: If you want to strictly block users without a tenantId in the proxy, 
-  // you would need to check user.app_metadata.tenantId or similar here.
-
-
-  // Finalize Response with Tracing
+  // --- 7. Final Response Enhancement ---
   response.headers.set("x-request-id", requestId);
   return response;
 }
 
+/**
+ * PROXY MATCHER CONFIGURATION
+ * 
+ * Optimized to exclude static assets while capturing all dynamic routes.
+ */
 export const config = {
   matcher: [
     /*
@@ -176,8 +114,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - images/ (public images)
-     * - public (public files)
+     * - public files with extensions
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

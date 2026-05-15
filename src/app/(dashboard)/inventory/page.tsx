@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getInventoryAction } from "@/app/actions/inventory";
 import { InventoryClient } from "./inventory-client";
 
