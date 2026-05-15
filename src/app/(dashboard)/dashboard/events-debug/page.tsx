@@ -140,9 +140,11 @@ export default async function EventsDebugPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] text-primary font-bold">
-                          {event.user?.staff?.name?.charAt(0) || 'S'}
+                          {((event as any).user?.memberships?.[0]?.staffProfile?.name || 'S').charAt(0)}
                         </div>
-                        <span className="text-xs text-muted-foreground">{event.user?.staff?.name || 'System'}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {(event as any).user?.memberships?.[0]?.staffProfile?.name || 'System'}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>

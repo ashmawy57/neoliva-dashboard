@@ -14,10 +14,17 @@ export async function getEvents(limit = 100) {
     take: limit,
     include: {
       user: {
-        include: {
-          staff: {
-            select: {
-              name: true,
+        select: {
+          id: true,
+          email: true,
+          memberships: {
+            where: { tenantId },
+            include: {
+              staffProfile: {
+                select: {
+                  name: true,
+                },
+              },
             },
           },
         },
