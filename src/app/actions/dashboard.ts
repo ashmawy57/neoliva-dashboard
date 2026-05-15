@@ -9,7 +9,7 @@ const dashboardService = new DashboardService();
 
 export async function getDashboardData() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.DASHBOARD_VIEW);
 
     return await dashboardService.getDashboardData(tenantId);

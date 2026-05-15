@@ -12,7 +12,7 @@ export async function getAllTenants() {
   return await prisma.tenant.findMany({
     include: {
       _count: {
-        select: { users: true }
+        select: { staff: true }
       }
     },
     orderBy: { createdAt: 'desc' }

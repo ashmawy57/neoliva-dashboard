@@ -21,7 +21,7 @@ export async function createLabOrderAction(data: {
   notes?: string;
 }) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_LAB_ORDER_MANAGE);
     const result = await labOrderService.createLabOrder(tenantId, data);
 
@@ -43,7 +43,7 @@ export async function createLabOrderAction(data: {
 
 export async function updateLabOrderStatusAction(id: string, status: LabOrderStatus) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_LAB_ORDER_MANAGE);
     const result = await labOrderService.updateLabOrderStatus(tenantId, id, status);
 
@@ -65,7 +65,7 @@ export async function updateLabOrderStatusAction(id: string, status: LabOrderSta
 
 export async function deleteLabOrderAction(id: string) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_LAB_ORDER_MANAGE);
     await labOrderService.deleteLabOrder(tenantId, id);
 

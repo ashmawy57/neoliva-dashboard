@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 const treasuryService = new TreasuryService();
 
 async function getTenant() {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   // Financial access is sensitive - only Admin/Owner
   await requirePermission(PermissionCode.ADMIN_TENANT_MANAGE);
   return tenantId;

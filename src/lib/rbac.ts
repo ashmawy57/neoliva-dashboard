@@ -1,6 +1,7 @@
-import { getTenantContext } from "./tenant-context";
+import { resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { createClient } from "@/lib/supabase/server";
 import { PermissionCode } from "@/types/permissions";
+import { isAdminAllowlisted } from "@/lib/auth/auth-orchestrator";
 import { cache } from "react";
 import { unstable_cache, revalidateTag } from "next/cache";
 
@@ -152,20 +153,21 @@ export const getUserPermissions = cache(async (): Promise<Set<string>> => {
     const supabase = await createClient();
     const { data: { user: authUser } } = await supabase.auth.getUser();
 
-    // --- 1. SUPER_ADMIN BYPASS ---
-    // If the user has the SUPER_ADMIN role in metadata, grant them full system access
-    // without requiring a tenant context or database-level User record.
+    // --- 1. SUPER_ADMIN BYPASS (Defense-in-Depth) ---
+    // Grants full system access if EITHER the JWT role is SUPER_ADMIN
+    // OR the email is in the ALLOWED_SUPER_ADMIN_EMAILS env var.
     const role = (authUser?.app_metadata?.role || authUser?.user_metadata?.role || '')?.toString().toUpperCase();
-    if (role === 'SUPER_ADMIN') {
-      console.log(`[RBAC] Super Admin detected: ${authUser.email}. Bypassing tenant check.`);
+    const isSuperAdmin = role === 'SUPER_ADMIN' || isAdminAllowlisted(authUser?.email ?? '');
+
+    if (isSuperAdmin) {
+      console.log(`[RBAC] Super Admin detected: ${authUser?.email}. Bypassing tenant check.`);
       return new Set(ROLE_PERMISSIONS['SUPER_ADMIN']);
     }
 
     // --- 2. STANDARD TENANT-SCOPED FLOW ---
-    const { user } = await getTenantContext();
+    // Uses the centralized resolver — FAIL-CLOSED, unified validation pipeline
+    const { user } = await resolveTenantContext();
     const normalizedRole = normalizeRole(user.role);
-    
-    console.log(`[RBAC Debug] User: ${user.email} | Original Role: ${user.role} | Normalized: ${normalizedRole}`);
     
     if (!normalizedRole) {
       console.error(`[RBAC] SECURITY DENIAL: User ${user.email} has NO valid role. Blocking all access.`);
@@ -173,16 +175,9 @@ export const getUserPermissions = cache(async (): Promise<Set<string>> => {
     }
     
     const permissionArray = await fetchPermissionsWithCache(user.id, user.role);
-    
-    console.log(`[RBAC Debug] User: ${user.email} | Permissions Count: ${permissionArray.length}`);
-    if (permissionArray.includes(PermissionCode.FINANCE_VIEW)) {
-      console.log(`[RBAC Debug] User HAS FINANCE_VIEW permission.`);
-    } else {
-      console.log(`[RBAC Debug] User MISSING FINANCE_VIEW permission. Total: ${JSON.stringify(permissionArray)}`);
-    }
 
     if (permissionArray.length === 0) {
-      console.error(`[RBAC] User ${user.email} has ZERO permissions. Role: ${user.role} | Normalized: ${normalizedRole}`);
+      console.warn(`[RBAC] User ${user.email} has ZERO permissions. Role: ${user.role}`);
     }
 
     return new Set(permissionArray);
@@ -207,7 +202,7 @@ export async function requirePermission(permission: PermissionCode) {
   const permissions = await getUserPermissions();
   if (!permissions.has(permission)) {
     try {
-      const { user } = await getTenantContext();
+      const { user } = await resolveTenantContext();
       // Track security event (imported dynamically to avoid circular dependencies if any)
       const { EventService } = await import("@/services/event.service");
       await EventService.trackEvent({

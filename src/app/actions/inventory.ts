@@ -23,7 +23,7 @@ export const createItemAction = wrapAction(
     minimumStock: number;
     initialStock?: number;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_MANAGE);
     const result = await inventoryService.createItemService(tenantId, data);
 
@@ -46,7 +46,7 @@ export const createItemAction = wrapAction(
  */
 export async function getInventoryAction(filters?: { search?: string; category?: string }) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_VIEW);
     const items = await inventoryService.getItemsService(tenantId, filters);
     const stats = await inventoryService.getInventoryStatsService(tenantId);
@@ -67,7 +67,7 @@ export const addStockAction = wrapAction(
     quantity: number;
     reason: string;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_MANAGE);
     await inventoryService.addStockService(tenantId, data);
 
@@ -95,7 +95,7 @@ export const deductStockAction = wrapAction(
     quantity: number;
     reason: string;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_MANAGE);
     await inventoryService.deductStockService(tenantId, data);
 
@@ -118,7 +118,7 @@ export const deductStockAction = wrapAction(
  */
 export async function getItemHistoryAction(itemId: string) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_VIEW);
     const history = await inventoryService.getItemHistoryService(tenantId, itemId);
     return { success: true, data: history };
@@ -139,7 +139,7 @@ export const updateItemAction = wrapAction(
     unit?: string;
     minimumStock?: number;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_MANAGE);
     await inventoryService.updateItemService(tenantId, id, data);
 
@@ -163,7 +163,7 @@ export const updateItemAction = wrapAction(
 export const deleteItemAction = wrapAction(
   'INVENTORY_ITEM_DELETE',
   async (id: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.INVENTORY_MANAGE);
     await inventoryService.deleteItemService(tenantId, id);
 

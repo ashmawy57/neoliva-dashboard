@@ -16,7 +16,7 @@ const expenseService = new ExpenseService();
  */
 export async function getExpenses(filters?: { search?: string, category?: string, status?: string }) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_VIEW);
     return await expenseService.getExpenses(tenantId, filters);
   } catch (error) {
@@ -30,7 +30,7 @@ export async function getExpenses(filters?: { search?: string, category?: string
  */
 export async function getExpenseStats() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_VIEW);
     return await expenseService.getExpenseStats(tenantId);
   } catch (error) {
@@ -53,7 +53,7 @@ export const createExpense = wrapAction(
     notes?: string; 
     status?: string 
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
     const result = await expenseService.createExpense(tenantId, data);
 
@@ -85,7 +85,7 @@ export const updateExpense = wrapAction(
     status: string; 
     notes: string 
   }>) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
     const result = await expenseService.updateExpense(tenantId, id, updates);
 
@@ -109,7 +109,7 @@ export const updateExpense = wrapAction(
 export const deleteExpense = wrapAction(
   'EXPENSE_DELETE',
   async (id: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
     await expenseService.deleteExpense(tenantId, id);
 

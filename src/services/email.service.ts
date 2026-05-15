@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export class EmailService {
   static async sendStaffInvitation({
@@ -14,6 +14,11 @@ export class EmailService {
     clinicName: string;
     inviteUrl: string;
   }) {
+    if (!resend) {
+      console.warn('[EmailService.sendStaffInvitation] RESEND_API_KEY not configured. Skipping email send.');
+      return { success: false, error: new Error('Email service not configured (missing RESEND_API_KEY)') };
+    }
+
     try {
       const { data, error } = await resend.emails.send({
         from: 'Neoliva <onboarding@resend.dev>', // In production, use a verified domain

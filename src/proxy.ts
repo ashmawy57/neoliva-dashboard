@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
  * 3. Protected Route Guards
  */
 export async function proxy(request: NextRequest) {
+  console.log(`[Proxy] Intercepting: ${request.nextUrl.pathname}`);
   // --- 1. Request Tracing ---
   const requestId = request.headers.get("x-request-id") || randomUUID();
   const requestHeaders = new Headers(request.headers);
@@ -128,12 +129,20 @@ export async function proxy(request: NextRequest) {
     return redirectResponse;
   }
 
-  // --- 5. Admin RBAC & Tenant Bypass ---
+  // --- 5. Admin RBAC — Defense-in-Depth ---
   if (isAdminRoute) {
     const role = (user.app_metadata?.role || user.user_metadata?.role || '')?.toString().toUpperCase();
     
-    // STRICT CHECK: Only SUPER_ADMIN can access any /admin route
-    if (role !== 'SUPER_ADMIN') {
+    // DUAL-FACTOR check: JWT role OR email in ALLOWED_SUPER_ADMIN_EMAILS env var
+    const allowlistRaw = process.env.ALLOWED_SUPER_ADMIN_EMAILS ?? '';
+    const allowlist = allowlistRaw
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const isAllowlisted = allowlist.includes((user.email ?? '').toLowerCase());
+    const isSuperAdmin = role === 'SUPER_ADMIN' || isAllowlisted;
+
+    if (!isSuperAdmin) {
       console.warn(`[Proxy] Unauthorized admin access attempt by ${user.email} (Role: ${role})`);
       const unauthorizedUrl = new URL('/unauthorized', request.url);
       const unauthorizedResponse = NextResponse.redirect(unauthorizedUrl);
@@ -141,7 +150,7 @@ export async function proxy(request: NextRequest) {
       return unauthorizedResponse;
     }
 
-    // Authorized Super Admin: Bypass tenant check
+    // Authorized admin — bypass tenant check
     response.headers.set("x-request-id", requestId);
     return response;
   }

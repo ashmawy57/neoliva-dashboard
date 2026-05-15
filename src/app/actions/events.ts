@@ -6,7 +6,7 @@ import { EventService } from '@/services/event.service';
 import { revalidatePath } from 'next/cache';
 
 export async function getEvents(limit = 100) {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   
   return prisma.businessEvent.findMany({
     where: { tenantId },
@@ -27,7 +27,7 @@ export async function getEvents(limit = 100) {
 }
 
 export async function replayEvent(eventId: string) {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   
   const event = await prisma.businessEvent.findUnique({
     where: { id: eventId, tenantId },

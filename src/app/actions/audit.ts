@@ -21,7 +21,7 @@ export interface AuditFilterOptions {
  */
 export async function getAuditLogs(filters: AuditFilterOptions = {}) {
   await requirePermission(PermissionCode.AUDIT_VIEW);
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
 
   const {
     userId,
@@ -88,7 +88,7 @@ export async function getAuditLogs(filters: AuditFilterOptions = {}) {
  */
 export async function getAuditMetadata() {
   await requirePermission(PermissionCode.AUDIT_VIEW);
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
 
   const [actions, entityTypes] = await Promise.all([
     prisma.auditLog.findMany({

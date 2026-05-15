@@ -16,7 +16,7 @@ export async function uploadDocument(patientId: string, documentData: {
   category: string;
   fileUrl: string 
 }) {
-  const tenantId = await resolveTenantContext()
+  const { tenantId } = await resolveTenantContext()
   await requirePermission(PermissionCode.PATIENT_DOCUMENT_MANAGE);
   await requireRecordAccess('patient', patientId);
 
@@ -42,7 +42,7 @@ export async function uploadDocument(patientId: string, documentData: {
 }
 
 export async function deleteDocument(patientId: string, documentId: string, fileUrl: string) {
-  const tenantId = await resolveTenantContext()
+  const { tenantId } = await resolveTenantContext()
   await requirePermission(PermissionCode.PATIENT_DOCUMENT_MANAGE);
   await requireRecordAccess('patient', patientId);
 

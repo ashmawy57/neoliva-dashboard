@@ -17,7 +17,7 @@ import {
 const reportsService = new ReportsService();
 
 async function getTenant() {
-  const tenantId = await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   await requirePermission(PermissionCode.STAFF_REPORTS_VIEW);
   return tenantId;
 }

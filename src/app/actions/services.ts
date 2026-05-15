@@ -16,7 +16,7 @@ const serviceService = new ServiceService();
  */
 export async function getServices() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.DASHBOARD_VIEW);
     const data = await serviceService.getServices(tenantId);
     return data;
@@ -39,7 +39,7 @@ export const createServiceAction = wrapAction(
     description?: string;
     popular?: boolean;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
     const result = await serviceService.createService(tenantId, data);
     revalidatePath('/services');
@@ -62,7 +62,7 @@ export const updateServiceAction = wrapAction(
     description: string;
     popular: boolean;
   }>) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
     const result = await serviceService.updateService(tenantId, id, data);
     revalidatePath('/services');
@@ -77,7 +77,7 @@ export const updateServiceAction = wrapAction(
 export const deleteServiceAction = wrapAction(
   'SERVICE_DELETE',
   async (id: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
     const result = await serviceService.deleteService(tenantId, id);
     revalidatePath('/services');

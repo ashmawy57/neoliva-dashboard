@@ -19,7 +19,7 @@ const billingService = new BillingService();
 export const generateInvoiceFromAppointment = wrapAction(
   'INVOICE_GENERATE',
   async (appointmentId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
     await requireRecordAccess('appointment', appointmentId);
     const result = await billingService.generateInvoiceFromAppointment(tenantId, appointmentId);
@@ -61,7 +61,7 @@ export const createInvoice = wrapAction(
       serviceId?: string;
     }[];
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
     
     if (!(await canAccessPatient(data.patientId))) {
@@ -98,7 +98,7 @@ export const recordPayment = wrapAction(
     notes?: string;
     paidAt?: Date;
   }) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_PAYMENT_RECORD);
     await requireRecordAccess('invoice', invoiceId);
     
@@ -134,7 +134,7 @@ export const recordPayment = wrapAction(
 export const deleteInvoice = wrapAction(
   'INVOICE_DELETE',
   async (patientId: string, invoiceId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
     await requireRecordAccess('invoice', invoiceId);
     await billingService.deleteInvoice(tenantId, invoiceId);
@@ -160,7 +160,7 @@ export const deleteInvoice = wrapAction(
  */
 export async function getInvoices() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_VIEW);
     return await billingService.getInvoicesList(tenantId);
   } catch (error) {
@@ -174,7 +174,7 @@ export async function getInvoices() {
  */
 export async function getBillingStats() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_VIEW);
     return await billingService.getBillingStats(tenantId);
   } catch (error) {
@@ -197,7 +197,7 @@ export async function getInvoice(id: string) {
     return null;
   }
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_VIEW);
     await requireRecordAccess('invoice', id);
     return await billingService.getInvoiceDetails(tenantId, id);

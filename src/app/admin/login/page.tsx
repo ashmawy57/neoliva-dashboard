@@ -31,11 +31,26 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Check if user has admin role in metadata
+      // --- SELF-HEALING ROLE LOGIC ---
       const { data: { user } } = await supabase.auth.getUser();
+      const allowlistRaw = process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? '';
+      const allowlist = allowlistRaw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      const userEmail = (user?.email ?? '').toLowerCase();
+      const isAllowlisted = allowlist.includes(userEmail);
+
+      if (isAllowlisted) {
+        // Force update metadata if allowlisted
+        console.log("Allowlisted admin detected. Ensuring SUPER_ADMIN role...");
+        await supabase.auth.updateUser({
+          data: { role: 'SUPER_ADMIN' }
+        });
+      }
+      // -------------------------------
+
       const role = (user?.app_metadata?.role || user?.user_metadata?.role || '')?.toString().toUpperCase();
-      
-      if (role !== 'SUPER_ADMIN') {
+      const isSuperAdmin = role === 'SUPER_ADMIN' || isAllowlisted;
+
+      if (!isSuperAdmin) {
         await supabase.auth.signOut();
         setError("Unauthorized: Platform Admin access only.");
         return;

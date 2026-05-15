@@ -13,7 +13,7 @@ const appointmentService = new AppointmentService();
 
 export async function getAppointmentsData() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_VIEW);
     return await appointmentService.getAppointmentsData(tenantId);
   } catch (error) {
@@ -24,7 +24,7 @@ export async function getAppointmentsData() {
 
 export async function getAppointmentFormData() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_VIEW);
     return await appointmentService.getAppointmentFormData(tenantId);
   } catch (error) {
@@ -36,7 +36,7 @@ export async function getAppointmentFormData() {
 export const createAppointment = wrapAction(
   'APPOINTMENT_CREATE',
   async (data: any) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_CREATE);
     const created = await appointmentService.createAppointment(tenantId, data);
 
@@ -63,7 +63,7 @@ export const createAppointment = wrapAction(
 export const updateAppointmentStatus = wrapAction(
   'APPOINTMENT_STATUS_UPDATE',
   async (id: string, status: any) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_EDIT);
     await requireRecordAccess('appointment', id);
     const updated = await appointmentService.updateStatus(tenantId, id, status);
@@ -86,7 +86,7 @@ export const updateAppointmentStatus = wrapAction(
 export const cancelAppointment = wrapAction(
   'APPOINTMENT_CANCEL',
   async (id: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_DELETE);
     await requireRecordAccess('appointment', id);
     const result = await appointmentService.cancelAppointment(tenantId, id);

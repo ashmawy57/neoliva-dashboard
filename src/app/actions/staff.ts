@@ -19,7 +19,7 @@ import { createStaffInvitation } from "./auth";
 export async function getStaff() {
   try {
     await requirePermission(PermissionCode.STAFF_VIEW);
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     const data = await staffService.getStaffList(tenantId);
 
     const getInitials = (name: string) => {
@@ -96,7 +96,7 @@ export const updateStaff = wrapAction(
   'STAFF_UPDATE',
   async (id: string, updates: Partial<{ name: string; role: string; title: string; email: string; phone: string; status: string }>) => {
     await requirePermission(PermissionCode.STAFF_MANAGE);
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     const result = await staffService.updateStaffMember(tenantId, id, updates);
 
     if (updates.role) {
@@ -122,7 +122,7 @@ export const deleteStaff = wrapAction(
   'STAFF_DELETE',
   async (id: string) => {
     await requirePermission(PermissionCode.STAFF_MANAGE);
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await staffService.deleteStaffMember(tenantId, id);
 
     await EventService.trackEvent({

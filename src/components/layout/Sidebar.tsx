@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Calendar, Users, Stethoscope,
   FileText, Package, UserCog, BarChart3, Settings,
-  ChevronLeft, LogOut, Moon, Sun, Truck, Wallet, Loader2, DollarSign, Activity
+  ChevronLeft, LogOut, Moon, Sun, Truck, Wallet, Loader2, DollarSign, Activity, DoorOpen
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Management",
     items: [
+      { name: "Rooms", href: "/dashboard/rooms", icon: DoorOpen, permission: PermissionCode.ROOM_VIEW },
       { name: "Staff", href: "/staff", icon: UserCog, permission: PermissionCode.STAFF_MANAGE },
       { name: "Reports", href: "/reports", icon: BarChart3, permission: PermissionCode.STAFF_REPORTS_VIEW },
       { name: "Operations", href: "/dashboard/operations", icon: Activity, permission: PermissionCode.ADMIN_FULL_ACCESS },

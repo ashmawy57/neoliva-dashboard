@@ -9,7 +9,7 @@ const financeService = new FinanceService();
 
 export async function getFinancialDashboardAction(period: '7d' | '30d' | '12m' = '30d') {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     // Strict RBAC Check
     await requirePermission(PermissionCode.FINANCE_VIEW);
@@ -34,7 +34,7 @@ export async function createJournalEntryAction(data: {
   lines: { accountName: string; debit: number; credit: number }[];
 }) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.FINANCE_VIEW);
 
     const treasuryService = new (await import("@/services/treasury.service")).TreasuryService();
@@ -49,7 +49,7 @@ export async function createJournalEntryAction(data: {
 
 export async function getAccountsAction() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.FINANCE_VIEW);
 
     const treasuryRepository = new (await import("@/repositories/treasury.repository")).TreasuryRepository();
@@ -63,7 +63,7 @@ export async function getAccountsAction() {
 
 export async function exportFinanceCSVAction() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.FINANCE_VIEW);
 
     const financeService = new FinanceService();
@@ -91,7 +91,7 @@ export async function exportFinanceCSVAction() {
 
 export async function getProfitLossReportAction() {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.FINANCE_VIEW);
 
     const treasuryService = new (await import("@/services/treasury.service")).TreasuryService();

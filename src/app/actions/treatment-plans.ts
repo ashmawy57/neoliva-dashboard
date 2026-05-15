@@ -17,7 +17,7 @@ const treatmentPlanService = new TreatmentPlanService();
  */
 export async function getTreatmentPlans(patientId: string) {
   try {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.PATIENT_VIEW);
     await requireRecordAccess('patient', patientId);
     
@@ -63,7 +63,7 @@ export async function getTreatmentPlans(patientId: string) {
 export const createTreatmentPlan = wrapAction(
   'TREATMENT_PLAN_CREATE',
   async (patientId: string, planData: any) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     
@@ -89,7 +89,7 @@ export const createTreatmentPlan = wrapAction(
 export const deleteTreatmentPlan = wrapAction(
   'TREATMENT_PLAN_DELETE',
   async (planId: string, patientId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     
@@ -115,7 +115,7 @@ export const deleteTreatmentPlan = wrapAction(
 export const updatePlanStatus = wrapAction(
   'TREATMENT_PLAN_STATUS_UPDATE',
   async (planId: string, status: string, patientId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     
@@ -141,7 +141,7 @@ export const updatePlanStatus = wrapAction(
 export const addTreatmentPhase = wrapAction(
   'TREATMENT_PHASE_ADD',
   async (planId: string, phaseData: any, step: number, patientId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     
@@ -167,7 +167,7 @@ export const addTreatmentPhase = wrapAction(
 export const updatePhaseStatus = wrapAction(
   'TREATMENT_PHASE_STATUS_UPDATE',
   async (phaseId: string, status: string, patientId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     
@@ -197,7 +197,7 @@ export const updatePhaseStatus = wrapAction(
 export const deleteTreatmentPhase = wrapAction(
   'TREATMENT_PHASE_DELETE',
   async (phaseId: string, patientId: string) => {
-    const tenantId = await resolveTenantContext();
+    const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.CLINICAL_TREATMENT_PLAN_MANAGE);
     await requireRecordAccess('patient', patientId);
     

@@ -13,7 +13,7 @@ import { wrapAction } from "@/lib/observability/wrap-action";
  * Server Action: Fetches all prescriptions for a patient.
  */
 export async function getPrescriptions(patientId: string) {
-  const tenantId = await resolveTenantContext()
+  const { tenantId } = await resolveTenantContext()
   await requirePermission(PermissionCode.PATIENT_VIEW);
   await requireRecordAccess('patient', patientId);
   
@@ -48,7 +48,7 @@ export const createPrescription = wrapAction(
       duration?: string
     }[]
   }) => {
-    const tenantId = await resolveTenantContext()
+    const { tenantId } = await resolveTenantContext()
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 
@@ -83,7 +83,7 @@ export const createPrescription = wrapAction(
 export const deletePrescription = wrapAction(
   'PRESCRIPTION_DELETE',
   async (id: string, patientId: string) => {
-    const tenantId = await resolveTenantContext()
+    const { tenantId } = await resolveTenantContext()
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 
@@ -113,7 +113,7 @@ export const deletePrescription = wrapAction(
 export const duplicatePrescription = wrapAction(
   'PRESCRIPTION_DUPLICATE',
   async (id: string, patientId: string) => {
-    const tenantId = await resolveTenantContext()
+    const { tenantId } = await resolveTenantContext()
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 

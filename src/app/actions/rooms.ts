@@ -2,6 +2,7 @@
 import { RoomService, RoomSchema, RoomAssignmentSchema } from '@/services/room.service';
 import { getTenantContext } from '@/lib/tenant-context';
 import { revalidatePath } from 'next/cache';
+import prisma from '@/lib/prisma';
 
 /**
  * Server Action: Create a new room
@@ -105,5 +106,32 @@ export async function addChairAction(roomId: string, name: string, code?: string
   } catch (error: any) {
     console.error('[addChairAction] Failed:', error);
     return { success: false, error: error.message || 'Failed to add chair' };
+  }
+}
+
+/**
+ * Server Action: Get available staff for room assignment
+ */
+export async function getStaffOptionsAction() {
+  try {
+    const { tenantId } = await getTenantContext();
+    const staff = await prisma.tenantMembership.findMany({
+      where: { tenantId, isActive: true },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        staffProfile: { select: { name: true } }
+      }
+    });
+
+    const mapped = staff.map(s => ({
+      userId: s.userId,
+      name: s.staffProfile?.name || s.user?.name || s.user?.email || 'Unknown',
+      role: s.role,
+    }));
+
+    return { success: true, data: mapped };
+  } catch (error: any) {
+    console.error('[getStaffOptionsAction] Failed:', error);
+    return { success: false, error: error.message || 'Failed to fetch staff' };
   }
 }
