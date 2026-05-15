@@ -127,7 +127,9 @@ export function AssignStaffModal({
                 {currentStaff.map((staff) => (
                   <div key={staff.id} className="flex items-center justify-between bg-card border p-2.5 rounded-lg shadow-sm">
                     <div>
-                      <p className="text-sm font-medium">{staff.user?.name || 'Unknown User'}</p>
+                      <p className="text-sm font-medium">
+                        {staff.user?.memberships?.[0]?.staffProfile?.name || staff.user?.email || 'Unknown User'}
+                      </p>
                       <Badge variant="secondary" className="text-[10px] mt-1">{staff.role}</Badge>
                     </div>
                     <Button 

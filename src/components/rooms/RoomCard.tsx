@@ -175,28 +175,34 @@ export function RoomCard({
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {assignedDoctors.map((rs: any) => (
-                  <div key={rs.user.id} className="group/staff flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 px-2 py-1.5 rounded-xl border border-blue-100/50 dark:border-blue-800/30 transition-all cursor-default">
-                    <div className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm shadow-blue-200">
-                      {rs.user.name?.charAt(0) || 'D'}
+                {assignedDoctors.map((rs: any) => {
+                  const staffName = rs.user.memberships?.[0]?.staffProfile?.name || rs.user.email || 'Doctor';
+                  return (
+                    <div key={rs.user.id} className="group/staff flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 px-2 py-1.5 rounded-xl border border-blue-100/50 dark:border-blue-800/30 transition-all cursor-default">
+                      <div className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold shadow-sm shadow-blue-200">
+                        {staffName.charAt(0)}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-blue-900 dark:text-blue-300 leading-none">{staffName}</span>
+                        <span className="text-[9px] text-blue-500/70 font-semibold uppercase tracking-tighter mt-0.5">Doctor</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold text-blue-900 dark:text-blue-300 leading-none">{rs.user.name}</span>
-                      <span className="text-[9px] text-blue-500/70 font-semibold uppercase tracking-tighter mt-0.5">Doctor</span>
+                  );
+                })}
+                {assignedAssistants.map((rs: any) => {
+                  const staffName = rs.user.memberships?.[0]?.staffProfile?.name || rs.user.email || 'Assistant';
+                  return (
+                    <div key={rs.user.id} className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-800/40 px-2 py-1.5 rounded-xl border border-slate-100/50 dark:border-slate-700/30">
+                      <div className="w-6 h-6 rounded-lg bg-slate-400 text-white flex items-center justify-center text-[10px] font-bold">
+                        {staffName.charAt(0)}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-none">{staffName}</span>
+                        <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-tighter mt-0.5">Assistant</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {assignedAssistants.map((rs: any) => (
-                  <div key={rs.user.id} className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-800/40 px-2 py-1.5 rounded-xl border border-slate-100/50 dark:border-slate-700/30">
-                    <div className="w-6 h-6 rounded-lg bg-slate-400 text-white flex items-center justify-center text-[10px] font-bold">
-                      {rs.user.name?.charAt(0) || 'A'}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-none">{rs.user.name}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-tighter mt-0.5">Assistant</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             
