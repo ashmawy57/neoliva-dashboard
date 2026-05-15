@@ -91,11 +91,14 @@ export async function proxy(request: NextRequest) {
 
   // --- 5. Auth Gate ---
   if (!user && !isPublicRoute) {
+    const isAdminRoute = pathname.startsWith('/admin');
+    const redirectPath = isAdminRoute ? '/admin/login' : '/login';
+    
     if (process.env.AUTH_DEBUG === 'true') {
-      console.warn(`[AUTH_DEBUG][Proxy][AUTH_REQUIRED] Redirecting to login: ${pathname}`);
+      console.warn(`[AUTH_DEBUG][Proxy][AUTH_REQUIRED] Redirecting to ${redirectPath}: ${pathname}`);
     }
-    console.warn(`[Proxy][AUTH_REQUIRED] Unauthenticated access to protected route: ${pathname} (RID: ${requestId})`);
-    const loginUrl = new URL('/login', request.url);
+    
+    const loginUrl = new URL(redirectPath, request.url);
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
