@@ -1,4 +1,4 @@
-import { ArrowRight, Play, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Play, CheckCircle2, Hospital, Stethoscope } from 'lucide-react'
 import Link from 'next/link'
 
 export function Hero() {
@@ -32,34 +32,56 @@ export function Hero() {
             Automate your workflow, delight your patients, and grow your revenue.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-            <Link 
-              href="/create-clinic" 
-              className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-200 hover:shadow-blue-300 active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              Get Started Now
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <button className="w-full sm:w-auto px-8 py-4 bg-white border border-slate-200 hover:border-blue-200 hover:bg-blue-50/50 text-slate-700 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                <Play className="w-4 h-4 fill-current" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
+            {/* Owner Path */}
+            <div className="group relative p-8 bg-white border border-slate-200 rounded-[2.5rem] hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/5 transition-all duration-500 text-left">
+              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
+                <Hospital className="text-white w-6 h-6" />
               </div>
-              Book a Demo
-            </button>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Clinic Owner</h3>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                Register your clinic, manage your entire business, and lead your team to success.
+              </p>
+              <Link 
+                href="/create-clinic" 
+                className="inline-flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Register Your Clinic
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Staff Path */}
+            <div className="group relative p-8 bg-slate-50 border border-slate-100 rounded-[2.5rem] hover:border-indigo-500/30 hover:shadow-2xl hover:shadow-indigo-500/5 transition-all duration-500 text-left">
+              <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+                <Stethoscope className="text-white w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Staff Member</h3>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                Access your assigned clinic workspace and manage your daily tasks efficiently.
+              </p>
+              <Link 
+                href="/staff/sign-in" 
+                className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+              >
+                Enter Staff Portal
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
 
           <div className="mt-12 flex flex-wrap justify-center items-center gap-x-8 gap-y-4 text-sm font-medium text-slate-500 animate-in fade-in duration-1000 delay-500">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-green-500" />
-              No credit card required
+              Role-Based Access Control
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-green-500" />
-              14-day free trial
+              Secure Multi-Tenant Isolation
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-green-500" />
-              Cancel anytime
+              Real-time Team Collaboration
             </div>
           </div>
         </div>

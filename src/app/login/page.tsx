@@ -17,10 +17,10 @@ export default function LoginPage() {
             <Stethoscope className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-black text-white mb-2 tracking-tight">
-            Neoliva <span className="text-blue-500">Core</span>
+            Owner <span className="text-blue-500">Login</span>
           </h1>
           <p className="text-white/40 font-medium tracking-wide text-sm uppercase">
-            Clinical Operations Engine
+            Clinic Management Portal
           </p>
         </div>
 
@@ -29,8 +29,8 @@ export default function LoginPage() {
         <div className="mt-10 pt-8 border-t border-white/5 text-center">
           <p className="text-sm text-white/40">
             Don't have an account?{' '}
-            <a href="/signup" className="text-blue-400 font-bold hover:text-blue-300 transition-colors">
-              Contact Admin
+            <a href="/create-clinic" className="text-blue-400 font-bold hover:text-blue-300 transition-colors">
+              Register Clinic
             </a>
           </p>
         </div>

@@ -42,16 +42,10 @@ export function Navbar() {
               Staff Sign In
             </Link>
             <Link 
-              href="/signup" 
-              className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
-            >
-              Staff Signup
-            </Link>
-            <Link 
               href="/login" 
               className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
             >
-              Login
+              Owner Login
             </Link>
             <Link 
               href="/create-clinic" 
@@ -79,8 +73,7 @@ export function Navbar() {
           <Link href="#pricing" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Pricing</Link>
           <hr className="border-slate-100" />
           <Link href="/staff/sign-in" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Staff Sign In</Link>
-          <Link href="/signup" className="block text-base font-medium text-slate-600" onClick={() => setIsMobileMenuOpen(false)}>Staff Signup</Link>
-          <Link href="/login" className="block text-base font-semibold text-slate-900" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
+          <Link href="/login" className="block text-base font-semibold text-slate-900" onClick={() => setIsMobileMenuOpen(false)}>Owner Login</Link>
           <Link 
             href="/create-clinic" 
             className="block bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold text-center shadow-lg shadow-blue-100"

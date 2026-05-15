@@ -91,7 +91,6 @@ export async function proxy(request: NextRequest) {
   // Public Page Bypass
   const isPublicPage = pathname === '/' ||
                        pathname.startsWith('/login') || 
-                       pathname.startsWith('/signup') ||
                        pathname.startsWith('/auth/') || 
                        pathname.startsWith('/staff/sign-in') ||
                        pathname.startsWith('/staff/accept-invitation') ||

@@ -111,7 +111,7 @@ export function ClinicRegistrationForm() {
 
         <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
           <p className="text-slate-500 text-sm font-medium">
-            Already have a clinic? <Link href="/login" className="text-blue-600 hover:underline font-bold">Login</Link>
+            Already have a clinic? <Link href="/login" className="text-blue-600 hover:underline font-bold">Owner Login</Link>
           </p>
         </div>
       </div>
