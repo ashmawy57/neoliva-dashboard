@@ -24,13 +24,14 @@ export class PatientService {
       }));
     } catch (error) {
       console.error("[PatientService.mapSafePatient] Error:", error);
-      return this.getSafeFallback(patient?.id);
+      return this.getSafeFallback(patient?.id, patient?.tenantId);
     }
   }
 
-  private getSafeFallback(id?: string): any {
+  private getSafeFallback(id?: string, tenantId?: string): any {
     return {
       id: id || "unknown",
+      tenantId: tenantId || null,
       displayId: "P-0000",
       name: "Unknown Patient",
       phone: "-",
@@ -185,8 +186,28 @@ export class PatientService {
   }
 
   async getPatientById(tenantId: string, id: string) {
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.log(`[AUTH_DEBUG][PatientService.getPatientById] REQUESTED: id=${id} | tenantId=${tenantId}`);
+    }
     try {
-      if (!id || !tenantId) return this.getSafeFallback(id);
+      if (!id || !tenantId) {
+        return this.getSafeFallback(id, tenantId);
+      }
+
+      // 1. Direct Prisma Check (Truth Verification)
+      const rawPatient = await prisma.patient.findUnique({
+        where: { id },
+        select: { id: true, tenantId: true, name: true }
+      });
+
+      if (process.env.AUTH_DEBUG === 'true') {
+        console.log("[AUTH_DEBUG][PATIENT_DATABASE_REALITY]", {
+          id: rawPatient?.id,
+          actualTenantId: rawPatient?.tenantId,
+          requestedTenantId: tenantId,
+          match: rawPatient?.tenantId === tenantId
+        });
+      }
 
       const [core, clinical] = await Promise.all([
         patientRepository.findUnique(tenantId, id, {
@@ -221,6 +242,7 @@ export class PatientService {
           patientDocuments: true,
         }),
         patientRepository.findUnique(tenantId, id, {
+          tenantId: true,
           patientAllergies: true,
           medicalConditions: true,
           patientMedications: true,
@@ -241,7 +263,12 @@ export class PatientService {
         }),
       ]);
 
-      if (!core) return this.getSafeFallback(id);
+      if (!core) {
+        if (process.env.AUTH_DEBUG === 'true') {
+          console.error(`[AUTH_DEBUG][PatientService.getPatientById] Patient not found in DB: ${id} for tenant: ${tenantId}`);
+        }
+        return this.getSafeFallback(id, tenantId);
+      }
 
       const result = {
         ...clinical,
@@ -317,7 +344,7 @@ export class PatientService {
 
   async getPatientProfile(tenantId: string, id: string) {
     try {
-      if (!id || !tenantId) return this.getSafeFallback();
+      if (!id || !tenantId) return this.getSafeFallback(id, tenantId);
 
       const data = await this.getPatientById(tenantId, id);
       
@@ -457,7 +484,8 @@ export class PatientService {
         prescriptions: (data.prescriptions || []).map((rx: any) => ({
           ...rx,
           items: (rx.items || []).map((item: any) => ({ ...item }))
-        }))
+        })),
+        tenantId: data.tenantId, // CRITICAL FIX: Ensure tenantId is propagated for authorization checks
       };
 
       return JSON.parse(JSON.stringify(result));

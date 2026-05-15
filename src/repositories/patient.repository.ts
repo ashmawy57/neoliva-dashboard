@@ -31,7 +31,8 @@ export class PatientRepository {
         email: true,
         phone: true,
         status: true,
-        createdAt: true
+        createdAt: true,
+        tenantId: true
       }
     });
   }
@@ -266,7 +267,10 @@ export class PatientRepository {
         status: true,
         dueDate: true,
         createdAt: true,
-        items: true
+        items: true,
+        updatedAt: true,
+        tenantId: true,
+        appointments: true,
       }
     });
   }

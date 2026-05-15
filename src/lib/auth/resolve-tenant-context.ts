@@ -156,8 +156,22 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
   // ── Step 1: Get authenticated user from Supabase ──────────────────────────
   const supabase = await createClient();
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (process.env.AUTH_DEBUG === 'true') {
+    console.log("[FULL_SESSION]", JSON.stringify(session, null, 2));
+    console.log("[AUTH_DEBUG][USER_SHAPE]", {
+      uid: authUser?.id,
+      email: authUser?.email,
+      app_metadata: authUser?.app_metadata,
+      user_metadata: authUser?.user_metadata,
+    });
+  }
 
   if (authError || !authUser) {
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.error("[AUTH_DEBUG][UNAUTHORIZED] No Supabase session found or error:", authError);
+    }
     throw new TenantContextError(
       'UNAUTHORIZED',
       `Supabase auth.getUser failed: ${authError?.message ?? 'No user in session'}`
@@ -183,6 +197,17 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
       );
     }
   } else {
+    if (process.env.AUTH_DEBUG === 'true') {
+      const allMemberships = await fetchAllMemberships(authUser.id);
+      console.log("[AUTH_DEBUG][ALL_USER_MEMBERSHIPS]", allMemberships.map(m => ({
+        tenant: m.tenant.name,
+        tenantId: m.tenantId,
+        status: m.status,
+        tenantStatus: m.tenant.status,
+        role: m.role
+      })));
+    }
+
     // Path B: No active_tenant_id — fallback to first active membership
     membership = await fetchPrimaryMembership(authUser.id);
 
@@ -213,6 +238,15 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
 
   // ── Step 4: Build and return the resolved context ─────────────────────────
   const normalizedRole = normalizeRole(membership.role)!; // Safe: validateMembership already checked this
+
+  if (process.env.AUTH_DEBUG === 'true') {
+    console.log("[AUTH_DEBUG][RESOLUTION_SUCCESS]", {
+      tenantId: membership.tenantId,
+      userId: membership.user.id,
+      role: normalizedRole,
+      staffId: membership.staffProfile?.id,
+    });
+  }
 
   return {
     tenantId: membership.tenantId,
@@ -251,15 +285,38 @@ async function fetchMembershipByTenantId(supabaseUserId: string, tenantId: strin
 }
 
 async function fetchPrimaryMembership(supabaseUserId: string) {
-  return prisma.tenantMembership.findFirst({
+  const memberships = await prisma.tenantMembership.findMany({
     where: {
       user: { supabaseId: supabaseUserId },
-      isActive: true,
       status: 'ACTIVE',
     },
     include: MEMBERSHIP_INCLUDE,
-    // Deterministic tie-breaking: most recently joined membership
     orderBy: { joinedAt: 'desc' },
+  });
+
+  if (process.env.AUTH_DEBUG === 'true') {
+    console.log("[AUTH_DEBUG][ALL_MEMBERSHIPS] " + JSON.stringify(memberships, null, 2));
+  }
+
+  if (!memberships[0]) return null;
+
+  return memberships[0];
+}
+
+/**
+ * fetchAllMemberships (Debug Only)
+ * 
+ * Retrieves all memberships for a user, regardless of status, 
+ * to provide context in the debug logs.
+ */
+async function fetchAllMemberships(supabaseUserId: string) {
+  return prisma.tenantMembership.findMany({
+    where: {
+      user: { supabaseId: supabaseUserId },
+    },
+    include: {
+      tenant: { select: { name: true, status: true } },
+    },
   });
 }
 

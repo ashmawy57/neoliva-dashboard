@@ -84,8 +84,15 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  if (process.env.AUTH_DEBUG === 'true') {
+    console.log(`[AUTH_DEBUG][Proxy] Path: ${pathname} | Auth: ${!!user} | RID: ${requestId}`);
+  }
+
   // --- 5. Auth Gate ---
   if (!user && !isPublicRoute) {
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.warn(`[AUTH_DEBUG][Proxy][AUTH_REQUIRED] Redirecting to login: ${pathname}`);
+    }
     console.warn(`[Proxy][AUTH_REQUIRED] Unauthenticated access to protected route: ${pathname} (RID: ${requestId})`);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname);
@@ -94,6 +101,9 @@ export async function proxy(request: NextRequest) {
 
   // --- 6. Redirect Authenticated Users from Login ---
   if (user && (pathname === '/login' || pathname === '/staff-signin')) {
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.log(`[AUTH_DEBUG][Proxy] User authenticated, redirecting from ${pathname} to dashboard`);
+    }
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
