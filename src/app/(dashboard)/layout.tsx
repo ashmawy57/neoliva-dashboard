@@ -37,7 +37,13 @@ export default async function DashboardLayout({
         redirect("/pending-approval");
       }
       if (error.code === 'REJECTED') {
-        redirect("/rejected");
+        redirect("/auth/error?type=ACCOUNT_REJECTED");
+      }
+      if (error.code === 'SUSPENDED') {
+        redirect("/auth/error?type=ACCOUNT_SUSPENDED");
+      }
+      if (error.code === 'DISABLED') {
+        redirect("/auth/error?type=ACCOUNT_DISABLED");
       }
       // NO_USER_RECORD, UNAUTHORIZED, etc.
       redirect("/unauthorized");

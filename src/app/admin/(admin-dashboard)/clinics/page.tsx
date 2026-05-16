@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Building2, Users, Calendar, Shield, LogOut, Monitor, Ban } from "lucide-react";
 import Link from "next/link";
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
+import { ClinicActions } from "@/components/admin/ClinicActions";
 
 export default async function AdminClinicsPage() {
   const tenants = await getAllTenants();
@@ -47,6 +48,7 @@ export default async function AdminClinicsPage() {
                     tenant.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                     tenant.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-100' :
                     tenant.status === 'SUSPENDED' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                    tenant.status === 'DISABLED' ? 'bg-gray-100 text-gray-800 border-gray-200' :
                     'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
                   }`}
                 >
@@ -73,49 +75,22 @@ export default async function AdminClinicsPage() {
                   </div>
 
                   <div className="md:col-span-2 flex items-center justify-end gap-3">
-                    {tenant.status === 'PENDING' ? (
-                      <>
-                        <form action={approveAction}>
-                          <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[120px]">
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Approve
-                          </Button>
-                        </form>
-                        <form action={rejectAction}>
-                          <Button type="submit" variant="outline" className="text-red-600 border-red-100 hover:bg-red-50 min-w-[120px]">
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Reject
-                          </Button>
-                        </form>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      {tenant.status !== 'PENDING' && (
                         <Link href={`/admin/clinics/${tenant.id}/sessions`}>
                           <Button variant="outline" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100">
                             <Monitor className="w-4 h-4 mr-2" />
                             Monitor Sessions
                           </Button>
                         </Link>
-                        
-                        {tenant.status === 'APPROVED' && (
-                          <form action={updateTenantStatus.bind(null, tenant.id, 'SUSPENDED')}>
-                            <Button type="submit" variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50">
-                              <Ban className="w-4 h-4 mr-2" />
-                              Suspend
-                            </Button>
-                          </form>
-                        )}
-
-                        {tenant.status === 'SUSPENDED' && (
-                          <form action={approveAction}>
-                            <Button type="submit" variant="outline" size="sm" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              Re-Activate
-                            </Button>
-                          </form>
-                        )}
-                      </div>
-                    )}
+                      )}
+                      
+                      <ClinicActions 
+                        tenantId={tenant.id} 
+                        clinicName={tenant.name} 
+                        status={tenant.status} 
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>

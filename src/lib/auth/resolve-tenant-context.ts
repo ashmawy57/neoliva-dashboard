@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { normalizeRole } from '@/lib/auth/roles';
 import { TenantContextError } from '@/lib/auth/auth-errors';
+import { cookies } from 'next/headers';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,13 @@ function validateMembership(membership: {
     );
   }
 
+  if (tenantStatus === 'DISABLED') {
+    throw new TenantContextError(
+      'DISABLED',
+      `Tenant for user ${membership.user.email} has been DISABLED.`
+    );
+  }
+
   // 3. Role must be a valid, recognized system role
   const normalizedRole = normalizeRole(membership.role);
   if (!normalizedRole) {
@@ -176,6 +184,33 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
       'UNAUTHORIZED',
       `Supabase auth.getUser failed: ${authError?.message ?? 'No user in session'}`
     );
+  }
+
+  // ── Step 1.5: Validate Persistent Session (Revocation Check) ──────────────
+  const cookieStore = await cookies();
+  const appRefreshToken = cookieStore.get('app_refresh_token')?.value;
+
+  if (appRefreshToken) {
+    const { SessionService } = await import('@/lib/auth/session-service');
+    const session = await SessionService.validateSession(appRefreshToken);
+    
+    if (!session) {
+      console.warn(`[Security][REVOKED_SESSION] Access denied for user ${authUser.email} - Session has been revoked.`);
+      throw new TenantContextError(
+        'UNAUTHORIZED',
+        'Your session has been revoked by an administrator or has expired.'
+      );
+    }
+    
+    // Safety check: Session must belong to the user
+    if (session.userId !== authUser.id) {
+       // Check if this is a DB User ID vs Supabase ID mismatch
+       const dbUser = await prisma.user.findUnique({ where: { supabaseId: authUser.id } });
+       if (!dbUser || session.userId !== dbUser.id) {
+          console.error(`[Security][SESSION_MISMATCH] Session ${session.id} belongs to user ${session.userId} but JWT belongs to ${authUser.id}`);
+          throw new TenantContextError('UNAUTHORIZED', 'Session mismatch detected.');
+       }
+    }
   }
 
   // ── Step 2: Determine Resolution Path ────────────────────────────────────
@@ -341,19 +376,28 @@ export async function resolveTenantContextOrRedirect(): Promise<ResolvedTenantCo
       switch (error.code) {
         case 'PENDING':
           redirect('/pending-approval');
+          break;
         case 'REJECTED':
           redirect('/auth/error?type=ACCOUNT_REJECTED');
+          break;
         case 'SUSPENDED':
           redirect('/auth/error?type=ACCOUNT_SUSPENDED');
+          break;
+        case 'DISABLED':
+          redirect('/auth/error?type=ACCOUNT_DISABLED');
+          break;
         case 'UNAUTHORIZED':
         case 'NO_USER_RECORD':
         case 'NO_MEMBERSHIP':
         case 'MEMBERSHIP_INACTIVE':
           redirect('/auth/error?type=SESSION_EXPIRED');
+          break;
         case 'INVALID_ROLE':
           redirect('/auth/error?type=INVALID_ACCOUNT');
+          break;
         default:
           redirect('/auth/error?type=SESSION_EXPIRED');
+          break;
       }
     }
     // Re-throw unexpected errors (will surface as a 500)

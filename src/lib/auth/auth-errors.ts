@@ -22,6 +22,7 @@ export type TenantContextCode =
   | 'PENDING'            // Tenant awaiting admin approval
   | 'REJECTED'           // Tenant registration was rejected
   | 'SUSPENDED'          // Tenant account suspended by admin
+  | 'DISABLED'           // Tenant account permanently disabled
   | 'INVALID_ROLE'       // Role in DB is not a recognized SystemRole
 
 export class TenantContextError extends Error {
@@ -57,6 +58,8 @@ export class TenantContextError extends Error {
         return 'Your clinic registration has been declined.';
       case 'SUSPENDED':
         return 'Your clinic account has been suspended. Please contact support.';
+      case 'DISABLED':
+        return 'Your clinic account has been permanently disabled. Please contact administration.';
       case 'INVALID_ROLE':
         return 'Your account has an invalid role configuration. Please contact support.';
       default:

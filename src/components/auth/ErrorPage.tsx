@@ -12,7 +12,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Lock,
-  UserX
+  UserX,
+  Ban
 } from 'lucide-react';
 import { getAuthError, AuthErrorCode } from '@/lib/auth-errors';
 import { resendVerificationEmail } from '@/app/actions/auth';
@@ -54,6 +55,7 @@ export function ErrorPage({ code, email }: ErrorPageProps) {
       case 'SESSION_EXPIRED': return <Info className="w-12 h-12 text-blue-500" />;
       case 'INVITE_EXPIRED': return <AlertTriangle className="w-12 h-12 text-amber-500" />;
       case 'ACCOUNT_SUSPENDED': return <UserX className="w-12 h-12 text-red-600" />;
+      case 'ACCOUNT_DISABLED': return <Ban className="w-12 h-12 text-red-700" />;
       case 'TENANT_PENDING': return <AlertCircle className="w-12 h-12 text-blue-400" />;
       default: return <AlertCircle className="w-12 h-12 text-red-500" />;
     }

@@ -2,6 +2,7 @@ import { resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { createClient } from "@/lib/supabase/server";
 import { PermissionCode } from "@/types/permissions";
 import { isAdminAllowlisted } from "@/lib/auth/auth-orchestrator";
+import { normalizeRole } from "@/lib/auth/roles";
 import { cache } from "react";
 import { unstable_cache, revalidateTag } from "next/cache";
 
@@ -12,33 +13,6 @@ import { unstable_cache, revalidateTag } from "next/cache";
  */
 export const VALID_ROLES = ['SUPER_ADMIN', 'OWNER', 'ADMIN', 'DOCTOR', 'ASSISTANT', 'RECEPTIONIST', 'ACCOUNTANT'] as const;
 export type SystemRole = typeof VALID_ROLES[number];
-
-/**
- * Normalizes legacy role strings to valid system roles.
- * FOLLOWS FAIL-CLOSED MODEL: Returns null if role is unknown or invalid.
- */
-export function normalizeRole(role: string | null | undefined): SystemRole | null {
-  if (!role) {
-    console.error(`[RBAC] Normalization failed: Role is empty/null.`);
-    return null;
-  }
-
-  const r = role.toUpperCase().trim();
-
-  // Explicit Legacy Mappings
-  if (r === 'ADMINISTRATOR' || r === 'CLINIC ADMIN' || r === 'CLINIC_ADMIN') return 'ADMIN';
-  if (r === 'SUPER ADMIN' || r === 'SUPER_ADMIN') return 'SUPER_ADMIN';
-  if (r === 'OWNER') return 'OWNER';
-  if (r === 'DR' || r === 'DENTIST') return 'DOCTOR';
-  
-  // Strict System Role Check
-  const matchedRole = VALID_ROLES.find(vr => vr === r);
-  if (matchedRole) return matchedRole;
-
-  // FAIL-CLOSED: Log and deny
-  console.error(`[RBAC] Security Warning: Unknown role detected: "${role}". Access will be denied.`);
-  return null;
-}
 
 const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
   SUPER_ADMIN: Object.values(PermissionCode),
@@ -157,12 +131,17 @@ export const getUserPermissions = cache(async (): Promise<Set<string>> => {
     // Grants full system access if EITHER the JWT role is SUPER_ADMIN
     // OR the email is in the ALLOWED_SUPER_ADMIN_EMAILS env var.
     const role = (authUser?.app_metadata?.role || authUser?.user_metadata?.role || '')?.toString().toUpperCase();
-    const isSuperAdmin = role === 'SUPER_ADMIN' || isAdminAllowlisted(authUser?.email ?? '');
+    const isAllowlisted = isAdminAllowlisted(authUser?.email ?? '');
+    const isSuperAdmin = role === 'SUPER_ADMIN' || isAllowlisted;
+
+    console.log(`[RBAC] User Resolution: Email: ${authUser?.email} | Metadata Role: ${role} | Allowlisted: ${isAllowlisted} | isSuperAdmin: ${isSuperAdmin}`);
 
     if (isSuperAdmin) {
-      console.log(`[RBAC] Super Admin detected: ${authUser?.email}. Bypassing tenant check.`);
+      console.log(`[RBAC] Super Admin Access GRANTED for: ${authUser?.email}. (Mode: ${role === 'SUPER_ADMIN' ? 'JWT_ROLE' : 'ALLOWLIST'})`);
       return new Set(ROLE_PERMISSIONS['SUPER_ADMIN']);
     }
+
+    console.log(`[RBAC] standard flow for user ${authUser?.email}. Resolving tenant context...`);
 
     // --- 2. STANDARD TENANT-SCOPED FLOW ---
     // Uses the centralized resolver — FAIL-CLOSED, unified validation pipeline

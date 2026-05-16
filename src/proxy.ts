@@ -154,7 +154,56 @@ export async function proxy(request: NextRequest) {
     return authResponse;
   }
 
-  // --- 7. Redirect Authenticated Users from Login ---
+  // --- 7. Hardened Security Check (Enterprise Lifecycle Enforcement) ---
+  if (user && !isPublicRoute && !pathname.startsWith('/admin')) {
+    try {
+      const { resolveTenantContext } = await import('@/lib/auth/resolve-tenant-context');
+      // This will throw if the tenant is SUSPENDED, DISABLED, or REJECTED
+      const context = await resolveTenantContext();
+      
+      if (process.env.AUTH_DEBUG === 'true') {
+        console.log(`[AUTH_DEBUG][Proxy] Tenant ${context.tenantId} verified (Status: ${context.user.tenant.status})`);
+      }
+    } catch (err: any) {
+      const code = err?.code as string;
+      const email = user.email;
+      
+      console.error(`[PROXY][SECURITY_VIOLATION] Access denied for user ${email} on ${pathname}. Code: ${code} | Reason: ${err?.internalReason || err?.message}`);
+      
+      // Detailed mapping of internal security codes to client-safe AuthErrorCodes
+      let errorType: string;
+      switch (code) {
+        case 'DISABLED':
+          errorType = 'ACCOUNT_DISABLED';
+          break;
+        case 'SUSPENDED':
+          errorType = 'ACCOUNT_SUSPENDED';
+          break;
+        case 'REJECTED':
+          errorType = 'ACCOUNT_REJECTED';
+          break;
+        case 'PENDING':
+          errorType = 'TENANT_PENDING';
+          break;
+        case 'MEMBERSHIP_INACTIVE':
+        case 'NO_MEMBERSHIP':
+        case 'NO_USER_RECORD':
+          errorType = 'SESSION_EXPIRED'; // Or map to a new 'ACCESS_DENIED' code if added
+          break;
+        default:
+          errorType = 'SESSION_EXPIRED';
+      }
+      
+      const errorUrl = new URL('/auth/error', request.url);
+      errorUrl.searchParams.set('type', errorType);
+      
+      const errorResponse = NextResponse.redirect(errorUrl);
+      errorResponse.cookies.delete('app_refresh_token');
+      return errorResponse;
+    }
+  }
+
+  // --- 8. Redirect Authenticated Users from Login ---
   if (user && (pathname === '/login' || pathname === '/staff-signin')) {
     console.log(`[PROXY][REDIRECT] ${pathname} -> /dashboard (Already Authenticated)`);
     return NextResponse.redirect(new URL('/dashboard', request.url));

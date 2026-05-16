@@ -191,6 +191,7 @@ export function getAdminPostLoginDestination(
  */
 export function isAdminAllowlisted(email: string): boolean {
   const allowlistRaw = process.env.ALLOWED_SUPER_ADMIN_EMAILS ?? '';
+  console.log(`[AUTH_ORCHESTRATOR] Checking allowlist for: ${email}. Raw list: "${allowlistRaw}"`);
   if (!allowlistRaw.trim()) return false;
 
   const allowlist = allowlistRaw

@@ -48,6 +48,34 @@ export class SessionService {
   }
 
   /**
+   * Validates a session without rotating it
+   */
+  static async validateSession(appRefreshToken: string) {
+    const hash = this.hashToken(appRefreshToken);
+    
+    const session = await prisma.session.findFirst({
+      where: {
+        refreshTokenHash: hash,
+        isRevoked: false,
+        expiresAt: { gt: new Date() }
+      },
+      include: {
+        tenant: true
+      }
+    });
+
+    if (!session) return null;
+
+    // Tenant-level block check
+    if (session.tenant && ['SUSPENDED', 'DISABLED', 'BLOCKED', 'CANCELLED'].includes(session.tenant.status)) {
+      await this.revokeSession(session.id);
+      return null;
+    }
+
+    return session;
+  }
+
+  /**
    * Validates and rotates a session
    */
   static async refreshSession(appRefreshToken: string, ip?: string, userAgent?: string) {
@@ -69,7 +97,7 @@ export class SessionService {
     }
 
     // Phase 5: Tenant-Aware Security
-    if (session.tenant && ['SUSPENDED', 'BLOCKED', 'CANCELLED'].includes(session.tenant.status)) {
+    if (session.tenant && ['SUSPENDED', 'DISABLED', 'BLOCKED', 'CANCELLED'].includes(session.tenant.status)) {
       await this.revokeSession(session.id);
       throw new Error('TENANT_BLOCKED');
     }

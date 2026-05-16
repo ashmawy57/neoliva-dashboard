@@ -6,6 +6,8 @@ export type AuthErrorCode =
   | 'SESSION_EXPIRED'
   | 'INVITE_EXPIRED'
   | 'ACCOUNT_SUSPENDED'
+  | 'ACCOUNT_DISABLED'
+  | 'ACCOUNT_REJECTED'
   | 'TENANT_PENDING'
   | 'UNKNOWN_ERROR';
 
@@ -69,6 +71,24 @@ export const AUTH_ERRORS: Record<AuthErrorCode, AuthErrorDetails> = {
   ACCOUNT_SUSPENDED: {
     title: 'Account suspended',
     description: 'Access to your account has been suspended. Please contact support if you believe this is an error.',
+    severity: 'error',
+    recoveryAction: {
+      label: 'Contact Support',
+      path: 'mailto:support@neoliva.com'
+    }
+  },
+  ACCOUNT_DISABLED: {
+    title: 'Account Disabled',
+    description: 'Your clinic account has been permanently disabled due to a breach of terms or administrative decision.',
+    severity: 'error',
+    recoveryAction: {
+      label: 'Contact Administration',
+      path: 'mailto:admin@neoliva.com'
+    }
+  },
+  ACCOUNT_REJECTED: {
+    title: 'Registration Rejected',
+    description: 'Your clinic registration has been rejected. Please contact our support team for more information.',
     severity: 'error',
     recoveryAction: {
       label: 'Contact Support',

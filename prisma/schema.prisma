@@ -802,6 +802,7 @@ enum TenantStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  DISABLED
 }
 
 enum StaffRole {
