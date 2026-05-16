@@ -12,17 +12,26 @@ import { EmailService } from "@/services/email.service";
 export async function staffLogin(formData: FormData) {
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
-  const rememberMe = formData.get('rememberMe') === 'true';
+  const rememberMe = formData.get('remember') === 'true' || formData.get('rememberMe') === 'true';
   const supabase = await createClient();
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  console.log(`[AUTH_TRACE][LOGIN_START] Email: ${email}, Path: /login`);
+  const result = await supabase.auth.signInWithPassword({
     email,
     password,
   });
+  
+  const { data, error } = result;
 
   if (error) {
+    console.warn(`[AUTH_TRACE][SUPABASE_FAILURE] Email: ${email}, Status: ${error.status}, Message: ${error.message}`);
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.log("[AUTH_TRACE][SUPABASE_RAW_ERROR]", JSON.stringify(error, null, 2));
+    }
     return { success: false, error: error.message };
   }
+
+  console.log(`[AUTH_TRACE][SUPABASE_SUCCESS] UserId: ${data.user?.id}, Email: ${email}`);
 
   if (!data.user) {
     return { success: false, error: "Authentication failed." };
@@ -41,6 +50,7 @@ export async function staffLogin(formData: FormData) {
   });
 
   if (!dbUser || dbUser.memberships.length === 0) {
+    console.warn(`[AUTH_TRACE][MEMBERSHIP_MISSING] UserId: ${data.user.id}, Email: ${email}`);
     // Check if there's a pending invitation
     const pendingInvite = await prisma.staffInvitation.findFirst({
       where: { 
@@ -63,6 +73,7 @@ export async function staffLogin(formData: FormData) {
   }
 
   const primaryMembership = dbUser.memberships[0];
+  console.log(`[AUTH_TRACE][MEMBERSHIP_FOUND] UserId: ${dbUser.id}, TenantId: ${primaryMembership.tenantId}, Role: ${primaryMembership.role}, Status: ${primaryMembership.tenant.status}`);
 
   // --- PERSISTENT SESSION ARCHITECTURE ---
   // Create a DB-backed session for long-term persistence
@@ -77,6 +88,8 @@ export async function staffLogin(formData: FormData) {
       ipAddress: headerList.get('x-forwarded-for') || undefined,
       userAgent: headerList.get('user-agent') || undefined
     }, data.session?.refresh_token || '');
+
+    console.log(`[AUTH_TRACE][SESSION_CREATED] UserId: ${dbUser.id}, TenantId: ${primaryMembership.tenantId}`);
 
     // Set the persistent refresh token cookie (90 days)
     const { cookies } = await import('next/headers');

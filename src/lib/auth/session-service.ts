@@ -68,9 +68,12 @@ export class SessionService {
 
     // Tenant-level block check
     if (session.tenant && ['SUSPENDED', 'DISABLED', 'BLOCKED', 'CANCELLED'].includes(session.tenant.status)) {
+      console.warn(`[AUTH_TRACE][SESSION_VALIDATION_FAILED] SessionId: ${session.id}, TenantId: ${session.tenantId}, Reason: TENANT_${session.tenant.status}`);
       await this.revokeSession(session.id);
       return null;
     }
+
+    console.log(`[AUTH_TRACE][SESSION_VALIDATION_SUCCESS] SessionId: ${session.id}, UserId: ${session.userId}, TenantId: ${session.tenantId}`);
 
     return session;
   }
@@ -93,11 +96,12 @@ export class SessionService {
     });
 
     if (!session) {
-      throw new Error('INVALID_SESSION');
+      throw new Error('SESSION_EXPIRED');
     }
 
     // Phase 5: Tenant-Aware Security
     if (session.tenant && ['SUSPENDED', 'DISABLED', 'BLOCKED', 'CANCELLED'].includes(session.tenant.status)) {
+      console.warn(`[AUTH_TRACE][SESSION_REFRESH_FAILED] SessionId: ${session.id}, TenantId: ${session.tenantId}, Reason: TENANT_${session.tenant.status}`);
       await this.revokeSession(session.id);
       throw new Error('TENANT_BLOCKED');
     }
@@ -144,6 +148,7 @@ export class SessionService {
   }
 
   static async revokeAllSessionsForTenant(tenantId: string) {
+    console.log(`[AUTH_TRACE][REVOKE_ALL_TENANT_SESSIONS] TenantId: ${tenantId}`);
     return prisma.session.updateMany({
       where: { tenantId },
       data: { isRevoked: true }

@@ -97,28 +97,30 @@ function validateMembership(membership: {
 
   if (tenantStatus === 'PENDING') {
     throw new TenantContextError(
-      'PENDING',
+      'TENANT_PENDING',
       `Tenant for user ${membership.user.email} is PENDING admin approval.`
     );
   }
 
   if (tenantStatus === 'REJECTED') {
     throw new TenantContextError(
-      'REJECTED',
+      'ACCOUNT_REJECTED',
       `Tenant for user ${membership.user.email} has been REJECTED by admin.`
     );
   }
 
   if (tenantStatus === 'SUSPENDED') {
+    console.warn(`[AUTH_TRACE][TENANT_SUSPENDED] UserId: ${membership.user.id}, TenantId: ${membership.tenantId}`);
     throw new TenantContextError(
-      'SUSPENDED',
+      'ACCOUNT_SUSPENDED',
       `Tenant for user ${membership.user.email} has been SUSPENDED.`
     );
   }
 
   if (tenantStatus === 'DISABLED') {
+    console.warn(`[AUTH_TRACE][TENANT_DISABLED] UserId: ${membership.user.id}, TenantId: ${membership.tenantId}`);
     throw new TenantContextError(
-      'DISABLED',
+      'ACCOUNT_DISABLED',
       `Tenant for user ${membership.user.email} has been DISABLED.`
     );
   }
@@ -195,7 +197,7 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
     const session = await SessionService.validateSession(appRefreshToken);
     
     if (!session) {
-      console.warn(`[Security][REVOKED_SESSION] Access denied for user ${authUser.email} - Session has been revoked.`);
+      console.warn(`[AUTH_TRACE][SESSION_REVOKED] UserId: ${authUser.id}, Email: ${authUser.email} - Session has been revoked or expired.`);
       throw new TenantContextError(
         'UNAUTHORIZED',
         'Your session has been revoked by an administrator or has expired.'

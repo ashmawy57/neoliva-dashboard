@@ -144,7 +144,7 @@ export async function proxy(request: NextRequest) {
     const isAdminRoute = pathname.startsWith('/admin');
     const redirectPath = isAdminRoute ? '/admin/login' : '/login';
     
-    console.log(`[PROXY][REDIRECT] ${pathname} -> ${redirectPath} (Unauthorized)`);
+    console.warn(`[AUTH_TRACE][PROXY_UNAUTHORIZED_REDIRECT] Path: ${pathname}, Target: ${redirectPath}`);
     
     const loginUrl = new URL(redirectPath, request.url);
     loginUrl.searchParams.set('next', pathname);
@@ -168,32 +168,34 @@ export async function proxy(request: NextRequest) {
       const code = err?.code as string;
       const email = user.email;
       
-      console.error(`[PROXY][SECURITY_VIOLATION] Access denied for user ${email} on ${pathname}. Code: ${code} | Reason: ${err?.internalReason || err?.message}`);
+      console.error(`[AUTH_TRACE][PROXY_SECURITY_VIOLATION] User: ${email}, Path: ${pathname}, Code: ${code}`);
       
       // Detailed mapping of internal security codes to client-safe AuthErrorCodes
       let errorType: string;
       switch (code) {
-        case 'DISABLED':
+        case 'ACCOUNT_DISABLED':
           errorType = 'ACCOUNT_DISABLED';
           break;
-        case 'SUSPENDED':
+        case 'ACCOUNT_SUSPENDED':
           errorType = 'ACCOUNT_SUSPENDED';
           break;
-        case 'REJECTED':
+        case 'ACCOUNT_REJECTED':
           errorType = 'ACCOUNT_REJECTED';
           break;
-        case 'PENDING':
+        case 'TENANT_PENDING':
           errorType = 'TENANT_PENDING';
           break;
         case 'MEMBERSHIP_INACTIVE':
         case 'NO_MEMBERSHIP':
         case 'NO_USER_RECORD':
-          errorType = 'SESSION_EXPIRED'; // Or map to a new 'ACCESS_DENIED' code if added
+        case 'UNAUTHORIZED':
+          errorType = 'SESSION_EXPIRED';
           break;
         default:
           errorType = 'SESSION_EXPIRED';
       }
       
+      console.warn(`[AUTH_TRACE][PROXY_SECURITY_REDIRECT] User: ${email}, Target: /auth/error?type=${errorType}`);
       const errorUrl = new URL('/auth/error', request.url);
       errorUrl.searchParams.set('type', errorType);
       
