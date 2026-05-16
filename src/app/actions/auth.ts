@@ -64,6 +64,35 @@ export async function staffLogin(formData: FormData) {
 
   const primaryMembership = dbUser.memberships[0];
 
+  // --- PERSISTENT SESSION ARCHITECTURE ---
+  // Create a DB-backed session for long-term persistence
+  try {
+    const { SessionService } = await import('@/lib/auth/session-service');
+    const { headers: getHeaders } = await import('next/headers');
+    const headerList = await getHeaders();
+    
+    const { appRefreshToken } = await SessionService.createSession({
+      userId: dbUser.id,
+      tenantId: primaryMembership.tenantId,
+      ipAddress: headerList.get('x-forwarded-for') || undefined,
+      userAgent: headerList.get('user-agent') || undefined
+    }, data.session?.refresh_token || '');
+
+    // Set the persistent refresh token cookie (90 days)
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    cookieStore.set('app_refresh_token', appRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 90, // 90 days
+      path: '/'
+    });
+  } catch (sessionError) {
+    console.error("[AUTH][CRITICAL] Failed to create persistent session:", sessionError);
+    // We continue since Supabase auth succeeded, but persistence will be limited
+  }
+
   await AuditService.logAudit({
     action: 'STAFF_LOGIN_SUCCESS',
     entityType: 'USER',
@@ -235,6 +264,32 @@ export async function acceptStaffInvitation(formData: FormData) {
         status: 'Online'
       }
     });
+
+    // --- PERSISTENT SESSION ARCHITECTURE ---
+    try {
+      const { SessionService } = await import('@/lib/auth/session-service');
+      const { headers: getHeaders } = await import('next/headers');
+      const headerList = await getHeaders();
+
+      const { appRefreshToken } = await SessionService.createSession({
+        userId: user.id,
+        tenantId: invite.tenantId,
+        ipAddress: headerList.get('x-forwarded-for') || undefined,
+        userAgent: headerList.get('user-agent') || undefined
+      }, data.session?.refresh_token || '');
+
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      cookieStore.set('app_refresh_token', appRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 90,
+        path: '/'
+      });
+    } catch (sessionError) {
+      console.error("[AUTH][INVITE] Failed to create persistent session:", sessionError);
+    }
   });
 
   revalidatePath('/', 'layout');

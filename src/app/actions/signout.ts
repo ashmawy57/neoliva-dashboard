@@ -12,6 +12,12 @@ export const signOut = wrapAction(
   async () => {
     const supabase = await createClient();
     await supabase.auth.signOut();
+
+    // Clear persistent session cookie
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    cookieStore.delete('app_refresh_token');
+
     revalidatePath('/', 'layout');
     redirect('/login');
   },

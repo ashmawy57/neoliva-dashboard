@@ -3,7 +3,8 @@ import { getAllTenants, updateTenantStatus } from "@/app/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Building2, Users, Calendar, Shield, LogOut } from "lucide-react";
+import { CheckCircle, XCircle, Building2, Users, Calendar, Shield, LogOut, Monitor, Ban } from "lucide-react";
+import Link from "next/link";
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
 
 export default async function AdminClinicsPage() {
@@ -45,6 +46,7 @@ export default async function AdminClinicsPage() {
                   className={`px-3 py-1 rounded-full text-xs font-semibold ${
                     tenant.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                     tenant.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-100' :
+                    tenant.status === 'SUSPENDED' ? 'bg-amber-100 text-amber-800 border-amber-200' :
                     'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
                   }`}
                 >
@@ -52,7 +54,7 @@ export default async function AdminClinicsPage() {
                 </Badge>
               </CardHeader>
               <CardContent className="bg-white p-6">
-                <div className="grid md:grid-cols-3 gap-6">
+                <div className="grid md:grid-cols-4 gap-6">
                   <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-gray-400" />
                     <div>
@@ -70,8 +72,8 @@ export default async function AdminClinicsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3">
-                    {tenant.status === 'PENDING' && (
+                  <div className="md:col-span-2 flex items-center justify-end gap-3">
+                    {tenant.status === 'PENDING' ? (
                       <>
                         <form action={approveAction}>
                           <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[120px]">
@@ -86,12 +88,33 @@ export default async function AdminClinicsPage() {
                           </Button>
                         </form>
                       </>
-                    )}
-                    {tenant.status !== 'PENDING' && (
-                      <p className="text-xs text-gray-400 italic font-medium flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                        Processed
-                      </p>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <Link href={`/admin/clinics/${tenant.id}/sessions`}>
+                          <Button variant="outline" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100">
+                            <Monitor className="w-4 h-4 mr-2" />
+                            Monitor Sessions
+                          </Button>
+                        </Link>
+                        
+                        {tenant.status === 'APPROVED' && (
+                          <form action={updateTenantStatus.bind(null, tenant.id, 'SUSPENDED')}>
+                            <Button type="submit" variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50">
+                              <Ban className="w-4 h-4 mr-2" />
+                              Suspend
+                            </Button>
+                          </form>
+                        )}
+
+                        {tenant.status === 'SUSPENDED' && (
+                          <form action={approveAction}>
+                            <Button type="submit" variant="outline" size="sm" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50">
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Re-Activate
+                            </Button>
+                          </form>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
