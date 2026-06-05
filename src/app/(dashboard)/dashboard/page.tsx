@@ -1,7 +1,6 @@
-export const dynamic = 'force-dynamic';
 import { getDashboardData } from "@/app/actions/dashboard";
 import { DashboardKPIs } from "@/components/dashboard/DashboardKPIs";
-import { AdvancedCharts } from "@/components/dashboard/AdvancedCharts";
+import { AdvancedCharts } from "@/components/dashboard/DynamicCharts";
 import { InsightsEngine } from "@/components/dashboard/InsightsEngine";
 import { OperationalPanel } from "@/components/dashboard/OperationalPanel";
 import { DoctorPerformance } from "@/components/dashboard/DoctorPerformance";
@@ -9,10 +8,81 @@ import { FinancialFlow } from "@/components/dashboard/FinancialFlow";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { LayoutDashboard, Sparkles } from "lucide-react";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// --- Granular Server Components ---
+
+async function KPIsSection() {
+  const data = await getDashboardData();
+  return <DashboardKPIs data={data.kpis} />;
+}
+
+async function ChartsSection() {
+  const data = await getDashboardData();
+  return <AdvancedCharts data={data.charts} />;
+}
+
+async function FinancialSection() {
+  const data = await getDashboardData();
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <FinancialFlow data={data.financialFlow} />
+      <ActivityFeed activities={data.financialFlow.activityFeed} />
+    </div>
+  );
+}
+
+async function InsightsSection() {
+  const data = await getDashboardData();
+  return <InsightsEngine insights={data.insights} />;
+}
+
+async function OperationalSection() {
+  const data = await getDashboardData();
+  return <OperationalPanel queue={data.operational.patientQueue} />;
+}
+
+async function DoctorPerformanceSection() {
+  const data = await getDashboardData();
+  return <DoctorPerformance doctors={data.doctorPerformance} />;
+}
+
+// --- Skeleton Fallbacks ---
+
+function KPISkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {[1, 2, 3, 4].map(i => (
+        <Skeleton key={i} className="h-28 rounded-2xl w-full" />
+      ))}
+    </div>
+  );
+}
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Skeleton className="h-[380px] rounded-2xl w-full" />
+      <Skeleton className="h-[380px] rounded-2xl w-full" />
+    </div>
+  );
+}
+
+function FinancialSkeleton() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <Skeleton className="h-[360px] rounded-2xl w-full" />
+      <Skeleton className="h-[360px] rounded-2xl w-full" />
+    </div>
+  );
+}
+
+function SidebarCardSkeleton({ height = "h-[300px]" }: { height?: string }) {
+  return <Skeleton className={`${height} rounded-2xl w-full`} />;
+}
 
 export default async function DashboardPage() {
-  const data = await getDashboardData();
-
   return (
     <div className="space-y-6 animate-fade-in-up pb-10">
       {/* Page header */}
@@ -35,26 +105,35 @@ export default async function DashboardPage() {
       </div>
 
       {/* Smart KPI Section */}
-      <DashboardKPIs data={data.kpis} />
+      <Suspense fallback={<KPISkeleton />}>
+        <KPIsSection />
+      </Suspense>
 
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Main Analytics Column */}
         <div className="lg:col-span-8 space-y-6">
-          <AdvancedCharts data={data.charts} />
+          <Suspense fallback={<ChartsSkeleton />}>
+            <ChartsSection />
+          </Suspense>
           
-          <div className="grid gap-6 md:grid-cols-2">
-            <FinancialFlow data={data.financialFlow} />
-            <ActivityFeed activities={data.financialFlow.activityFeed} />
-          </div>
+          <Suspense fallback={<FinancialSkeleton />}>
+            <FinancialSection />
+          </Suspense>
         </div>
 
         {/* Intelligence Sidebar */}
         <div className="lg:col-span-4 space-y-6">
-          <InsightsEngine insights={data.insights} />
+          <Suspense fallback={<SidebarCardSkeleton height="h-[220px]" />}>
+            <InsightsSection />
+          </Suspense>
           
-          <OperationalPanel queue={data.operational.patientQueue} />
+          <Suspense fallback={<SidebarCardSkeleton height="h-[350px]" />}>
+            <OperationalSection />
+          </Suspense>
 
-          <DoctorPerformance doctors={data.doctorPerformance} />
+          <Suspense fallback={<SidebarCardSkeleton height="h-[300px]" />}>
+            <DoctorPerformanceSection />
+          </Suspense>
         </div>
       </div>
     </div>

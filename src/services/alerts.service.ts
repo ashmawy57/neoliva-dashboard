@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { EventRepository } from '@/repositories/event.repository';
 
 export type AlertType = 'NO_SHOW' | 'OVERDUE' | 'TREATMENT_DELAY';
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -22,6 +22,8 @@ const DERIVED_EVENT_MAP: Record<string, AlertType> = {
   INVOICE_OVERDUE:    'OVERDUE',
   TREATMENT_DELAYED:  'TREATMENT_DELAY',
 };
+
+const eventRepository = new EventRepository();
 
 function getSeverity(type: AlertType, count: number): AlertSeverity {
   const { high, medium } = SEVERITY_THRESHOLDS[type];
@@ -53,15 +55,11 @@ export async function getOperationalAlerts(tenantId: string): Promise<Operationa
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   // Single aggregation query — pull counts for all derived event types at once
-  const rawCounts = await prisma.businessEvent.groupBy({
-    by: ['eventType'],
-    where: {
-      tenantId,
-      createdAt: { gte: since },
-      eventType: { in: ['PATIENT_NO_SHOW', 'INVOICE_OVERDUE', 'TREATMENT_DELAYED'] },
-    },
-    _count: { id: true },
-  });
+  const rawCounts = await eventRepository.getOperationalAlertsCount(
+    tenantId,
+    since,
+    ['PATIENT_NO_SHOW', 'INVOICE_OVERDUE', 'TREATMENT_DELAYED']
+  );
 
   const alerts: OperationalAlert[] = rawCounts.map(({ eventType, _count }) => {
     const type = DERIVED_EVENT_MAP[eventType];

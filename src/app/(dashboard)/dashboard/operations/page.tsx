@@ -17,7 +17,7 @@ import { AppointmentEfficiencyChart } from '@/components/analytics/AppointmentEf
 import { PatientFunnelChart }         from '@/components/analytics/PatientFunnelChart';
 import { SegmentationPanel }          from '@/components/analytics/SegmentationPanel';
 import { TrendBadge }                 from '@/components/analytics/TrendBadge';
-import { getTenantContext }           from '@/lib/tenant-context';
+import { resolveTenantContext as getTenantContext } from '@/lib/auth/resolve-tenant-context';
 import { prisma }                     from '@/lib/prisma';
 import type { TimeRangeComparison }   from '@/services/analytics.service';
 

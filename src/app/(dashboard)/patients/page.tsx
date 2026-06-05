@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { AddPatientDialog } from "@/components/patients/AddPatientDialog";
 import { PatientsTable } from "@/components/patients/PatientsTable";
 import { PatientService } from "@/services/patient.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 
 const patientService = new PatientService();
 

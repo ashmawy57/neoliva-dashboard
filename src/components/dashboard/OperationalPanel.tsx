@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDoctorName } from "@/lib/utils";
 
 interface QueueItem {
   id: string;
@@ -95,7 +96,7 @@ export function OperationalPanel({ queue }: OperationalPanelProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-gray-500 truncate">
-                          Dr. {item.doctorName}
+                          {formatDoctorName(item.doctorName)}
                         </p>
                         <span className="text-[10px] text-gray-300">•</span>
                         <div className="flex items-center gap-1">

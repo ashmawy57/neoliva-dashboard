@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { formatDoctorName } from "@/lib/utils";
 
 interface DoctorStats {
   id: string;
@@ -18,6 +19,7 @@ interface DoctorStats {
   revenue: number;
   patientsCount: number;
   completionRate: number;
+  growth?: number;
 }
 
 interface DoctorPerformanceProps {
@@ -57,7 +59,7 @@ export function DoctorPerformance({ doctors }: DoctorPerformanceProps) {
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-900 leading-tight">
-                      Dr. {doctor.name}
+                      {formatDoctorName(doctor.name)}
                     </h4>
                     <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
                       {doctor.patientsCount} PATIENTS HANDLED
@@ -68,10 +70,12 @@ export function DoctorPerformance({ doctors }: DoctorPerformanceProps) {
                   <span className="text-sm font-bold text-gray-900">
                     ${doctor.revenue.toLocaleString()}
                   </span>
-                  <div className="flex items-center justify-end gap-1 text-[10px] font-bold text-emerald-500">
-                    <TrendingUp className="w-2.5 h-2.5" />
-                    +12%
-                  </div>
+                  {doctor.growth !== undefined && (
+                    <div className={`flex items-center justify-end gap-1 text-[10px] font-bold ${doctor.growth >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      <TrendingUp className="w-2.5 h-2.5" />
+                      {doctor.growth >= 0 ? `+${doctor.growth}%` : `${doctor.growth}%`}
+                    </div>
+                  )}
                 </div>
               </div>
               

@@ -1,92 +1,96 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { resolvePostAuthRedirect } from '@/lib/auth/auth-orchestrator';
 
+/**
+ * AUTH CALLBACK ROUTE HANDLER
+ *
+ * Handles the OAuth/magic-link code exchange from Supabase.
+ *
+ * Security model:
+ * - ALL membership validation is delegated to `resolvePostAuthRedirect()`
+ *   in `auth-orchestrator.ts`, which runs the same FAIL-CLOSED pipeline
+ *   as `resolveTenantContext()` used in the dashboard layout.
+ * - This means SUSPENDED, DISABLED, REJECTED, INACTIVE, and INVALID_ROLE
+ *   users are blocked at login, not just during mid-session access.
+ * - This route does NOT import Prisma directly; it never touches the DB.
+ *
+ * Flow:
+ *   1. Exchange the Supabase authorization code for a session.
+ *   2. Verify the session produced a valid authenticated user.
+ *   3. Delegate ALL validation + routing to resolvePostAuthRedirect().
+ *   4. Redirect to the returned destination (error page or dashboard).
+ */
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard';
+  // Accept a `next` param from the original login URL for deep-link support.
+  // resolvePostAuthRedirect() validates it against isSafePath() before use.
+  const next = requestUrl.searchParams.get('next') ?? undefined;
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    
-    if (!error) {
-      // 1. Get the authenticated user
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        return NextResponse.redirect(new URL('/auth/error?type=SESSION_EXPIRED', request.url));
-      }
-
-      // 2. Resolve tenant context manually here for precise redirect control
-      try {
-        const dbUser = await prisma.user.findUnique({
-          where: { supabaseId: user.id },
-          include: {
-            memberships: {
-              where: { status: 'ACTIVE' },
-              include: { tenant: true },
-              take: 1
-            }
-          }
-        });
-
-        if (!dbUser || dbUser.memberships.length === 0) {
-          console.error('[AuthCallback] No active membership found for user:', user.id);
-          // If no membership, maybe check for invitations
-          return NextResponse.redirect(new URL('/auth/error?type=UNAUTHORIZED', request.url));
-        }
-
-        const primaryMembership = dbUser.memberships[0];
-        const tenant = primaryMembership.tenant;
-        const role = primaryMembership.role;
-
-        // 3. Redirect based on Tenant Status
-        if (tenant.status === 'PENDING') {
-          return NextResponse.redirect(new URL('/auth/error?type=TENANT_PENDING', request.url));
-        }
-
-        if (tenant.status === 'REJECTED') {
-          return NextResponse.redirect(new URL('/auth/error?type=ACCOUNT_SUSPENDED', request.url));
-        }
-
-        // 5. Smart Role-Based Redirects
-        let redirectPath = next;
-        if (next === '/dashboard') {
-          switch (role) {
-            case 'DOCTOR':
-              redirectPath = '/dashboard/appointments';
-              break;
-            case 'ACCOUNTANT':
-              redirectPath = '/dashboard/finance';
-              break;
-            case 'OWNER':
-            case 'ADMIN':
-            case 'MANAGER':
-            default:
-              redirectPath = '/dashboard';
-          }
-        }
-
-        return NextResponse.redirect(new URL(redirectPath, request.url));
-
-      } catch (err) {
-        console.error('[AuthCallback] Database lookup error:', err);
-        return NextResponse.redirect(new URL('/auth/error?type=UNKNOWN_ERROR', request.url));
-      }
-    } else {
-      console.error('Error exchanging code for session:', error.message);
-      
-      // Smart Error Mapping
-      let errorType = 'UNKNOWN_ERROR';
-      if (error.message.includes('expired')) errorType = 'EMAIL_EXPIRED';
-      if (error.message.includes('credentials')) errorType = 'INVALID_CREDENTIALS';
-      if (error.message.includes('confirmed')) errorType = 'EMAIL_NOT_CONFIRMED';
-
-      return NextResponse.redirect(new URL(`/auth/error?type=${errorType}`, request.url));
-    }
+  // ── 1. No code present ────────────────────────────────────────────────────
+  if (!code) {
+    console.warn('[AuthCallback] No authorization code in request URL.');
+    return NextResponse.redirect(
+      new URL('/auth/error?type=SESSION_EXPIRED', request.url)
+    );
   }
 
-  return NextResponse.redirect(new URL('/auth/error?type=UNKNOWN_ERROR', request.url));
+  // ── 2. Exchange authorization code for a Supabase session ─────────────────
+  const supabase = await createClient();
+  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (exchangeError) {
+    console.error('[AuthCallback] Code exchange failed:', exchangeError.message);
+
+    // Map known Supabase error messages to typed error codes for the UI.
+    let errorType = 'UNKNOWN_ERROR';
+    if (exchangeError.message.includes('expired'))   errorType = 'EMAIL_EXPIRED';
+    if (exchangeError.message.includes('credentials')) errorType = 'INVALID_CREDENTIALS';
+    if (exchangeError.message.includes('confirmed'))  errorType = 'EMAIL_NOT_CONFIRMED';
+
+    return NextResponse.redirect(
+      new URL(`/auth/error?type=${errorType}`, request.url)
+    );
+  }
+
+  // ── 3. Verify the exchange produced an authenticated user ─────────────────
+  //
+  // We use getUser() (server-verified JWT) not getSession() (client-unverified)
+  // to guarantee the identity of the user before any DB work.
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error('[AuthCallback] getUser() failed after code exchange:', userError?.message);
+    return NextResponse.redirect(
+      new URL('/auth/error?type=SESSION_EXPIRED', request.url)
+    );
+  }
+
+  // ── 4. Delegate ALL validation + routing to the unified orchestrator ───────
+  //
+  // resolvePostAuthRedirect() is the SINGLE SOURCE OF TRUTH for post-auth
+  // routing decisions. It:
+  //   a) Looks up the user's TenantMembership via rawPrisma (same as resolveTenantContext)
+  //   b) Runs validateCallbackMembership() — enforcing SUSPENDED, DISABLED,
+  //      REJECTED, MEMBERSHIP_INACTIVE, and INVALID_ROLE — which the old
+  //      callback silently skipped
+  //   c) Maps any failure to the correct error redirect path
+  //   d) On success, applies role-based routing via getPostLoginDestination()
+  try {
+    const { destination, reason } = await resolvePostAuthRedirect(user.id, next);
+
+    console.log(
+      `[AuthCallback] Redirecting user ${user.email} → ${destination} (reason: ${reason})`
+    );
+
+    return NextResponse.redirect(new URL(destination, request.url));
+  } catch (err) {
+    // resolvePostAuthRedirect never throws — it always returns a destination.
+    // This catch is a final safety net for genuinely unexpected runtime errors.
+    console.error('[AuthCallback] Unexpected error in resolvePostAuthRedirect:', err);
+    return NextResponse.redirect(
+      new URL('/auth/error?type=UNKNOWN_ERROR', request.url)
+    );
+  }
 }

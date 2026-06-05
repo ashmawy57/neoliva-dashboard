@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { NotificationService } from "@/services/notification.service";
 import { revalidatePath } from "next/cache";
 import { NotificationType, NotificationPriority, NotificationChannelType } from "@/generated/client";

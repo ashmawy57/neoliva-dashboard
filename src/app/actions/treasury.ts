@@ -1,7 +1,7 @@
 'use server'
 
 import { TreasuryService } from "@/services/treasury.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 import { revalidatePath } from "next/cache";

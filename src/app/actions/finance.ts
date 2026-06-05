@@ -1,7 +1,7 @@
 'use server'
 
 import { FinanceService } from "@/services/finance.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 

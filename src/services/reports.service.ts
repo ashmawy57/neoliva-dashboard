@@ -189,13 +189,21 @@ export class ReportsService {
     }
   }
 
-  async getAIInsights(tenantId: string): Promise<string[]> {
+  getAIInsights = cache(async (
+    tenantId: string,
+    data?: {
+      financials?: FinancialTrend[];
+      treatments?: TreatmentDistribution[];
+      growth?: PatientGrowth[];
+      inventory?: InventoryInsights;
+    }
+  ): Promise<string[]> => {
     try {
       const [financials, treatments, growth, inventory] = await Promise.all([
-        this.getFinancialAnalytics(tenantId),
-        this.getTreatmentDistribution(tenantId),
-        this.getPatientGrowth(tenantId),
-        this.getInventoryInsights(tenantId)
+        data?.financials ?? this.getFinancialAnalytics(tenantId),
+        data?.treatments ?? this.getTreatmentDistribution(tenantId),
+        data?.growth ?? this.getPatientGrowth(tenantId),
+        data?.inventory ?? this.getInventoryInsights(tenantId)
       ]);
 
       return AIInsightsService.generateInsights({
@@ -204,13 +212,13 @@ export class ReportsService {
         profitTrend: financials.map(f => f.profit),
         patientGrowth: growth.map(g => g.count),
         topTreatments: treatments,
-        lowStockItems: inventory.lowStock.map(i => ({ name: i.name, currentStock: i.currentStock }))
+        lowStockItems: (inventory?.lowStock || []).map(i => ({ name: i.name, currentStock: i.currentStock }))
       });
     } catch (error) {
       console.error('[ReportsService.getAIInsights]', error);
       return ["No insights available at the moment."];
     }
-  }
+  });
 }
 
 // Export a request-memoized version of the service instance creator if needed, 

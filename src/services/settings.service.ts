@@ -1,4 +1,6 @@
-import { prisma } from '@/lib/prisma';
+import { SettingsRepository } from '@/repositories/settings.repository';
+import { TenantRepository } from '@/repositories/tenant.repository';
+import { EventRepository } from '@/repositories/event.repository';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@/generated/client';
 
@@ -16,22 +18,22 @@ const DEFAULT_NOTIFICATIONS: NotificationsConfig = {
   lowInventoryAlerts: false,
 };
 
+const settingsRepository = new SettingsRepository();
+const tenantRepository = new TenantRepository();
+const eventRepository = new EventRepository();
+
 export async function getClinicSettings(tenantId: string) {
-  let settings = await prisma.clinicSettings.findUnique({
-    where: { tenantId },
-  });
+  let settings = await settingsRepository.findUnique(tenantId);
 
   if (!settings) {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await tenantRepository.findUnique(tenantId);
     if (!tenant) throw new Error("Tenant not found");
 
-    settings = await prisma.clinicSettings.create({
-      data: {
-        tenantId,
-        clinicName: tenant.name,
-        notificationsConfig: DEFAULT_NOTIFICATIONS as unknown as Prisma.InputJsonValue,
-      },
-    });
+    settings = await settingsRepository.create(
+      tenantId,
+      tenant.name,
+      DEFAULT_NOTIFICATIONS
+    );
     
     logger.info('[SettingsService] Auto-created default settings', { tenantId });
   }
@@ -54,19 +56,16 @@ export type UpdateClinicSettingsInput = {
 export async function updateClinicSettings(tenantId: string, data: UpdateClinicSettingsInput, userId: string) {
   const previous = await getClinicSettings(tenantId);
   
-  const updated = await prisma.clinicSettings.update({
-    where: { tenantId },
-    data: {
-      clinicName: data.clinicName !== undefined ? data.clinicName : undefined,
-      email: data.email !== undefined ? data.email : undefined,
-      phone: data.phone !== undefined ? data.phone : undefined,
-      address: data.address !== undefined ? data.address : undefined,
-      workingHours: data.workingHours !== undefined ? (data.workingHours as Prisma.InputJsonValue) : undefined,
-      currency: data.currency !== undefined ? data.currency : undefined,
-      taxRate: data.taxRate !== undefined ? data.taxRate : undefined,
-      invoiceNote: data.invoiceNote !== undefined ? data.invoiceNote : undefined,
-      notificationsConfig: data.notificationsConfig !== undefined ? (data.notificationsConfig as unknown as Prisma.InputJsonValue) : undefined,
-    },
+  const updated = await settingsRepository.update(tenantId, {
+    clinicName: data.clinicName !== undefined ? data.clinicName : undefined,
+    email: data.email !== undefined ? data.email : undefined,
+    phone: data.phone !== undefined ? data.phone : undefined,
+    address: data.address !== undefined ? data.address : undefined,
+    workingHours: data.workingHours !== undefined ? (data.workingHours as Prisma.InputJsonValue) : undefined,
+    currency: data.currency !== undefined ? data.currency : undefined,
+    taxRate: data.taxRate !== undefined ? data.taxRate : undefined,
+    invoiceNote: data.invoiceNote !== undefined ? data.invoiceNote : undefined,
+    notificationsConfig: data.notificationsConfig !== undefined ? (data.notificationsConfig as unknown as Prisma.InputJsonValue) : undefined,
   });
 
   logger.info('[SettingsService] Clinic settings updated', {
@@ -75,21 +74,19 @@ export async function updateClinicSettings(tenantId: string, data: UpdateClinicS
     updatedFields: Object.keys(data),
   });
 
-  await prisma.businessEvent.create({
-    data: {
-      tenantId,
-      eventType: 'SETTINGS_UPDATED',
-      entityType: 'SETTINGS',
-      entityId: updated.id,
-      metadata: {
-        userId,
-        changedFields: Object.keys(data),
-        previous: {
-          currency: previous.currency,
-          taxRate: previous.taxRate,
-          notificationsConfig: previous.notificationsConfig,
-        }
-      } as Prisma.InputJsonValue,
+  await eventRepository.create(tenantId, {
+    userId,
+    eventType: 'SETTINGS_UPDATED',
+    entityType: 'SETTINGS',
+    entityId: updated.id,
+    metadata: {
+      userId,
+      changedFields: Object.keys(data),
+      previous: {
+        currency: previous.currency,
+        taxRate: previous.taxRate,
+        notificationsConfig: previous.notificationsConfig,
+      }
     }
   });
 

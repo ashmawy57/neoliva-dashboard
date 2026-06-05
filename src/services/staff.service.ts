@@ -86,6 +86,35 @@ export class StaffService {
   }
 
   /**
+   * getStaffOptions
+   *
+   * Returns the compact staff list used for assignment dropdowns (e.g., room
+   * staff assignment). Only active members are included.
+   *
+   * This method is the authoritative replacement for the inlined
+   * `prisma.tenantMembership.findMany` that previously existed inside the
+   * `getStaffOptionsAction` Server Action (Violation 2).
+   */
+  async getStaffOptions(tenantId: string): Promise<Array<{
+    userId: string;
+    name: string;
+    role: string;
+  }>> {
+    try {
+      this.validateTenant(tenantId);
+      const members = await this.repository.findActiveMembers(tenantId);
+      return members.map(m => ({
+        userId: m.userId,
+        name:   m.staffProfile?.name || m.user?.email || 'Unknown',
+        role:   m.role,
+      }));
+    } catch (error) {
+      console.error("[StaffService.getStaffOptions] Error:", error);
+      return [];
+    }
+  }
+
+  /**
    * Updates a staff member's profile using their membershipId.
    */
   async updateStaffMember(tenantId: string, membershipId: string, updates: any): Promise<any> {

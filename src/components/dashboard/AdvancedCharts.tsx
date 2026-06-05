@@ -28,7 +28,6 @@ interface AdvancedChartsProps {
   data: {
     revenueVsExpensesVsProfit: any[];
     appointmentStatus: any[];
-    doctorPerformanceTrends: any[];
   };
 }
 
@@ -50,8 +49,15 @@ export function AdvancedCharts({ data }: AdvancedChartsProps) {
           </div>
         </CardHeader>
         <CardContent className="pt-6 h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data.revenueVsExpensesVsProfit}>
+          {!data.revenueVsExpensesVsProfit || data.revenueVsExpensesVsProfit.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 bg-gray-50/30 rounded-2xl border border-dashed border-gray-100 p-6">
+              <BarChart3 className="w-8 h-8 mb-2 stroke-[1.5] text-indigo-400 opacity-60 animate-pulse" />
+              <p className="text-sm font-semibold text-gray-500">No financial data available</p>
+              <p className="text-[10px] text-gray-400 mt-1">Data will appear once invoices or expenses are recorded.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.revenueVsExpensesVsProfit}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
@@ -102,6 +108,7 @@ export function AdvancedCharts({ data }: AdvancedChartsProps) {
               />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -118,8 +125,15 @@ export function AdvancedCharts({ data }: AdvancedChartsProps) {
           </div>
         </CardHeader>
         <CardContent className="pt-6 h-[300px] flex items-center justify-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+          {!data.appointmentStatus || data.appointmentStatus.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full w-full text-gray-400 bg-gray-50/30 rounded-2xl border border-dashed border-gray-100 p-6">
+              <Calendar className="w-8 h-8 mb-2 stroke-[1.5] text-amber-500 opacity-60 animate-pulse" />
+              <p className="text-sm font-semibold text-gray-500">No appointments scheduled</p>
+              <p className="text-[10px] text-gray-400 mt-1">There are no appointments registered for this week.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
               <Pie
                 data={data.appointmentStatus}
                 cx="50%"
@@ -135,8 +149,9 @@ export function AdvancedCharts({ data }: AdvancedChartsProps) {
               </Pie>
               <Tooltip />
               <Legend verticalAlign="bottom" height={36} iconType="circle" />
-            </PieChart>
-          </ResponsiveContainer>
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
     </div>

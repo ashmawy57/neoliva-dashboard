@@ -62,6 +62,20 @@ export class TreasuryRepository {
     }[];
   }) {
     const client = this.getClient();
+
+    // Validate that all accounts belong to the current tenant
+    const accountIds = data.lines.map(line => line.accountId);
+    const validAccountsCount = await client.ledgerAccount.count({
+      where: {
+        id: { in: accountIds },
+        tenantId
+      }
+    });
+
+    if (validAccountsCount !== accountIds.length) {
+      throw new Error("One or more accounts do not belong to this tenant or do not exist.");
+    }
+
     return client.journalEntry.create({
       data: {
         tenantId,

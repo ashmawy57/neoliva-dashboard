@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getTenantContext, TenantContextError } from "./tenant-context";
+import { resolveTenantContext as getTenantContext } from "./auth/resolve-tenant-context";
+import { TenantContextError } from "./auth/auth-errors";
 
 /**
  * Reusable authentication guard for API route handlers.

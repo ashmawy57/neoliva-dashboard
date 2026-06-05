@@ -1,5 +1,6 @@
 import { DashboardRepository } from "@/repositories/dashboard.repository";
 import { subMonths, startOfMonth, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
+import { formatDoctorName } from "@/lib/utils";
 
 export class DashboardService {
   private dashboardRepo = new DashboardRepository();
@@ -48,9 +49,8 @@ export class DashboardService {
       ? ((currentMonthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 
       : 0;
 
-    // Profit Margin & Collection Rate
-    const totalRevenue = financialStats.invoices
-      .filter(i => i.status === "PAID")
+    // Profit Margin & Collection Rate (Unified 12-month window)
+    const totalRevenue = revenueVsExpensesRaw.invoices
       .reduce((acc, i) => acc + Number(i.totalAmount), 0);
     const totalExpenses = revenueVsExpensesRaw.expenses
       .reduce((acc, i) => acc + Number(i.amount), 0);
@@ -89,14 +89,19 @@ export class DashboardService {
       insights.push({ type: 'top_doctor', message: `${doctorPerformance[0].name} is the top performer this month.`, severity: 'low' });
     }
 
-    // Patient Queue
+    // Patient Queue (Combine date and time for correct wait time tracking)
     const patientQueue = patientQueueRaw.map(q => {
-      const waitTime = differenceInMinutes(new Date(), new Date(q.date));
+      const dateComp = q.date instanceof Date ? q.date : new Date(q.date);
+      const timeComp = q.time instanceof Date ? q.time : new Date(q.time);
+      const scheduledDateTime = new Date(dateComp);
+      scheduledDateTime.setHours(timeComp.getHours(), timeComp.getMinutes(), 0, 0);
+
+      const waitTime = differenceInMinutes(new Date(), scheduledDateTime);
       return {
         id: q.id,
         patientName: q.patient.name,
         doctorName: q.doctor?.name || "Unassigned",
-        time: new Date(q.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        time: scheduledDateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         waitTime: waitTime > 0 ? waitTime : 0,
         status: q.status
       };
@@ -122,7 +127,7 @@ export class DashboardService {
         id: `a-${a.id}`,
         type: 'appointment' as const,
         title: 'New Appointment',
-        description: `${a.patient.name} with ${a.doctor?.name}`,
+        description: `${a.patient.name} with ${formatDoctorName(a.doctor?.name || "")}`,
         time: a.createdAt
       }))
     ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
@@ -137,8 +142,7 @@ export class DashboardService {
       insights,
       charts: {
         revenueVsExpensesVsProfit: this.calculateFinancialTrends(revenueVsExpensesRaw),
-        appointmentStatus: this.calculateAppointmentStatus(weeklyAppointmentsRaw),
-        doctorPerformanceTrends: this.calculateDoctorTrends(doctorPerformanceRaw)
+        appointmentStatus: this.calculateAppointmentStatus(weeklyAppointmentsRaw)
       },
       operational: {
         patientQueue
@@ -196,13 +200,5 @@ export class DashboardService {
       if (statusCounts[a.status] !== undefined) statusCounts[a.status]++;
     });
     return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-  }
-
-  private calculateDoctorTrends(raw: any[]) {
-    // Simplified for now, just monthly totals
-    return raw.map(doc => ({
-      name: doc.name,
-      revenue: doc.appointments.reduce((acc: number, a: any) => acc + (Number(a.invoice?.totalAmount) || 0), 0)
-    }));
   }
 }

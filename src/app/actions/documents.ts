@@ -1,7 +1,7 @@
 'use server'
 
 import { PatientService } from "@/services/patient.service"
-import { resolveTenantContext } from "@/lib/tenant-context"
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context"
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermission } from "@/lib/rbac";

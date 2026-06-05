@@ -50,6 +50,22 @@ export function FinancialFlow({ data }: FinancialFlowProps) {
     }
   ];
 
+  const total = data.cashIn + data.cashOut + data.outstandingInvoices;
+  const pctRevenue = total > 0 ? (data.cashIn / total) * 100 : 0;
+  const pctExpenses = total > 0 ? (data.cashOut / total) * 100 : 0;
+  const pctPending = total > 0 ? (data.outstandingInvoices / total) * 100 : 0;
+
+  const netFlow = data.cashIn - data.cashOut;
+  let statusText = "NEUTRAL";
+  let statusColor = "text-gray-500";
+  if (netFlow > 0) {
+    statusText = "POSITIVE";
+    statusColor = "text-emerald-600";
+  } else if (netFlow < 0) {
+    statusText = "NEGATIVE";
+    statusColor = "text-rose-600";
+  }
+
   return (
     <Card className="border-0 shadow-lg bg-white overflow-hidden h-full">
       <CardHeader className="pb-2 border-b border-gray-50 flex flex-row items-center justify-between">
@@ -88,22 +104,33 @@ export function FinancialFlow({ data }: FinancialFlowProps) {
           <div className="mt-6 pt-6 border-t border-dashed border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold text-gray-500 uppercase">Daily Movement</span>
-              <span className="text-xs font-bold text-emerald-600">POSITIVE</span>
+              <span className={`text-xs font-bold ${statusColor}`}>{statusText}</span>
             </div>
             <div className="flex gap-1 h-3 rounded-full overflow-hidden bg-gray-100">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: '65%' }}
-                transition={{ duration: 1 }}
-                className="h-full bg-emerald-400" 
-              />
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: '25%' }}
-                transition={{ duration: 1, delay: 0.2 }}
-                className="h-full bg-rose-400" 
-              />
-              <div className="flex-1 bg-amber-400 opacity-50" />
+              {pctRevenue > 0 && (
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pctRevenue}%` }}
+                  transition={{ duration: 1 }}
+                  className="h-full bg-emerald-400" 
+                />
+              )}
+              {pctExpenses > 0 && (
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pctExpenses}%` }}
+                  transition={{ duration: 1, delay: 0.2 }}
+                  className="h-full bg-rose-400" 
+                />
+              )}
+              {pctPending > 0 && (
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pctPending}%` }}
+                  transition={{ duration: 1, delay: 0.4 }}
+                  className="h-full bg-amber-400 opacity-50" 
+                />
+              )}
             </div>
             <div className="flex justify-between mt-2 text-[8px] font-bold text-gray-400 uppercase">
               <span>REVENUE</span>

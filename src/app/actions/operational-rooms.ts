@@ -1,7 +1,7 @@
 'use server';
 
 import { RoomOperationalService } from "@/services/room-operational.service";
-import { getTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { revalidatePath } from "next/cache";
 import { getUserPermissions } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";

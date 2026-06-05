@@ -1,7 +1,9 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
+import { UserRepository } from "@/repositories/user.repository";
+import { StaffRepository } from "@/repositories/staff.repository";
+import { TenantRepository } from "@/repositories/tenant.repository";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -9,6 +11,10 @@ import { AuditService } from "@/services/audit.service";
 import crypto from "crypto";
 import { StaffRole } from "@/generated/client";
 import { EmailService } from "@/services/email.service";
+
+const userRepository = new UserRepository();
+const staffRepository = new StaffRepository();
+const tenantRepository = new TenantRepository();
 
 export async function staffLogin(formData: FormData) {
   const email = (formData.get('email') as string || '').trim().toLowerCase();
@@ -91,16 +97,7 @@ export async function staffLogin(formData: FormData) {
 
   // Find the user and their primary membership
   console.log(`[AUTH_STEP_3][USER_FETCH_START] SupabaseId: ${data.user.id}`);
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: data.user.id },
-    include: {
-      memberships: {
-        where: { status: 'ACTIVE' },
-        include: { tenant: true },
-        take: 1
-      }
-    }
-  });
+  const dbUser = await userRepository.findUniqueWithActiveMembership(data.user.id);
 
   if (!dbUser) {
     console.error(`[AUTH_TRACE][USER_FETCH_FAILED] No DB user record found for SupabaseId: ${data.user.id}`);
@@ -114,9 +111,7 @@ export async function staffLogin(formData: FormData) {
     console.warn(`[AUTH_STEP_4][TENANT_MEMBERSHIP_MISSING] UserId: ${dbUser.id}, Email: ${email}`);
     
     // Check if there's a pending invitation
-    const pendingInvite = await prisma.staffInvitation.findFirst({
-      where: { email: email, status: 'PENDING' }
-    });
+    const pendingInvite = await staffRepository.findPendingInvitation(email);
 
     if (pendingInvite) {
       console.log(`[AUTH_TRACE][FINAL_ERROR] Stage: TENANT_MEMBERSHIP_CHECK, Code: INVITE_PENDING`);
@@ -280,10 +275,7 @@ export async function resetPassword(formData: FormData) {
 export async function validateInviteToken(tokenHash: string) {
   if (!tokenHash) return { valid: false };
 
-  const invite = await prisma.staffInvitation.findUnique({
-    where: { tokenHash },
-    include: { tenant: true }
-  });
+  const invite = await staffRepository.findInvitationByToken(tokenHash);
 
   if (!invite) return { valid: false, error: "Invitation not found." };
   if (invite.status !== 'PENDING') return { valid: false, error: `Invitation already ${invite.status.toLowerCase()}.` };
@@ -309,10 +301,7 @@ export async function acceptStaffInvitation(formData: FormData) {
   const validation = await validateInviteToken(tokenHash);
   if (!validation.valid) return { success: false, error: validation.error };
 
-  const invite = await prisma.staffInvitation.findUnique({
-    where: { tokenHash },
-    include: { tenant: true }
-  });
+  const invite = await staffRepository.findInvitationByToken(tokenHash);
 
   if (!invite) return { success: false, error: "Invitation not found." };
 
@@ -333,74 +322,33 @@ export async function acceptStaffInvitation(formData: FormData) {
   if (!data.user) return { success: false, error: "Signup failed." };
 
   // 2. Create local User and Membership inside a transaction
-  await prisma.$transaction(async (tx) => {
-    // Create or find User
-    const user = await tx.user.upsert({
-      where: { email: invite.email },
-      update: { supabaseId: data.user!.id },
-      create: {
-        supabaseId: data.user!.id,
-        email: invite.email
-      }
+  const { user } = await staffRepository.acceptInvitation(data.user!.id, invite);
+
+  // --- PERSISTENT SESSION ARCHITECTURE ---
+  try {
+    const { SessionService } = await import('@/lib/auth/session-service');
+    const { headers: getHeaders } = await import('next/headers');
+    const headerList = await getHeaders();
+
+    const { appRefreshToken } = await SessionService.createSession({
+      userId: user.id,
+      tenantId: invite.tenantId,
+      ipAddress: headerList.get('x-forwarded-for') || undefined,
+      userAgent: headerList.get('user-agent') || undefined
+    }, data.session?.refresh_token || '');
+
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    cookieStore.set('app_refresh_token', appRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 90,
+      path: '/'
     });
-
-    // Create Tenant Membership
-    const membership = await tx.tenantMembership.create({
-      data: {
-        userId: user.id,
-        tenantId: invite.tenantId,
-        role: invite.role,
-        status: 'ACTIVE'
-      }
-    });
-
-    // Update Invitation Status
-    await tx.staffInvitation.update({
-      where: { id: invite.id },
-      data: {
-        status: 'ACCEPTED',
-        acceptedAt: new Date()
-      }
-    });
-
-    // Optionally create Staff profile
-    await tx.staff.create({
-      data: {
-        name: invite.fullName,
-        email: invite.email,
-        role: invite.role,
-        tenantId: invite.tenantId,
-        membershipId: membership.id,
-        status: 'Online'
-      }
-    });
-
-    // --- PERSISTENT SESSION ARCHITECTURE ---
-    try {
-      const { SessionService } = await import('@/lib/auth/session-service');
-      const { headers: getHeaders } = await import('next/headers');
-      const headerList = await getHeaders();
-
-      const { appRefreshToken } = await SessionService.createSession({
-        userId: user.id,
-        tenantId: invite.tenantId,
-        ipAddress: headerList.get('x-forwarded-for') || undefined,
-        userAgent: headerList.get('user-agent') || undefined
-      }, data.session?.refresh_token || '', tx);
-
-      const { cookies } = await import('next/headers');
-      const cookieStore = await cookies();
-      cookieStore.set('app_refresh_token', appRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 90,
-        path: '/'
-      });
-    } catch (sessionError) {
-      console.error("[AUTH][INVITE] Failed to create persistent session:", sessionError);
-    }
-  });
+  } catch (sessionError) {
+    console.error("[AUTH][INVITE] Failed to create persistent session:", sessionError);
+  }
 
   revalidatePath('/', 'layout');
   redirect('/staff/sign-in?success=invitation-accepted');
@@ -427,30 +375,24 @@ export async function createStaffInvitation(data: { email: string; fullName: str
   expiresAt.setDate(expiresAt.getDate() + 7);
 
   // Check for existing pending invitation
-  const existingInvite = await prisma.staffInvitation.findFirst({
-    where: { 
-      tenantId, 
-      email, 
-      status: 'PENDING' 
-    }
-  });
+  const existingInvite = await staffRepository.findPendingInvitationByTenant(tenantId, email);
 
   if (existingInvite) {
     return { success: false, error: "A pending invitation already exists for this email." };
   }
 
+  const dbInvitedBy = await userRepository.findBySupabaseId(invitedByUser.id);
+  if (!dbInvitedBy) throw new Error("Inviting user record not found");
+
   // Create invitation record
-  const invitation = await prisma.staffInvitation.create({
-    data: {
-      tenantId,
-      email,
-      fullName,
-      role,
-      jobTitle,
-      tokenHash,
-      invitedById: (await prisma.user.findUnique({ where: { supabaseId: invitedByUser.id } }))!.id,
-      expiresAt,
-    }
+  const invitation = await staffRepository.createInvitation(tenantId, {
+    email,
+    fullName,
+    role,
+    jobTitle,
+    tokenHash,
+    invitedById: dbInvitedBy.id,
+    expiresAt,
   });
 
   // Log Audit
@@ -466,7 +408,7 @@ export async function createStaffInvitation(data: { email: string; fullName: str
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   const inviteUrl = `${siteUrl}/staff/accept-invitation?token=${rawToken}`;
   
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  const tenant = await tenantRepository.findUnique(tenantId);
   
   await EmailService.sendStaffInvitation({
     email,

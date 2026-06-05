@@ -1,13 +1,15 @@
 'use server'
 
-import { prisma } from "@/lib/prisma"
-import { resolveTenantContext } from '@/lib/tenant-context'
+import { PrescriptionRepository } from "@/repositories/prescription.repository"
+import { resolveTenantContextOrRedirect as resolveTenantContext } from '@/lib/auth/resolve-tenant-context'
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from "@/lib/rbac";
 import { requireRecordAccess } from "@/lib/abac";
 import { PermissionCode } from "@/types/permissions";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
+
+const prescriptionRepository = new PrescriptionRepository();
 
 /**
  * Server Action: Fetches all prescriptions for a patient.
@@ -17,19 +19,7 @@ export async function getPrescriptions(patientId: string) {
   await requirePermission(PermissionCode.PATIENT_VIEW);
   await requireRecordAccess('patient', patientId);
   
-  return prisma.prescription.findMany({
-    where: {
-      tenantId,
-      patientId
-    },
-    include: {
-      items: true,
-      doctor: true
-    },
-    orderBy: {
-      createdAt: 'desc'
-    }
-  })
+  return prescriptionRepository.findMany(tenantId, patientId);
 }
 
 /**
@@ -52,24 +42,7 @@ export const createPrescription = wrapAction(
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 
-    const prescription = await prisma.prescription.create({
-      data: {
-        tenantId,
-        patientId,
-        notes: data.notes,
-        doctorName: data.doctorName,
-        doctorId: data.doctorId,
-        items: {
-          create: data.items.map(item => ({
-            ...item,
-            tenantId
-          }))
-        }
-      },
-      include: {
-        items: true
-      }
-    })
+    const prescription = await prescriptionRepository.create(tenantId, patientId, data);
 
     revalidatePath(`/patients/${patientId}`)
     return prescription;
@@ -87,19 +60,7 @@ export const deletePrescription = wrapAction(
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 
-    await prisma.prescriptionItem.deleteMany({
-      where: {
-        prescriptionId: id,
-        tenantId
-      }
-    })
-
-    await prisma.prescription.delete({
-      where: {
-        id,
-        tenantId
-      }
-    })
+    await prescriptionRepository.delete(tenantId, id);
 
     revalidatePath(`/patients/${patientId}`)
     return { success: true };
@@ -117,35 +78,26 @@ export const duplicatePrescription = wrapAction(
     await requirePermission(PermissionCode.CLINICAL_PRESCRIPTION_MANAGE);
     await requireRecordAccess('patient', patientId);
 
-    const source = await prisma.prescription.findUnique({
-      where: { id, tenantId },
-      include: { items: true }
-    })
+    const source = await prescriptionRepository.findUnique(tenantId, id);
 
     if (!source) throw new Error('Prescription not found');
 
-    const newPrescription = await prisma.prescription.create({
-      data: {
-        tenantId,
-        patientId,
-        notes: source.notes,
-        doctorName: source.doctorName,
-        doctorId: source.doctorId,
-        items: {
-          create: source.items.map(item => ({
-            medicationName: item.medicationName,
-            dosage: item.dosage,
-            frequency: item.frequency,
-            duration: item.duration,
-            tenantId
-          }))
-        }
-      }
-    })
+    const newPrescription = await prescriptionRepository.create(tenantId, patientId, {
+      notes: source.notes || undefined,
+      doctorName: source.doctorName || undefined,
+      doctorId: source.doctorId || undefined,
+      items: source.items.map(item => ({
+        medicationName: item.medicationName,
+        dosage: item.dosage || undefined,
+        frequency: item.frequency || undefined,
+        duration: item.duration || undefined
+      }))
+    });
 
     revalidatePath(`/patients/${patientId}`)
     return newPrescription;
   },
   { module: 'clinical', entityType: 'PRESCRIPTION' }
 );
+
 

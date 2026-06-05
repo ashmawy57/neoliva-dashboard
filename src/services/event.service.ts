@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { EventRepository } from '@/repositories/event.repository';
 import { logger } from '@/lib/logger';
 import { getTraceContextSync } from '@/lib/observability/context';
 import { validateEvent } from '@/lib/events/validation';
@@ -112,15 +112,13 @@ export class EventService {
       }
 
       // 2. Persist to DB
-      const event = await prisma.businessEvent.create({
-        data: {
-          tenantId,
-          userId: userId || context?.userId,
-          eventType,
-          entityType,
-          entityId,
-          metadata: metadata || {},
-        },
+      const eventRepository = new EventRepository();
+      const event = await eventRepository.create(tenantId, {
+        userId: userId || context?.userId,
+        eventType,
+        entityType,
+        entityId,
+        metadata: metadata || {},
       });
 
       // 3. Structured Logging

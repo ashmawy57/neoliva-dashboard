@@ -1,6 +1,6 @@
 'use server';
 
-import { getTenantContext } from '@/lib/tenant-context';
+import { resolveTenantContext as getTenantContext } from '@/lib/auth/resolve-tenant-context';
 import { requirePermission } from '@/lib/rbac';
 import { PermissionCode } from '@/types/permissions';
 import { getOperationalAlerts, type OperationalAlert } from '@/services/alerts.service';

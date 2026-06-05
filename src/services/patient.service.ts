@@ -1,6 +1,5 @@
 import "server-only";
 import { PatientRepository } from "@/repositories/patient.repository";
-import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/client";
 
 const patientRepository = new PatientRepository();
@@ -10,6 +9,84 @@ export class PatientService {
     if (!val || typeof val !== 'string') return fallback;
     const trimmed = val.trim();
     return trimmed.length > 0 ? trimmed : fallback;
+  }
+
+  // ─── Patient Identity Factory ───────────────────────────────────────────────
+
+  /**
+   * getInitials — Derives avatar initials from a patient's display name.
+   * Single-word names use the first two characters; multi-word names use
+   * first + last initial. Moved here from the Server Action layer.
+   */
+  private getInitials(name: string): string {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '??';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+
+  /**
+   * pickGradient — Deterministically selects an avatar colour gradient based
+   * on the patient's name so that the same patient always gets the same colour
+   * on re-creation (rather than a random one on each save).
+   * Moved here from the Server Action layer.
+   */
+  private static readonly AVATAR_GRADIENTS = [
+    'from-blue-500 to-indigo-600',
+    'from-emerald-500 to-teal-600',
+    'from-purple-500 to-pink-600',
+    'from-amber-500 to-orange-600',
+    'from-rose-500 to-red-600',
+  ] as const;
+
+  private pickGradient(name: string): string {
+    const index = (name || '').length % PatientService.AVATAR_GRADIENTS.length;
+    return PatientService.AVATAR_GRADIENTS[index];
+  }
+
+  /**
+   * buildCreateInput
+   *
+   * Canonical factory for all fields that must be enriched before a new
+   * Patient record is persisted. Accepts raw, unvalidated form data from the
+   * Server Action layer and returns a fully-formed create-input object.
+   *
+   * Business rules owned here:
+   * - `displayId`      — "P-NNNN" formatted random 4-digit suffix
+   * - `avatarInitials` — derived from patient name
+   * - `colorGradient`  — deterministic gradient from name length
+   * - `status`         — defaults to "Active" for new patients
+   *
+   * @param raw - Flat key-value map from FormData.entries()
+   */
+  buildCreateInput(raw: Record<string, any>) {
+    const name = (raw.name as string)?.trim() || '';
+    return {
+      displayId:      `P-${Math.floor(1000 + Math.random() * 9000)}`,
+      name,
+      phone:          raw.phone1 as string,
+      phone2:         (raw.phone2 as string) || null,
+      email:          (raw.email as string) || null,
+      address:        (raw.address as string) || null,
+      postCode:       (raw.postCode as string) || null,
+      city:           (raw.city as string) || null,
+      dob:            raw.dob ? new Date(raw.dob as string) : null,
+      gender:         (raw.gender as string) || null,
+      maritalStatus:  (raw.maritalStatus as string) || null,
+      occupation:     (raw.occupation as string) || null,
+      insurance:      (raw.insurance as string) || null,
+      ssn:            (raw.ssn as string) || null,
+      idNumber:       (raw.idNumber as string) || null,
+      medicalAlert:   (raw.medicalAlert as string) || null,
+      referredBy:     (raw.referredBy as string) || null,
+      notes:          (raw.notes as string) || null,
+      isDeceased:     raw.isDeceased === 'true',
+      isSigned:       raw.isSigned === 'true',
+      avatarInitials: this.getInitials(name),
+      colorGradient:  this.pickGradient(name),
+      status:         'Active',
+    };
   }
 
   private mapSafePatient(patient: any): any {
@@ -195,13 +272,9 @@ export class PatientService {
         return this.getSafeFallback(id, tenantId);
       }
 
-      // 1. Direct Prisma Check (Truth Verification)
-      const rawPatient = await prisma.patient.findUnique({
-        where: { id },
-        select: { id: true, tenantId: true, name: true }
-      });
-
+      // 1. Repository Check (Truth Verification - debug only)
       if (process.env.AUTH_DEBUG === 'true') {
+        const rawPatient = await patientRepository.findUniqueGlobal(id);
         console.log("[AUTH_DEBUG][PATIENT_DATABASE_REALITY]", {
           id: rawPatient?.id,
           actualTenantId: rawPatient?.tenantId,
@@ -210,61 +283,57 @@ export class PatientService {
         });
       }
 
-      const [core, clinical] = await Promise.all([
-        patientRepository.findUnique(tenantId, id, {
-          id: true,
-          displayId: true,
-          name: true,
-          email: true,
-          phone: true,
-          gender: true,
-          dob: true,
-          address: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          tenantId: true,
-          appointments: true,
-          invoices: {
-            select: {
-              id: true,
-              displayId: true,
-              patientId: true,
-              totalAmount: true,
-              paidAmount: true,
-              status: true,
-              dueDate: true,
-              createdAt: true,
-              items: true,
-              payments: true
-            }
-          },
-          visitRecords: true,
-          patientDocuments: true,
-        }),
-        patientRepository.findUnique(tenantId, id, {
-          tenantId: true,
-          patientAllergies: true,
-          medicalConditions: true,
-          patientMedications: true,
-          patientSurgeries: true,
-          patientFamilyHistory: true,
-          oralTissueFindings: true,
-          toothConditions: true,
-          periodontalMeasurements: true,
-          prescriptions: {
-            select: {
-              id: true,
-              date: true,
-              notes: true,
-              items: true
-            }
-          },
-          oralConditions: true,
-        }),
-      ]);
+      // Combine both core and clinical queries into a single database findUnique call
+      const data = await patientRepository.findUnique(tenantId, id, {
+        id: true,
+        displayId: true,
+        name: true,
+        email: true,
+        phone: true,
+        gender: true,
+        dob: true,
+        address: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        tenantId: true,
+        appointments: true,
+        invoices: {
+          select: {
+            id: true,
+            displayId: true,
+            patientId: true,
+            totalAmount: true,
+            paidAmount: true,
+            status: true,
+            dueDate: true,
+            createdAt: true,
+            items: true,
+            payments: true
+          }
+        },
+        visitRecords: true,
+        patientDocuments: true,
+        patientAllergies: true,
+        medicalConditions: true,
+        patientMedications: true,
+        patientSurgeries: true,
+        patientFamilyHistory: true,
+        oralTissueFindings: true,
+        toothConditions: true,
+        periodontalMeasurements: true,
+        prescriptions: {
+          select: {
+            id: true,
+            date: true,
+            notes: true,
+            items: true
+          }
+        },
+        oralConditions: true,
+      });
 
-      if (!core) {
+      if (!data) {
         if (process.env.AUTH_DEBUG === 'true') {
           console.error(`[AUTH_DEBUG][PatientService.getPatientById] Patient not found in DB: ${id} for tenant: ${tenantId}`);
         }
@@ -272,25 +341,24 @@ export class PatientService {
       }
 
       const result = {
-        ...clinical,
-        ...core,
-        name: this.normalizeString(core.name, "Unknown Patient"),
-        phone: this.normalizeString(core.phone, "-"),
-        email: this.normalizeString(core.email, "-"),
-        patientAllergies: clinical?.patientAllergies ?? [],
-        medicalConditions: clinical?.medicalConditions ?? [],
-        patientMedications: clinical?.patientMedications ?? [],
-        patientSurgeries: clinical?.patientSurgeries ?? [],
-        patientFamilyHistory: clinical?.patientFamilyHistory ?? [],
-        oralTissueFindings: clinical?.oralTissueFindings ?? [],
-        toothConditions: clinical?.toothConditions ?? [],
-        periodontalMeasurements: clinical?.periodontalMeasurements ?? [],
-        prescriptions: clinical?.prescriptions ?? [],
-        oralConditions: clinical?.oralConditions ?? [],
-        appointments: core?.appointments ?? [],
-        invoices: core?.invoices ?? [],
-        visitRecords: core?.visitRecords ?? [],
-        patientDocuments: core?.patientDocuments ?? [],
+        ...data,
+        name: this.normalizeString(data.name, "Unknown Patient"),
+        phone: this.normalizeString(data.phone, "-"),
+        email: this.normalizeString(data.email, "-"),
+        patientAllergies: data.patientAllergies ?? [],
+        medicalConditions: data.medicalConditions ?? [],
+        patientMedications: data.patientMedications ?? [],
+        patientSurgeries: data.patientSurgeries ?? [],
+        patientFamilyHistory: data.patientFamilyHistory ?? [],
+        oralTissueFindings: data.oralTissueFindings ?? [],
+        toothConditions: data.toothConditions ?? [],
+        periodontalMeasurements: data.periodontalMeasurements ?? [],
+        prescriptions: data.prescriptions ?? [],
+        oralConditions: data.oralConditions ?? [],
+        appointments: data.appointments ?? [],
+        invoices: data.invoices ?? [],
+        visitRecords: data.visitRecords ?? [],
+        patientDocuments: data.patientDocuments ?? [],
       };
 
       return JSON.parse(JSON.stringify(result));
@@ -759,6 +827,32 @@ export class PatientService {
     } catch (error) {
       console.error("[PatientService.deleteInvoice] Error:", error);
       return false;
+    }
+  }
+
+  async searchPatients(tenantId: string, query: string) {
+    try {
+      if (!tenantId || !query) return [];
+      const data = await patientRepository.findMany(tenantId, {
+        where: {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { phone: { contains: query, mode: 'insensitive' } },
+          ]
+        },
+        select: {
+          id: true,
+          displayId: true,
+          name: true,
+          phone: true,
+        },
+        take: 10,
+        orderBy: { name: 'asc' }
+      });
+      return JSON.parse(JSON.stringify(data));
+    } catch (error) {
+      console.error("[PatientService.searchPatients] Error:", error);
+      return [];
     }
   }
 }

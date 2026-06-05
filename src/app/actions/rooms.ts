@@ -1,15 +1,18 @@
 'use server';
 import { RoomService, RoomSchema, RoomAssignmentSchema } from '@/services/room.service';
-import { getTenantContext } from '@/lib/tenant-context';
+import { StaffService } from '@/services/staff.service';
+import { resolveTenantContext } from '@/lib/auth/resolve-tenant-context';
 import { revalidatePath } from 'next/cache';
-import prisma from '@/lib/prisma';
+
+const staffService = new StaffService();
+
 
 /**
  * Server Action: Create a new room
  */
 export async function createRoomAction(data: any) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     // Parse data with RoomSchema (slug is now optional)
     const result = RoomSchema.safeParse(data);
@@ -33,7 +36,7 @@ export async function createRoomAction(data: any) {
  */
 export async function updateRoomAction(roomId: string, data: any) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     const result = RoomSchema.partial().safeParse(data);
     if (!result.success) {
@@ -56,7 +59,7 @@ export async function updateRoomAction(roomId: string, data: any) {
  */
 export async function assignRoomStaffAction(data: any) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     const validated = RoomAssignmentSchema.parse(data);
     
     await RoomService.assignStaffToRoom(tenantId, validated);
@@ -74,7 +77,7 @@ export async function assignRoomStaffAction(data: any) {
  */
 export async function removeRoomStaffAction(roomId: string, userId: string) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     await RoomService.removeStaffFromRoom(tenantId, roomId, userId);
     
@@ -91,7 +94,7 @@ export async function removeRoomStaffAction(roomId: string, userId: string) {
  */
 export async function updateRoomStatusAction(roomId: string, status: any) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     await RoomService.changeRoomStatus(tenantId, roomId, status);
     
@@ -108,7 +111,7 @@ export async function updateRoomStatusAction(roomId: string, status: any) {
  */
 export async function addChairAction(roomId: string, name: string, code?: string) {
   try {
-    const { tenantId } = await getTenantContext();
+    const { tenantId } = await resolveTenantContext();
     
     await RoomService.addChairToRoom(tenantId, roomId, name, code);
     
@@ -122,25 +125,17 @@ export async function addChairAction(roomId: string, name: string, code?: string
 
 /**
  * Server Action: Get available staff for room assignment
+ *
+ * V2 FIX: Removed direct `prisma.tenantMembership.findMany` from this
+ * action. The query is now owned by StaffRepository.findActiveMembers()
+ * and exposed through StaffService.getStaffOptions().
+ * Actions must never touch the database directly.
  */
 export async function getStaffOptionsAction() {
   try {
-    const { tenantId } = await getTenantContext();
-    const staff = await prisma.tenantMembership.findMany({
-      where: { tenantId, isActive: true },
-      include: {
-        user: { select: { id: true, email: true } },
-        staffProfile: { select: { name: true } }
-      }
-    });
-
-    const mapped = staff.map(s => ({
-      userId: s.userId,
-      name: s.staffProfile?.name || s.user?.email || 'Unknown',
-      role: s.role,
-    }));
-
-    return { success: true, data: mapped };
+    const { tenantId } = await resolveTenantContext();
+    const data = await staffService.getStaffOptions(tenantId);
+    return { success: true, data };
   } catch (error: any) {
     console.error('[getStaffOptionsAction] Failed:', error);
     return { success: false, error: error.message || 'Failed to fetch staff' };

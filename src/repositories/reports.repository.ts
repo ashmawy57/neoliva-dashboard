@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { cache } from "react";
 
 export class ReportsRepository {
-  async getInvoices(tenantId: string, fromDate?: Date) {
+  getInvoices = cache(async (tenantId: string, fromDate?: Date) => {
     return await prisma.invoice.findMany({
       where: {
         tenantId,
@@ -16,9 +17,9 @@ export class ReportsRepository {
         createdAt: 'asc'
       }
     });
-  }
+  });
 
-  async getExpenses(tenantId: string, fromDate?: Date) {
+  getExpenses = cache(async (tenantId: string, fromDate?: Date) => {
     return await prisma.expense.findMany({
       where: {
         tenantId,
@@ -32,9 +33,9 @@ export class ReportsRepository {
         date: 'asc'
       }
     });
-  }
+  });
 
-  async getAppointments(tenantId: string) {
+  getAppointments = cache(async (tenantId: string) => {
     return await prisma.appointment.findMany({
       where: {
         tenantId,
@@ -45,9 +46,9 @@ export class ReportsRepository {
         date: true,
       },
     });
-  }
+  });
 
-  async getPatients(tenantId: string, fromDate?: Date) {
+  getPatients = cache(async (tenantId: string, fromDate?: Date) => {
     return await prisma.patient.findMany({
       where: {
         tenantId,
@@ -57,9 +58,9 @@ export class ReportsRepository {
         createdAt: true,
       },
     });
-  }
+  });
 
-  async getInventory(tenantId: string) {
+  getInventory = cache(async (tenantId: string) => {
     return await prisma.inventoryItem.findMany({
       where: {
         tenantId,
@@ -78,5 +79,5 @@ export class ReportsRepository {
         },
       },
     });
-  }
+  });
 }

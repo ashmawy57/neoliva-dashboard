@@ -1,8 +1,11 @@
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getTraceContextSync } from '@/lib/observability/context';
-import { getTenantContext } from '@/lib/tenant-context';
+import { resolveTenantContext as getTenantContext } from '@/lib/auth/resolve-tenant-context';
 import { headers } from 'next/headers';
+import { AuditRepository } from '@/repositories/audit.repository';
+import type { Prisma } from '@/generated/client';
+
+const auditRepository = new AuditRepository();
 
 export interface AuditLogOptions {
   action: string;
@@ -11,6 +14,9 @@ export interface AuditLogOptions {
   tenantId?: string;
   metadata?: Record<string, any>;
 }
+
+/** Subset of a Prisma transaction client — anything with an `auditLog.create`. */
+export type AuditTxClient = Prisma.TransactionClient;
 
 export class AuditService {
   /**
@@ -58,44 +64,90 @@ export class AuditService {
     // 3. Mask Sensitive Data
     const maskedMetadata = this.maskSensitiveFields(metadata);
 
+    // 4. Persistence — throws on failure so the caller can decide whether to rollback.
+    //    Use logAuditSafe() if you explicitly want fire-and-forget semantics.
+    const log = await auditRepository.create(tenantId, {
+      userId,
+      action,
+      entityType,
+      entityId,
+      metadata: maskedMetadata,
+      ipAddress,
+      userAgent,
+      requestId: trace?.requestId,
+    });
+
+    // 5. Correlate with System Logs
+    logger.info(`Audit Log Created: ${action}`, {
+      module: 'AUDIT_SERVICE',
+      action,
+      tenantId,
+      userId,
+      entityType,
+      entityId,
+      requestId: trace?.requestId,
+      logId: log.id
+    });
+
+    return log;
+  }
+
+  /**
+   * Fire-and-forget variant for use in error/cleanup paths where audit failure
+   * must NOT propagate (e.g. failure audit log inside wrapAction catch block).
+   * Logs a CRITICAL alert but does not throw.
+   */
+  static async logAuditSafe(options: AuditLogOptions): Promise<void> {
     try {
-      // 4. Persistence (IMMUTABLE - No update/delete exposed)
-      const log = await prisma.auditLog.create({
-        data: {
-          tenantId,
-          userId,
-          action,
-          entityType,
-          entityId,
-          metadata: maskedMetadata,
-          ipAddress,
-          userAgent,
-          requestId: trace?.requestId,
-        }
-      });
-
-      // 5. Correlate with System Logs
-      logger.info(`Audit Log Created: ${action}`, {
-        module: 'AUDIT_SERVICE',
-        action,
-        tenantId,
-        userId,
-        entityType,
-        entityId,
-        requestId: trace?.requestId,
-        logId: log.id
-      });
-
-      return log;
+      await this.logAudit(options);
     } catch (error) {
-      // We log error but don't throw to prevent crashing the main workflow
-      // though for a FORENSIC system, we might want to reconsider this later.
-      logger.error('CRITICAL: Audit Log creation failed', error, {
-        action,
-        tenantId,
-        userId
+      logger.error('CRITICAL: Audit Log creation failed (safe mode)', error, {
+        action: options.action,
+        tenantId: options.tenantId,
       });
     }
+  }
+
+  /**
+   * Transactional variant: writes the audit row inside an existing Prisma
+   * transaction so the audit log and the primary mutation share one atomic
+   * Postgres transaction. If this throws, the outer $transaction rolls back both.
+   *
+   * Usage (inside a service method):
+   * ```ts
+   * await rawPrisma.$transaction(async (tx) => {
+   *   const result = await tx.patient.update({ ... });
+   *   await AuditService.logAuditInTx(tx, { action: 'PATIENT_UPDATE', ... });
+   *   return result;
+   * });
+   * ```
+   */
+  static async logAuditInTx(
+    tx: AuditTxClient,
+    options: AuditLogOptions & { userId?: string; ipAddress?: string; userAgent?: string }
+  ) {
+    const { action, entityType, entityId, tenantId, metadata = {}, userId, ipAddress, userAgent } = options;
+    const trace = getTraceContextSync();
+
+    if (!tenantId) {
+      throw new Error(`[AuditService] logAuditInTx called without tenantId for action "${action}"`);
+    }
+
+    const maskedMetadata = this.maskSensitiveFields(metadata);
+
+    return tx.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        action,
+        entityType,
+        entityId,
+        metadata: maskedMetadata,
+        ipAddress,
+        userAgent,
+        requestId: trace?.requestId ?? null,
+      },
+    });
   }
 
   /**

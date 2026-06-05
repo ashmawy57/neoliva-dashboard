@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { RoomService } from "@/services/room.service";
 import { getUserPermissions } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
@@ -10,6 +10,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const metadata = {
   title: "Rooms Dashboard | Dental Clinic",
 };
+
+async function RoomListContainer({
+  tenantId,
+  canManageRooms,
+  canAssignStaff,
+}: {
+  tenantId: string;
+  canManageRooms: boolean;
+  canAssignStaff: boolean;
+}) {
+  const initialRooms = await RoomService.getRoomsLiveStatus(tenantId);
+  return (
+    <RoomList 
+      initialRooms={initialRooms as any} 
+      canManageRooms={canManageRooms}
+      canAssignStaff={canAssignStaff}
+    />
+  );
+}
 
 export default async function RoomsPage() {
   const { tenantId, user } = await getTenantContext();
@@ -28,9 +47,6 @@ export default async function RoomsPage() {
   const canManageRooms = permissions.has(PermissionCode.ROOM_MANAGE);
   const canAssignStaff = permissions.has(PermissionCode.ROOM_STAFF_ASSIGN);
   
-  // Fetch initial data
-  const initialRooms = await RoomService.getRoomsLiveStatus(tenantId);
-
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
@@ -43,8 +59,8 @@ export default async function RoomsPage() {
       </div>
       <div className="h-full">
         <Suspense fallback={<RoomListSkeleton />}>
-          <RoomList 
-            initialRooms={initialRooms as any} 
+          <RoomListContainer 
+            tenantId={tenantId}
             canManageRooms={canManageRooms}
             canAssignStaff={canAssignStaff}
           />

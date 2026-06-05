@@ -1,16 +1,15 @@
 import { Suspense } from "react";
-import { getFinancialDashboardAction } from "@/app/actions/finance";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
+import { FinanceService } from "@/services/finance.service";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 import { FinanceKPIs } from "@/components/finance/FinanceKPIs";
-import { RevenueChart } from "@/components/finance/RevenueChart";
 import { CashFlowCard } from "@/components/finance/CashFlowCard";
 import { FinancialAlerts } from "@/components/finance/FinancialAlerts";
 import { RecentFinancialActivity } from "@/components/finance/RecentFinancialActivity";
-import { TopServicesChart } from "@/components/finance/TopServicesChart";
-import { RevenueByDoctorChart } from "@/components/finance/RevenueByDoctorChart";
 import { FinanceDashboardHeader } from "@/components/finance/FinanceDashboardHeader";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RevenueChart, TopServicesChart, RevenueByDoctorChart } from "@/components/finance/DynamicFinanceCharts";
 import { FinanceQuickActions } from "@/components/finance/FinanceQuickActions";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -27,12 +26,19 @@ export default async function FinancePage({
   const { period = '30d' } = await searchParams;
   
   // Strict Page-Level Protection
-  await resolveTenantContext();
+  const { tenantId } = await resolveTenantContext();
   await requirePermission(PermissionCode.FINANCE_VIEW);
 
-  const dashboardData = await getFinancialDashboardAction(period as any);
+  const financeService = new FinanceService();
+  let data;
+  let errorMsg = "";
+  try {
+    data = await financeService.getFinancialDashboard(tenantId, period as any);
+  } catch (err: any) {
+    errorMsg = err.message || "You do not have permission to view the financial dashboard or an error occurred while fetching data.";
+  }
 
-  if (!dashboardData.success || !dashboardData.data) {
+  if (!data) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
         <div className="p-4 bg-rose-50 dark:bg-rose-500/10 rounded-full">
@@ -40,7 +46,7 @@ export default async function FinancePage({
         </div>
         <h2 className="text-xl font-bold">Access Denied or Load Error</h2>
         <p className="text-slate-500 max-w-md text-center">
-          {dashboardData.error || "You do not have permission to view the financial dashboard or an error occurred while fetching data."}
+          {errorMsg}
         </p>
         <Link 
           href="/dashboard" 
@@ -51,8 +57,6 @@ export default async function FinancePage({
       </div>
     );
   }
-
-  const { data } = dashboardData;
   const periodLabel = {
     "7d": "Last 7 Days",
     "30d": "Last 30 Days",

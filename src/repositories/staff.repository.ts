@@ -18,6 +18,32 @@ export class StaffRepository {
     });
   }
 
+  /**
+   * findActiveMembers — Narrow projection for staff-selection dropdowns.
+   *
+   * Returns only the fields needed to populate a staff option list
+   * (userId, email, staffProfile name, and membership role).
+   * This replaces the inlined prisma.tenantMembership.findMany() that
+   * previously lived inside the getStaffOptionsAction Server Action.
+   */
+  async findActiveMembers(tenantId: string): Promise<Array<{
+    userId: string;
+    role: string;
+    user: { id: string; email: string };
+    staffProfile: { name: string } | null;
+  }>> {
+    return prisma.tenantMembership.findMany({
+      where: { tenantId, isActive: true },
+      select: {
+        userId:  true,
+        role:    true,
+        user:    { select: { id: true, email: true } },
+        staffProfile: { select: { name: true } },
+      },
+      orderBy: { joinedAt: 'asc' },
+    }) as any;
+  }
+
   async findInvitations(tenantId: string): Promise<any[]> {
     return prisma.staffInvitation.findMany({
       where: { tenantId },
@@ -91,5 +117,78 @@ export class StaffRepository {
 
   async delete(tenantId: string, id: string): Promise<any> {
     return this.deleteStaffMember(tenantId, id);
+  }
+
+  // Invitation & Acceptance Operations
+  async findPendingInvitation(email: string) {
+    return prisma.staffInvitation.findFirst({
+      where: { email, status: 'PENDING' }
+    });
+  }
+
+  async findInvitationByToken(tokenHash: string) {
+    return prisma.staffInvitation.findUnique({
+      where: { tokenHash },
+      include: { tenant: true }
+    });
+  }
+
+  async findPendingInvitationByTenant(tenantId: string, email: string) {
+    return prisma.staffInvitation.findFirst({
+      where: { tenantId, email, status: 'PENDING' }
+    });
+  }
+
+  async acceptInvitation(supabaseUserId: string, invite: { id: string, email: string, tenantId: string, role: any, fullName: string }) {
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.upsert({
+        where: { email: invite.email },
+        update: { supabaseId: supabaseUserId },
+        create: {
+          supabaseId: supabaseUserId,
+          email: invite.email
+        }
+      });
+
+      const membership = await tx.tenantMembership.create({
+        data: {
+          userId: user.id,
+          tenantId: invite.tenantId,
+          role: invite.role,
+          status: 'ACTIVE'
+        }
+      });
+
+      await tx.staffInvitation.update({
+        where: { id: invite.id },
+        data: {
+          status: 'ACCEPTED',
+          acceptedAt: new Date()
+        }
+      });
+
+      await tx.staff.create({
+        data: {
+          name: invite.fullName,
+          email: invite.email,
+          role: invite.role,
+          tenantId: invite.tenantId,
+          membershipId: membership.id,
+          status: 'Online'
+        }
+      });
+
+      return { user, membership };
+    });
+  }
+
+  async findStaff(tenantId: string, role?: any, select?: Prisma.StaffSelect) {
+    return prisma.staff.findMany({
+      where: {
+        tenantId,
+        ...(role ? { role } : {}),
+      },
+      select,
+    });
   }
 }

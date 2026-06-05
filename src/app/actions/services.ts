@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { ServiceService } from "@/services/service.service";
 import { ServiceCategory } from "@/generated/client";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 

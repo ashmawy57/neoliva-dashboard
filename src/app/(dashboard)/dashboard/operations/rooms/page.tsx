@@ -1,4 +1,4 @@
-import { getTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { RoomOperationalService } from "@/services/room-operational.service";
 import { LiveRoomMonitor } from "@/components/operations/LiveRoomMonitor";
 import { Suspense } from "react";
@@ -7,28 +7,11 @@ import { getUserPermissions } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 import { redirect } from "next/navigation";
 
-export default async function RoomOperationsPage() {
-  const permissions = await getUserPermissions();
-  if (!permissions.has(PermissionCode.ROOM_VIEW)) {
-    redirect("/dashboard");
-  }
-
-  const { tenantId } = await getTenantContext();
+async function RoomOperationsContainer({ tenantId }: { tenantId: string }) {
   const initialData = await RoomOperationalService.getLiveRoomStatus(tenantId);
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 bg-slate-50/50 dark:bg-slate-950/50">
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 dark:from-slate-100 dark:to-slate-400 bg-clip-text text-transparent">
-            Live Room Operations
-          </h2>
-          <p className="text-muted-foreground">
-            Enterprise Monitoring & Clinic Flow Management
-          </p>
-        </div>
-      </div>
-
+    <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total Active Rooms</p>
@@ -60,8 +43,47 @@ export default async function RoomOperationsPage() {
         </div>
       </div>
 
-      <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>
-        <LiveRoomMonitor initialData={initialData} />
+      <LiveRoomMonitor initialData={initialData} />
+    </>
+  );
+}
+
+function RoomOperationsSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-24 rounded-xl w-full" />
+        ))}
+      </div>
+      <Skeleton className="h-[600px] w-full rounded-2xl" />
+    </div>
+  );
+}
+
+export default async function RoomOperationsPage() {
+  const permissions = await getUserPermissions();
+  if (!permissions.has(PermissionCode.ROOM_VIEW)) {
+    redirect("/dashboard");
+  }
+
+  const { tenantId } = await getTenantContext();
+
+  return (
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 bg-slate-50/50 dark:bg-slate-950/50">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 dark:from-slate-100 dark:to-slate-400 bg-clip-text text-transparent">
+            Live Room Operations
+          </h2>
+          <p className="text-muted-foreground">
+            Enterprise Monitoring & Clinic Flow Management
+          </p>
+        </div>
+      </div>
+
+      <Suspense fallback={<RoomOperationsSkeleton />}>
+        <RoomOperationsContainer tenantId={tenantId} />
       </Suspense>
     </div>
   );

@@ -37,7 +37,10 @@ export function wrapAction<T, Args extends any[]>(
         logger.info(`Action Success: ${name}`, { duration: `${duration}ms` });
         
         // --- AUDIT LOG (Success) ---
-        // Extract entityId if path provided (e.g. args[0].id)
+        // logAudit() now THROWS on failure. This is intentional: if the audit
+        // row cannot be persisted, we treat the entire action as failed so that
+        // no mutation escapes the audit trail. The action will surface an error
+        // to the client rather than silently proceeding without a record.
         let entityId: string | undefined;
         if (metadata.entityIdPath && args[0]) {
           entityId = args[0][metadata.entityIdPath];
@@ -81,7 +84,10 @@ export function wrapAction<T, Args extends any[]>(
         });
 
         // --- AUDIT LOG (Failure) ---
-        await AuditService.logAudit({
+        // Use logAuditSafe: the action already failed. If the audit also fails,
+        // we MUST NOT swallow the original error with a second exception —
+        // logAuditSafe logs a CRITICAL alert but does not throw.
+        await AuditService.logAuditSafe({
           action: `${name.toUpperCase()}_FAILED`,
           entityType: metadata.entityType || metadata.module.toUpperCase(),
           metadata: {

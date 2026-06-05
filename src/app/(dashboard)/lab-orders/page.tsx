@@ -6,7 +6,7 @@ import { NewLabOrderDialog } from "@/components/lab-orders/NewLabOrderDialog";
 import { LabOrdersTable } from "@/components/lab-orders/LabOrdersTable";
 import { LabOrderService } from "@/services/lab-order.service";
 import { PatientService } from "@/services/patient.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 
 const labOrderService = new LabOrderService();
 const patientService = new PatientService();

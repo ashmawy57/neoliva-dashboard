@@ -1,7 +1,7 @@
 'use server'
 
 import { PatientService } from "@/services/patient.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { revalidatePath } from 'next/cache'
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
@@ -11,16 +11,6 @@ import { EventService } from "@/services/event.service";
 const patientService = new PatientService();
 import { wrapAction } from "@/lib/observability/wrap-action";
 
-
-function getInitials(name: string) {
-  if (!name) return '??';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '??';
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
 
 export async function getPatients() {
   await requirePermission(PermissionCode.PATIENT_VIEW);
@@ -43,40 +33,7 @@ export const createPatient = wrapAction(
       throw new Error('Missing name or phone')
     }
 
-    const initials = getInitials(name)
-    const gradients = [
-      'from-blue-500 to-indigo-600',
-      'from-emerald-500 to-teal-600',
-      'from-purple-500 to-pink-600',
-      'from-amber-500 to-orange-600',
-      'from-rose-500 to-red-600'
-    ]
-
-    const patientData = {
-      displayId: `P-${Math.floor(1000 + Math.random() * 9000)}`,
-      name: name,
-      phone: phone,
-      phone2: rawFormData.phone2 as string || null,
-      email: rawFormData.email as string || null,
-      address: rawFormData.address as string || null,
-      postCode: rawFormData.postCode as string || null,
-      city: rawFormData.city as string || null,
-      dob: rawFormData.dob ? new Date(rawFormData.dob as string) : null,
-      gender: rawFormData.gender as string || null,
-      maritalStatus: rawFormData.maritalStatus as string || null,
-      occupation: rawFormData.occupation as string || null,
-      insurance: rawFormData.insurance as string || null,
-      ssn: rawFormData.ssn as string || null,
-      idNumber: rawFormData.idNumber as string || null,
-      medicalAlert: rawFormData.medicalAlert as string || null,
-      referredBy: rawFormData.referredBy as string || null,
-      notes: rawFormData.notes as string || null,
-      isDeceased: rawFormData.isDeceased === 'true',
-      isSigned: rawFormData.isSigned === 'true',
-      avatarInitials: initials,
-      colorGradient: gradients[Math.floor(Math.random() * gradients.length)],
-      status: 'Active'
-    }
+    const patientData = patientService.buildCreateInput(rawFormData);
 
     const patient = await patientService.createPatient(tenantId, patientData);
     
@@ -920,6 +877,17 @@ export async function deletePrescription(id: string, patientId: string) {
   } catch (error: any) {
     console.error("Error deleting prescription:", error);
     return { success: false, error: error.message };
+  }
+}
+
+export async function searchPatients(query: string) {
+  try {
+    const { tenantId } = await resolveTenantContext();
+    await requirePermission(PermissionCode.PATIENT_VIEW);
+    return await patientService.searchPatients(tenantId, query);
+  } catch (error) {
+    console.error('Error searching patients:', error);
+    return [];
   }
 }
 

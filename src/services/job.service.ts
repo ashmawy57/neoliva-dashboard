@@ -364,3 +364,161 @@ async function pruneOldJobsTask() {
   });
   logger.info('[JobService] Task: pruneOldJobsTask executed', { deleted: result.count });
 }
+
+/**
+ * Recovery sweeper for stuck background jobs:
+ * Find jobs in 'PROCESSING' state older than 10 minutes,
+ * and reset to 'PENDING' if attempts < 3, else mark 'FAILED'.
+ */
+export async function recoverStuckJobs() {
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+
+  // Execute atomic raw update
+  const updatedCount = await prisma.$executeRaw`
+    UPDATE jobs
+    SET    status = CASE WHEN attempts < 3 THEN 'PENDING' ELSE 'FAILED' END,
+           updated_at = NOW()
+    WHERE  status = 'PROCESSING'
+      AND  updated_at < ${cutoff}
+  `;
+
+  if (updatedCount > 0) {
+    logger.warn('[JobService] Stuck jobs recovery sweeper rescued jobs', { count: updatedCount });
+  } else {
+    logger.info('[JobService] Stuck jobs recovery sweeper finished (no stuck jobs found)');
+  }
+
+  return updatedCount;
+}
+
+/**
+ * Executes a single locked job based on its type and payload.
+ * Invoked by the cron runner route.
+ */
+export async function executeJob(job: { id: string; type: JobType; payload: Record<string, unknown>; tenantId: string }) {
+  const { id, type, payload, tenantId } = job;
+  
+  const { withTrace } = await import('@/lib/observability/context');
+  
+  return withTrace({ requestId: id, tenantId }, async () => {
+    logger.info('[JobService] Executing job within tenant trace context', { jobId: id, type, tenantId });
+
+    const { EventService } = await import('@/services/event.service');
+
+    switch (type) {
+      case JOB_TYPE.CHECK_PATIENT_NO_SHOW: {
+        const appointmentId = payload.appointmentId as string;
+        if (!appointmentId) throw new Error('Missing appointmentId in payload');
+
+        const appointment = await prisma.appointment.findUnique({
+          where: { id: appointmentId },
+          select: { status: true, id: true },
+        });
+
+        if (!appointment) {
+          logger.warn('[JobService] Appointment not found for no-show check', { appointmentId });
+          break;
+        }
+
+        if (appointment.status === 'SCHEDULED') {
+          await prisma.appointment.update({
+            where: { id: appointment.id },
+            data: { status: 'NO_SHOW' },
+          });
+
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'PATIENT_NO_SHOW',
+            entityType: 'APPOINTMENT',
+            entityId: appointment.id,
+            metadata: { autoMarked: true, jobId: id },
+          });
+
+          logger.info('[JobService] Appointment marked as NO_SHOW', { appointmentId });
+        }
+        break;
+      }
+
+      case JOB_TYPE.CHECK_INVOICE_OVERDUE: {
+        const invoiceId = payload.invoiceId as string;
+        if (!invoiceId) throw new Error('Missing invoiceId in payload');
+
+        const invoice = await prisma.invoice.findUnique({
+          where: { id: invoiceId },
+          select: { status: true, dueDate: true, id: true },
+        });
+
+        if (!invoice) {
+          logger.warn('[JobService] Invoice not found for overdue check', { invoiceId });
+          break;
+        }
+
+        if (invoice.status === 'PENDING' || invoice.status === 'PARTIAL') {
+          const now = new Date();
+          if (invoice.dueDate && new Date(invoice.dueDate) < now) {
+            await prisma.invoice.update({
+              where: { id: invoice.id },
+              data: { status: 'OVERDUE' },
+            });
+
+            await EventService.trackEvent({
+              tenantId,
+              eventType: 'INVOICE_OVERDUE',
+              entityType: 'INVOICE',
+              entityId: invoice.id,
+              metadata: { dueDate: invoice.dueDate, jobId: id },
+            });
+
+            logger.info('[JobService] Invoice marked as OVERDUE', { invoiceId });
+          }
+        }
+        break;
+      }
+
+      case JOB_TYPE.CHECK_TREATMENT_DELAYED: {
+        const itemId = payload.itemId as string;
+        if (!itemId) throw new Error('Missing itemId in payload');
+
+        const item = await prisma.treatmentPlanItem.findUnique({
+          where: { id: itemId },
+          select: { status: true, scheduledDate: true, planId: true, id: true },
+        });
+
+        if (!item) {
+          logger.warn('[JobService] TreatmentPlanItem not found for delay check', { itemId });
+          break;
+        }
+
+        if (item.status === 'Planned') {
+          const now = new Date();
+          if (item.scheduledDate && new Date(item.scheduledDate) < now) {
+            await prisma.treatmentPlanItem.update({
+              where: { id: item.id },
+              data: { status: 'Delayed' },
+            });
+
+            await EventService.trackEvent({
+              tenantId,
+              eventType: 'TREATMENT_DELAYED',
+              entityType: 'TREATMENT',
+              entityId: item.planId,
+              metadata: { itemId: item.id, scheduledDate: item.scheduledDate, jobId: id },
+            });
+
+            logger.info('[JobService] TreatmentPlanItem marked as Delayed', { itemId });
+          }
+        }
+        break;
+      }
+
+      case JOB_TYPE.SEND_NOTIFICATION:
+      case JOB_TYPE.SEND_EMAIL: {
+        logger.info('[JobService] Send Notification/Email job executed (stub)', { payload });
+        break;
+      }
+
+      default:
+        throw new Error(`Unsupported job type: ${type}`);
+    }
+  });
+}

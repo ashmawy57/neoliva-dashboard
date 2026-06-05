@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { getClinicSettings, updateClinicSettings, NotificationsConfig } from "@/services/settings.service";
-import { getTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { PermissionCode } from "@/types/permissions";

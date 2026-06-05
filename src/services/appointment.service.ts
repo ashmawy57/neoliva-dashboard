@@ -1,9 +1,10 @@
 import "server-only";
 import { AppointmentRepository } from "@/repositories/appointment.repository";
-import { resolveTenantContext } from "@/lib/tenant-context";
 import { InventoryService } from "./inventory.service";
 import { AppointmentStatus } from "@/generated/client";
-import { prisma } from "@/lib/prisma";
+import { PatientRepository } from "@/repositories/patient.repository";
+import { StaffRepository } from "@/repositories/staff.repository";
+import { ServiceRepository } from "@/repositories/service.repository";
 
 import { NotificationService } from "./notification.service";
 import { RoomService } from "./room.service";
@@ -11,6 +12,9 @@ import { RoomService } from "./room.service";
 const appointmentRepository = new AppointmentRepository();
 const inventoryService = new InventoryService();
 const notificationService = new NotificationService();
+const patientRepository = new PatientRepository();
+const staffRepository = new StaffRepository();
+const serviceRepository = new ServiceRepository();
 
 export class AppointmentService {
   private normalizeString(val: string | null | undefined, fallback: string = "-"): string {
@@ -137,15 +141,14 @@ export class AppointmentService {
   }
 
   /**
-   * Get all data needed for creation forms (patients, doctors, services)
+   * Get all data needed for creation forms (doctors, services)
    */
   async getAppointmentFormData(tenantId: string) {
     try {
       this.validateTenant(tenantId);
-      const [patients, doctors, servicesRaw] = await Promise.all([
-        prisma.patient.findMany({ where: { tenantId }, select: { id: true, name: true, phone: true } }),
-        prisma.staff.findMany({ where: { tenantId, role: 'DOCTOR' }, select: { id: true, name: true } }),
-        prisma.service.findMany({ where: { tenantId, isActive: true }, select: { id: true, name: true, duration: true, price: true } })
+      const [doctors, servicesRaw] = await Promise.all([
+        staffRepository.findStaff(tenantId, 'DOCTOR', { id: true, name: true }),
+        serviceRepository.findMany(tenantId, { select: { id: true, name: true, duration: true, price: true } })
       ]);
 
       const services = (servicesRaw || []).map(s => ({
@@ -154,13 +157,12 @@ export class AppointmentService {
       }));
 
       return JSON.parse(JSON.stringify({
-        patients: patients || [],
         doctors: doctors || [],
         services: services || []
       }));
     } catch (error) {
       console.error("[AppointmentService] Failed to get form data:", error);
-      return { patients: [], doctors: [], services: [] };
+      return { doctors: [], services: [] };
     }
   }
 

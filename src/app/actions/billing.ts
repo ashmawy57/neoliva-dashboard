@@ -1,7 +1,7 @@
 'use server'
 
-import { prisma } from "@/lib/prisma";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { BillingRepository } from "@/repositories/billing.repository";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { revalidatePath } from "next/cache";
 import { BillingService } from "@/services/billing.service";
 import { requirePermission } from "@/lib/rbac";
@@ -12,6 +12,7 @@ import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
 const billingService = new BillingService();
+const billingRepository = new BillingRepository();
 
 /**
  * Server Action: Generates an invoice from an appointment.
@@ -102,10 +103,7 @@ export const recordPayment = wrapAction(
     await requirePermission(PermissionCode.BILLING_PAYMENT_RECORD);
     await requireRecordAccess('invoice', invoiceId);
     
-    const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceId, tenantId },
-      select: { patientId: true }
-    });
+    const invoice = await billingRepository.findUnique(tenantId, invoiceId);
 
     if (!invoice) throw new Error("Invoice not found or unauthorized access.");
 

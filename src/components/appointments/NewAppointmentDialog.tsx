@@ -8,7 +8,10 @@ import {
   UserPlus, 
   Stethoscope, 
   ClipboardList,
-  Palette
+  Palette,
+  User,
+  Search,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,15 +33,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createAppointment } from "@/app/actions/appointments";
+import { searchPatients } from "@/app/actions/patients";
 import { toast } from "sonner";
 
 interface NewAppointmentDialogProps {
-  patients: any[];
   doctors: any[];
   services: any[];
 }
 
-export function NewAppointmentDialog({ patients, doctors, services }: NewAppointmentDialogProps) {
+export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -51,6 +54,55 @@ export function NewAppointmentDialog({ patients, doctors, services }: NewAppoint
     notes: "",
     color: "from-blue-500 to-indigo-600"
   });
+
+  // Client-side Async Search State
+  const [patientQuery, setPatientQuery] = useState("");
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [selectedPatientName, setSelectedPatientName] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const resetForm = () => {
+    setFormData({
+      patientId: "",
+      doctorId: "",
+      serviceId: "",
+      date: new Date().toISOString().split('T')[0],
+      time: "09:00",
+      treatment: "",
+      notes: "",
+      color: "from-blue-500 to-indigo-600"
+    });
+    setPatientQuery("");
+    setPatientResults([]);
+    setSelectedPatientName("");
+    setShowDropdown(false);
+  };
+
+  const handleSearch = async (val: string) => {
+    setPatientQuery(val);
+    if (val.trim().length === 0) {
+      setPatientResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    setIsSearching(true);
+    setShowDropdown(true);
+    try {
+      const results = await searchPatients(val);
+      setPatientResults(results || []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectPatient = (id: string, name: string) => {
+    setFormData({ ...formData, patientId: id });
+    setSelectedPatientName(name);
+    setShowDropdown(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,16 +126,7 @@ export function NewAppointmentDialog({ patients, doctors, services }: NewAppoint
       if (res.success) {
         toast.success("Appointment created successfully!");
         setIsOpen(false);
-        setFormData({
-          patientId: "",
-          doctorId: "",
-          serviceId: "",
-          date: new Date().toISOString().split('T')[0],
-          time: "09:00",
-          treatment: "",
-          notes: "",
-          color: "from-blue-500 to-indigo-600"
-        });
+        resetForm();
       } else {
         toast.error(res.error || "Failed to create appointment");
       }
@@ -103,7 +146,12 @@ export function NewAppointmentDialog({ patients, doctors, services }: NewAppoint
   ];
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) {
+        resetForm();
+      }
+    }}>
       <DialogTrigger asChild>
         <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-6 h-10 md:h-12 rounded-xl md:rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 border-0 cursor-pointer">
           <Plus className="w-4 h-4 md:w-5 md:h-5" />
@@ -124,21 +172,74 @@ export function NewAppointmentDialog({ patients, doctors, services }: NewAppoint
         <form onSubmit={handleSubmit}>
           <div className="p-6 md:p-8 space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {/* Patient Selection */}
-              <div className="space-y-2">
+              {/* Patient Selection (Async Combobox Search) */}
+              <div className="space-y-2 relative">
                 <Label className="text-xs md:text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-500" /> Patient
                 </Label>
-                <Select value={formData.patientId} onValueChange={(val) => setFormData({ ...formData, patientId: val })}>
-                  <SelectTrigger className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50">
-                    <SelectValue placeholder="Select patient" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl md:rounded-2xl border-gray-100 shadow-xl p-1">
-                    {patients.map(p => (
-                      <SelectItem key={p.id} value={p.id} className="rounded-lg md:rounded-xl my-0.5">{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {formData.patientId ? (
+                  <div className="flex items-center justify-between h-10 md:h-12 px-4 border border-blue-200 bg-blue-50/30 rounded-xl md:rounded-2xl">
+                    <div className="flex items-center gap-2 text-sm text-blue-900 font-medium">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs text-blue-700 font-bold">
+                        {selectedPatientName.substring(0, 2).toUpperCase()}
+                      </div>
+                      <span>{selectedPatientName}</span>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setFormData({ ...formData, patientId: "" });
+                        setSelectedPatientName("");
+                        setPatientQuery("");
+                        setPatientResults([]);
+                      }}
+                      className="h-7 px-2 text-xs text-blue-600 hover:text-rose-600 hover:bg-rose-50"
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="relative flex items-center">
+                      <Search className="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <Input 
+                        placeholder="Search patient by name or phone..." 
+                        className="h-10 md:h-12 pl-10 pr-10 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50"
+                        value={patientQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        onFocus={() => { if (patientQuery.trim().length > 0) setShowDropdown(true); }}
+                      />
+                      {isSearching && (
+                        <Loader2 className="absolute right-3 w-4 h-4 text-blue-500 animate-spin" />
+                      )}
+                    </div>
+                    {showDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+                        
+                        <div className="absolute top-full left-0 right-0 mt-2 z-20 max-h-[200px] overflow-y-auto bg-white border border-gray-100 shadow-xl rounded-xl p-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                          {patientResults.length === 0 ? (
+                            <div className="p-3 text-xs text-gray-500 text-center">No patients found.</div>
+                          ) : (
+                            patientResults.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => handleSelectPatient(p.id, p.name)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition-colors flex flex-col cursor-pointer"
+                              >
+                                <span className="font-semibold">{p.name}</span>
+                                <span className="text-[10px] text-gray-500">{p.phone ? p.phone : p.displayId}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Doctor Selection */}

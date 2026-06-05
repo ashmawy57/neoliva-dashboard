@@ -6,7 +6,8 @@ export class ServiceRepository {
     skip?: number;
     take?: number;
     orderBy?: Prisma.ServiceOrderByWithRelationInput;
-  }): Promise<Service[]> {
+    select?: Prisma.ServiceSelect;
+  }): Promise<any[]> {
     return prisma.service.findMany({
       ...params,
       where: {

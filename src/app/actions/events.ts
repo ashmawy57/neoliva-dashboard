@@ -1,44 +1,22 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { resolveTenantContext } from '@/lib/tenant-context';
+import { EventRepository } from '@/repositories/event.repository';
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { EventService } from '@/services/event.service';
 import { revalidatePath } from 'next/cache';
+
+const eventRepository = new EventRepository();
 
 export async function getEvents(limit = 100) {
   const { tenantId } = await resolveTenantContext();
   
-  return prisma.businessEvent.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          memberships: {
-            where: { tenantId },
-            include: {
-              staffProfile: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+  return eventRepository.findMany(tenantId, limit);
 }
 
 export async function replayEvent(eventId: string) {
   const { tenantId } = await resolveTenantContext();
   
-  const event = await prisma.businessEvent.findUnique({
-    where: { id: eventId, tenantId },
-  });
+  const event = await eventRepository.findUnique(tenantId, eventId);
 
   if (!event) throw new Error('Event not found');
 
@@ -59,3 +37,4 @@ export async function replayEvent(eventId: string) {
   revalidatePath('/dashboard/events-debug');
   return { success: true };
 }
+

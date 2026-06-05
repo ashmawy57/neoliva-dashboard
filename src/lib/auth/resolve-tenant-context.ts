@@ -23,7 +23,7 @@
  */
 
 import { cache } from 'react';
-import { prisma } from '@/lib/prisma';
+import { rawPrisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { normalizeRole } from '@/lib/auth/roles';
 import { TenantContextError } from '@/lib/auth/auth-errors';
@@ -70,7 +70,7 @@ export interface ResolvedTenantContext {
  * active_tenant_id path and findFirst fallback path
  * both pass through the SAME logic — no divergence.
  */
-function validateMembership(membership: {
+export function validateMembership(membership: {
   isActive: boolean;
   status: string;
   role: string;
@@ -207,7 +207,7 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
     // Safety check: Session must belong to the user
     if (session.userId !== authUser.id) {
        // Check if this is a DB User ID vs Supabase ID mismatch
-       const dbUser = await prisma.user.findUnique({ where: { supabaseId: authUser.id } });
+       const dbUser = await rawPrisma.user.findUnique({ where: { supabaseId: authUser.id } });
        if (!dbUser || session.userId !== dbUser.id) {
           console.error(`[Security][SESSION_MISMATCH] Session ${session.id} belongs to user ${session.userId} but JWT belongs to ${authUser.id}`);
           throw new TenantContextError('UNAUTHORIZED', 'Session mismatch detected.');
@@ -250,7 +250,7 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
 
     if (!membership) {
       // Check if User record exists at all for better diagnostics
-      const userExists = await prisma.user.findUnique({
+      const userExists = await rawPrisma.user.findUnique({
         where: { supabaseId: authUser.id },
         select: { id: true },
       });
@@ -303,14 +303,14 @@ export const resolveTenantContext = cache(async (): Promise<ResolvedTenantContex
 
 async function fetchMembershipByTenantId(supabaseUserId: string, tenantId: string) {
   // Resolve internal user ID first
-  const dbUser = await prisma.user.findUnique({
+  const dbUser = await rawPrisma.user.findUnique({
     where: { supabaseId: supabaseUserId },
     select: { id: true },
   });
 
   if (!dbUser) return null;
 
-  return prisma.tenantMembership.findUnique({
+  return rawPrisma.tenantMembership.findUnique({
     where: {
       userId_tenantId: {
         userId: dbUser.id,
@@ -322,7 +322,7 @@ async function fetchMembershipByTenantId(supabaseUserId: string, tenantId: strin
 }
 
 async function fetchPrimaryMembership(supabaseUserId: string) {
-  const memberships = await prisma.tenantMembership.findMany({
+  const memberships = await rawPrisma.tenantMembership.findMany({
     where: {
       user: { supabaseId: supabaseUserId },
       status: 'ACTIVE',
@@ -347,7 +347,7 @@ async function fetchPrimaryMembership(supabaseUserId: string) {
  * to provide context in the debug logs.
  */
 async function fetchAllMemberships(supabaseUserId: string) {
-  return prisma.tenantMembership.findMany({
+  return rawPrisma.tenantMembership.findMany({
     where: {
       user: { supabaseId: supabaseUserId },
     },

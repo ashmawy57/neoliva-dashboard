@@ -31,7 +31,6 @@ export default async function AppointmentsPage() {
           <p className="text-sm text-gray-500 mt-1">Manage and track all clinic appointments</p>
         </div>
         <NewAppointmentDialog 
-          patients={formData.patients} 
           doctors={formData.doctors} 
           services={formData.services} 
         />

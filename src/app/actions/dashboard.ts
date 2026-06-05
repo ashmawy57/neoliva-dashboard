@@ -1,13 +1,15 @@
 'use server'
 
 import { DashboardService } from "@/services/dashboard.service";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 
+import { cache } from "react";
+
 const dashboardService = new DashboardService();
 
-export async function getDashboardData() {
+export const getDashboardData = cache(async () => {
   try {
     const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.DASHBOARD_VIEW);
@@ -17,4 +19,4 @@ export async function getDashboardData() {
     console.error('[getDashboardData]', error);
     throw error;
   }
-}
+});

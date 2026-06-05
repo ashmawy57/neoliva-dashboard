@@ -1,22 +1,19 @@
 'use server';
 
-import { prisma } from "@/lib/prisma";
+import { TenantRepository } from "@/repositories/tenant.repository";
+import { SessionRepository } from "@/repositories/session.repository";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
 
+const tenantRepository = new TenantRepository();
+const sessionRepository = new SessionRepository();
+
 export async function getAllTenants() {
   await requirePermission(PermissionCode.ADMIN_SYSTEM_VIEW);
-  return await prisma.tenant.findMany({
-    include: {
-      _count: {
-        select: { staff: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  return await tenantRepository.findMany();
 }
 
 export const updateTenantStatus = wrapAction(
@@ -29,10 +26,7 @@ export const updateTenantStatus = wrapAction(
       console.log(`[SUPER_ADMIN][AUTH_CHECK] Permission verified.`);
       
       console.log(`[SUPER_ADMIN][DB_QUERY] Fetching tenant record...`);
-      const oldTenant = await prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { status: true, name: true }
-      });
+      const oldTenant = await tenantRepository.findUnique(tenantId);
       console.log(`[SUPER_ADMIN][DB_QUERY] Current state:`, oldTenant);
 
       if (!oldTenant) {
@@ -41,10 +35,7 @@ export const updateTenantStatus = wrapAction(
       }
 
       console.log(`[SUPER_ADMIN][DB_UPDATE] Executing update in Prisma: ${oldTenant.status} -> ${status}`);
-      const updatedTenant = await prisma.tenant.update({
-        where: { id: tenantId },
-        data: { status }
-      });
+      const updatedTenant = await tenantRepository.update(tenantId, { status });
       console.log(`[SUPER_ADMIN][DB_UPDATE] Prisma update successful. New status in DB: ${updatedTenant.status}`);
 
       // Audit Logging
@@ -104,10 +95,7 @@ export async function revokeSession(sessionId: string) {
   await requirePermission(PermissionCode.ADMIN_TENANT_MANAGE);
   const { SessionService } = await import('@/lib/auth/session-service');
   
-  const session = await prisma.session.findUnique({
-    where: { id: sessionId },
-    select: { tenantId: true, userId: true, ipAddress: true }
-  });
+  const session = await sessionRepository.findUnique(sessionId);
 
   await SessionService.revokeSession(sessionId);
 
@@ -127,4 +115,5 @@ export async function revokeSession(sessionId: string) {
   revalidatePath('/admin/clinics');
   return { success: true };
 }
+
 

@@ -37,6 +37,13 @@ export class PatientRepository {
     });
   }
 
+  async findUniqueGlobal(id: string) {
+    return prisma.patient.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true, name: true }
+    });
+  }
+
   async create(tenantId: string, data: Omit<Prisma.PatientUncheckedCreateInput, 'tenantId'>) {
     return prisma.patient.create({
       data: {
@@ -112,6 +119,16 @@ export class PatientRepository {
   }
 
   async createPeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
+    // Validate that the patient belongs to the tenant
+    const patientExists = await prisma.patient.findFirst({
+      where: { id: patientId, tenantId },
+      select: { id: true }
+    });
+
+    if (!patientExists) {
+      throw new Error("Patient not found or unauthorized access.");
+    }
+
     // Upsert to avoid duplicate rows for the same tooth + parameter combination
     return prisma.periodontalMeasurement.upsert({
       where: {

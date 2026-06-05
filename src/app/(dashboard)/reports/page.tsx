@@ -9,15 +9,19 @@ import {
   getAIInsightsAction
 } from "@/app/actions/reports";
 import { ReportsKPIs } from "@/components/reports/ReportsKPIs";
-import { ReportsRevenueChart } from "@/components/reports/ReportsRevenueChart";
-import { ReportsExpenseChart } from "@/components/reports/ReportsExpenseChart";
-import { ReportsProfitChart } from "@/components/reports/ReportsProfitChart";
-import { ReportsTreatmentChart } from "@/components/reports/ReportsTreatmentChart";
-import { ReportsPatientGrowthChart } from "@/components/reports/ReportsPatientGrowthChart";
 import { ReportsInventoryAlerts } from "@/components/reports/ReportsInventoryAlerts";
 import { ReportsAIInsights } from "@/components/reports/ReportsAIInsights";
 import { AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ReportsRevenueChart,
+  ReportsExpenseChart,
+  ReportsProfitChart,
+  ReportsTreatmentChart,
+  ReportsPatientGrowthChart
+} from "@/components/reports/DynamicReportsCharts";
 
 function ErrorState({ message }: { message?: string }) {
   return (
@@ -31,6 +35,29 @@ function ErrorState({ message }: { message?: string }) {
   );
 }
 
+function AISkeleton() {
+  return (
+    <Card className="border-0 shadow-lg bg-white overflow-hidden">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="w-8 h-8 rounded-lg" />
+          <Skeleton className="h-6 w-48 rounded" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full rounded" />
+          <Skeleton className="h-4 w-5/6 rounded" />
+          <Skeleton className="h-4 w-4/5 rounded" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function AIInsightsContainer() {
+  const aiRes = await getAIInsightsAction();
+  return <ReportsAIInsights insights={aiRes.success ? aiRes.data || [] : []} />;
+}
+
 export default async function ReportsPage() {
   // Use parallel fetching with failure isolation
   const [
@@ -38,15 +65,13 @@ export default async function ReportsPage() {
     trendsRes,
     treatmentsRes,
     growthRes,
-    inventoryRes,
-    aiRes
+    inventoryRes
   ] = await Promise.all([
     getReportsKPIsAction(),
     getFinancialTrendsAction(),
     getTreatmentDistributionAction(),
     getPatientGrowthAction(),
-    getInventoryInsightsAction(),
-    getAIInsightsAction()
+    getInventoryInsightsAction()
   ]);
 
   return (
@@ -83,7 +108,9 @@ export default async function ReportsPage() {
 
       {/* Section 3: AI Intelligence Insights */}
       <div className="max-w-5xl">
-        <ReportsAIInsights insights={aiRes.success ? aiRes.data || [] : []} />
+        <Suspense fallback={<AISkeleton />}>
+          <AIInsightsContainer />
+        </Suspense>
       </div>
 
       {/* Section 4: Analytics & Insights */}

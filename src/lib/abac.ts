@@ -1,4 +1,4 @@
-import { getTenantContext } from "./tenant-context";
+import { resolveTenantContext as getTenantContext } from "./auth/resolve-tenant-context";
 import { prisma } from "./prisma";
 import { PermissionCode } from "@/types/permissions";
 import { hasPermission } from "./rbac";
@@ -37,9 +37,16 @@ export async function canAccessPatient(patientId: string): Promise<boolean> {
     return assignmentCount > 0;
   }
 
-  // 3. STAFF/RECEPTIONIST/ASSISTANT: Can see all patients in their clinic
-  // (Assuming basic RBAC has already passed PATIENT_VIEW)
-  return true;
+  // 3. STAFF/RECEPTIONIST/ASSISTANT: Can see patients in their own clinic
+  const patientExists = await prisma.patient.findFirst({
+    where: {
+      id: patientId,
+      tenantId: user.tenantId
+    },
+    select: { id: true }
+  });
+  
+  return !!patientExists;
 }
 
 /**

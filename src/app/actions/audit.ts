@@ -1,9 +1,11 @@
 'use server'
 
-import { prisma } from "@/lib/prisma";
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { AuditRepository } from "@/repositories/audit.repository";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { requirePermission } from "@/lib/rbac";
 import { PermissionCode } from "@/types/permissions";
+
+const auditRepository = new AuditRepository();
 
 export interface AuditFilterOptions {
   userId?: string;
@@ -34,9 +36,7 @@ export async function getAuditLogs(filters: AuditFilterOptions = {}) {
     offset = 0
   } = filters;
 
-  const where: any = {
-    tenantId,
-  };
+  const where: any = {};
 
   if (userId) where.userId = userId;
   if (action) where.action = action;
@@ -51,29 +51,8 @@ export async function getAuditLogs(filters: AuditFilterOptions = {}) {
 
   try {
     const [logs, total] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              memberships: {
-                where: { tenantId },
-                include: {
-                  staffProfile: {
-                    select: { name: true }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }),
-      prisma.auditLog.count({ where })
+      auditRepository.findMany(tenantId, where, limit, offset),
+      auditRepository.count(tenantId, where)
     ]);
 
     return {
@@ -96,20 +75,13 @@ export async function getAuditMetadata() {
   const { tenantId } = await resolveTenantContext();
 
   const [actions, entityTypes] = await Promise.all([
-    prisma.auditLog.findMany({
-      where: { tenantId },
-      distinct: ['action'],
-      select: { action: true }
-    }),
-    prisma.auditLog.findMany({
-      where: { tenantId },
-      distinct: ['entityType'],
-      select: { entityType: true }
-    })
+    auditRepository.getDistinctActions(tenantId),
+    auditRepository.getDistinctEntityTypes(tenantId)
   ]);
 
   return {
-    actions: actions.map(a => a.action),
-    entityTypes: entityTypes.map(e => e.entityType)
+    actions,
+    entityTypes
   };
 }
+

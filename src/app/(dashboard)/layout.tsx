@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBanner } from "@/components/layout/TopBanner";
-import { resolveTenantContext, getTenantContext, TenantContextError } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext, resolveTenantContext as getTenantContext } from "@/lib/auth/resolve-tenant-context";
+import { TenantContextError } from "@/lib/auth/auth-errors";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { PermissionProvider } from "@/components/providers/permission-provider";
@@ -20,9 +21,14 @@ export default async function DashboardLayout({
   // We don't await it to avoid blocking the initial page load.
   runDailyJobsIfNeeded().catch(err => console.error('[DashboardLayout] Daily jobs error:', err));
 
+  let user: any;
+  let tenantId: string | undefined;
+
   try {
     // Force tenant resolution - this will throw/redirect if not APPROVED
-    await resolveTenantContext();
+    const context = await resolveTenantContext();
+    user = context.user;
+    tenantId = context.tenantId;
   } catch (error: any) {
     // CRITICAL: Let Next.js redirect() errors propagate naturally.
     // redirect() works by throwing a special error internally — catching
@@ -54,13 +60,11 @@ export default async function DashboardLayout({
     redirect("/unauthorized");
   }
 
-  const { user, tenantId } = await getTenantContext();
-  const permissions = await getUserPermissions();
-  
-  let tenantSettings;
-  if (tenantId) {
-    tenantSettings = await getClinicSettings(tenantId);
-  }
+  // Fetch permissions and settings concurrently
+  const [permissions, tenantSettings] = await Promise.all([
+    getUserPermissions(),
+    tenantId ? getClinicSettings(tenantId) : Promise.resolve(null)
+  ]);
 
   // Pass only plain serializable properties to Client Components
   const sidebarSettings = {

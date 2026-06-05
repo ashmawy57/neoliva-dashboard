@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { resolveTenantContext } from "@/lib/tenant-context";
+import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 
 export default async function ServicesPage() {
   const { tenantId } = await resolveTenantContext();
