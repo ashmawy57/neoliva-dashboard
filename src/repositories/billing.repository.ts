@@ -43,28 +43,47 @@ export class BillingRepository {
    * Get financial statistics for a tenant
    */
   async getFinancialStats(tenantId: string) {
-    const invoices = await prisma.invoice.findMany({
-      where: { tenantId },
-      select: {
-        totalAmount: true,
-        paidAmount: true,
-        status: true,
-        dueDate: true
-      }
-    });
-
     const now = new Date();
 
-    const stats = {
-      totalRevenue: invoices.reduce((sum, i) => sum + Number(i.paidAmount), 0),
-      pendingAmount: invoices.reduce((sum, i) => sum + (Number(i.totalAmount) - Number(i.paidAmount)), 0),
-      overdueAmount: invoices
-        .filter(i => i.status !== 'PAID' && i.dueDate && new Date(i.dueDate) < now)
-        .reduce((sum, i) => sum + (Number(i.totalAmount) - Number(i.paidAmount)), 0),
-      overdueCount: invoices.filter(i => i.status !== 'PAID' && i.dueDate && new Date(i.dueDate) < now).length
-    };
+    const [general, overdue] = await Promise.all([
+      prisma.invoice.aggregate({
+        where: { tenantId },
+        _sum: {
+          totalAmount: true,
+          paidAmount: true
+        }
+      }),
+      prisma.invoice.aggregate({
+        where: {
+          tenantId,
+          status: { not: 'PAID' },
+          dueDate: { lt: now }
+        },
+        _sum: {
+          totalAmount: true,
+          paidAmount: true
+        },
+        _count: {
+          id: true
+        }
+      })
+    ]);
 
-    return stats;
+    const totalRevenue = Number(general._sum.paidAmount || 0);
+    const totalInvoiced = Number(general._sum.totalAmount || 0);
+    const pendingAmount = totalInvoiced - totalRevenue;
+
+    const overdueTotal = Number(overdue._sum.totalAmount || 0);
+    const overduePaid = Number(overdue._sum.paidAmount || 0);
+    const overdueAmount = overdueTotal - overduePaid;
+    const overdueCount = overdue._count.id || 0;
+
+    return {
+      totalRevenue,
+      pendingAmount,
+      overdueAmount,
+      overdueCount
+    };
   }
 
   async findUnique(tenantId: string, id: string) {
@@ -108,7 +127,7 @@ export class BillingRepository {
   /**
    * Creates an invoice with items atomically
    */
-  async create(tenantId: string, data: Omit<Prisma.InvoiceUncheckedCreateInput, 'tenantId' | 'totalAmount'> & { totalAmount?: number | any }) {
+  async create(tenantId: string, data: Omit<Prisma.InvoiceUncheckedCreateInput, 'tenantId' | 'totalAmount'> & { totalAmount?: number | any }, tx?: Prisma.TransactionClient) {
     // Calculate total amount if items are provided in the create-input style
     let totalAmount = 0;
     if (data.items && typeof data.items === 'object' && 'create' in data.items) {
@@ -118,7 +137,8 @@ export class BillingRepository {
       }
     }
 
-    return await prisma.invoice.create({
+    const client = tx || prisma;
+    return await client.invoice.create({
       data: {
         ...data,
         totalAmount: data.totalAmount || totalAmount,
@@ -151,10 +171,10 @@ export class BillingRepository {
     method: PaymentMethod;
     notes?: string;
     paidAt?: Date;
-  }) {
-    return prisma.$transaction(async (tx) => {
+  }, tx?: Prisma.TransactionClient) {
+    const execute = async (client: Prisma.TransactionClient) => {
       // 1. Fetch invoice with strict tenant isolation
-      const invoice = await tx.invoice.findFirst({
+      const invoice = await client.invoice.findFirst({
         where: { id: invoiceId, tenantId },
         select: {
           id: true,
@@ -183,7 +203,7 @@ export class BillingRepository {
       }
 
       // 3. Create the Payment record
-      const payment = await tx.payment.create({
+      const payment = await client.payment.create({
         data: {
           invoiceId,
           patientId: invoice.patientId,
@@ -204,7 +224,7 @@ export class BillingRepository {
       }
 
       // 5. Update the Invoice record
-      await tx.invoice.update({
+      await client.invoice.update({
         where: { id: invoiceId, tenantId },
         data: { 
           paidAmount: newPaidAmount,
@@ -214,7 +234,13 @@ export class BillingRepository {
       });
 
       return payment;
-    });
+    };
+
+    if (tx) {
+      return execute(tx);
+    } else {
+      return prisma.$transaction(execute);
+    }
   }
 
   async delete(tenantId: string, id: string) {

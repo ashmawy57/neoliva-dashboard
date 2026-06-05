@@ -7,9 +7,24 @@ import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/au
 
 const patientService = new PatientService();
 
-export default async function PatientsPage() {
+const PATIENTS_PER_PAGE = 15;
+
+interface PatientsPageProps {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}
+
+export default async function PatientsPage({ searchParams }: PatientsPageProps) {
   const { tenantId } = await resolveTenantContext();
-  const patientsData = await patientService.getPatientsList(tenantId);
+
+  // Await the searchParams Promise (Next.js 15+ async searchParams)
+  const params  = await searchParams;
+  const page    = Math.max(1, parseInt(params.page   ?? "1",  10) || 1);
+  const search  = (params.search ?? "").trim();
+
+  const { patients, total, totalPages } = await patientService.getPatientsPaginated(
+    tenantId,
+    { page, limit: PATIENTS_PER_PAGE, search }
+  );
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -17,13 +32,19 @@ export default async function PatientsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">Patients</h1>
           <p className="text-sm text-gray-500 mt-1">
-            <span className="font-medium text-gray-700">{patientsData.length}</span> registered patients
+            <span className="font-medium text-gray-700">{total}</span> registered patients
           </p>
         </div>
         <AddPatientDialog />
       </div>
 
-      <PatientsTable initialPatients={patientsData} />
+      <PatientsTable
+        initialPatients={patients}
+        total={total}
+        totalPages={totalPages}
+        currentPage={page}
+        currentSearch={search}
+      />
     </div>
   );
 }

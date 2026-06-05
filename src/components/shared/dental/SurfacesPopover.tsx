@@ -19,19 +19,19 @@ export function SurfacesPopover({ tooth, surfaces, onSurfaceChange }: SurfacesPo
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="group p-1.5 hover:bg-white hover:shadow-md rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-100 border border-transparent hover:border-gray-100 flex items-center justify-center bg-gray-50/50">
-          <ToothSurfacesSvg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" surfaces={surfaces} />
+        <button className="group p-1.5 hover:bg-card hover:shadow-md rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-100 border border-transparent hover:border-border flex items-center justify-center bg-muted/50">
+          <ToothSurfacesSvg className="w-5 h-5 text-muted-foreground group-hover:text-blue-500 transition-colors" surfaces={surfaces} />
         </button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-[340px] p-0 rounded-3xl shadow-2xl border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden bg-white/95 backdrop-blur-xl">
-        <div className="bg-gray-50/80 px-5 py-4 border-b border-gray-100">
-          <h4 className="text-sm font-bold text-gray-900">Surface Mapping</h4>
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mt-0.5">Tooth #{tooth}</p>
+      <PopoverContent className="w-full max-w-[calc(100vw-2rem)] sm:w-[340px] p-0 rounded-3xl shadow-2xl border-border animate-in zoom-in-95 duration-200 overflow-hidden bg-popover/95 backdrop-blur-xl">
+        <div className="bg-muted/80 px-5 py-4 border-b border-border">
+          <h4 className="text-sm font-bold text-foreground">Surface Mapping</h4>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">Tooth #{tooth}</p>
         </div>
 
         <div className="p-5 space-y-6">
-          <div className="relative aspect-square w-36 mx-auto bg-white rounded-3xl p-3 shadow-inner border border-gray-100">
+          <div className="relative aspect-square w-36 mx-auto bg-card rounded-3xl p-3 shadow-inner border border-border">
             <InteractiveSurfacesSvg 
               surfaces={surfaces} 
               onClickWedge={(wedge) => {
@@ -51,13 +51,13 @@ export function SurfacesPopover({ tooth, surfaces, onSurfaceChange }: SurfacesPo
             {Object.entries(SURFACE_LABELS).map(([key, label]) => (
               <div key={key} className="space-y-2">
                 <div className="flex items-center justify-between">
-                   <span className="text-[11px] font-bold text-gray-700 uppercase tracking-tight">{label}</span>
-                   <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-gray-50 text-gray-500 font-medium">
+                   <span className="text-[11px] font-bold text-foreground uppercase tracking-tight">{label}</span>
+                   <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-muted text-muted-foreground border-border font-medium">
                      {SURFACE_COLORS.find(c => c.hex === surfaces[key as SurfaceKey])?.label || "Normal"}
                    </Badge>
                 </div>
-                <div className="flex justify-between items-center bg-gray-50/50 p-1.5 rounded-xl border border-gray-100">
-                  {SURFACE_COLORS.map((c, i) => (
+                <div className="flex justify-between items-center bg-muted/50 p-1.5 rounded-xl border border-border">
+                   {SURFACE_COLORS.map((c, i) => (
                     <button
                       key={i}
                       title={c.label}
@@ -76,9 +76,9 @@ export function SurfacesPopover({ tooth, surfaces, onSurfaceChange }: SurfacesPo
             ))}
           </div>
           
-          <div className="pt-4 border-t border-gray-50 flex items-center gap-2 justify-center">
+          <div className="pt-4 border-t border-border flex items-center gap-2 justify-center">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            <p className="text-[10px] text-gray-400 font-medium italic">
+            <p className="text-[10px] text-muted-foreground font-medium italic">
               Mapped surfaces persist automatically to chart
             </p>
           </div>

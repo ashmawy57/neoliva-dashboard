@@ -7,7 +7,14 @@ import { ClinicSettingsForm } from "@/components/settings/ClinicSettingsForm";
 import { BillingSettingsForm } from "@/components/settings/BillingSettingsForm";
 import { NotificationSettingsForm } from "@/components/settings/NotificationSettingsForm";
 
+import { hasPermission } from "@/lib/rbac";
+import { PermissionCode } from "@/types/permissions";
+import { redirect } from "next/navigation";
+
 export default async function SettingsPage() {
+  if (!(await hasPermission(PermissionCode.SETTINGS_CLINIC_EDIT))) {
+    redirect("/dashboard");
+  }
   const settings = await fetchSettingsAction();
 
   return (

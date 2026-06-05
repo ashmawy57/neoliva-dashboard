@@ -1,4 +1,4 @@
-import { getDashboardData } from "@/app/actions/dashboard";
+import { getDashboardData } from "./query";
 import { DashboardKPIs } from "@/components/dashboard/DashboardKPIs";
 import { AdvancedCharts } from "@/components/dashboard/DynamicCharts";
 import { InsightsEngine } from "@/components/dashboard/InsightsEngine";

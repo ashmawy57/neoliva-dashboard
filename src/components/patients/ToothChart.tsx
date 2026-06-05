@@ -407,7 +407,7 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
         </div>
       </div>
 
-      <Card className="border-0 shadow-sm bg-white overflow-hidden">
+      <Card className="border-0 shadow-sm bg-white">
         <CardContent className="p-8 relative">
           {isUpdating && (
             <div className="absolute inset-0 z-10 bg-white/40 backdrop-blur-[1px] flex items-center justify-center">
@@ -417,7 +417,11 @@ export function ToothChart({ patient, onRefresh }: { patient: any; onRefresh?: (
               </div>
             </div>
           )}
-          <DentalGrid renderTooth={renderTooth} />
+          <div className="overflow-x-auto scrollbar-thin">
+            <div className="min-w-[700px]">
+              <DentalGrid renderTooth={renderTooth} />
+            </div>
+          </div>
         </CardContent>
       </Card>
 

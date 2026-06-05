@@ -146,10 +146,8 @@ export class AppointmentService {
   async getAppointmentFormData(tenantId: string) {
     try {
       this.validateTenant(tenantId);
-      const [doctors, servicesRaw] = await Promise.all([
-        staffRepository.findStaff(tenantId, 'DOCTOR', { id: true, name: true }),
-        serviceRepository.findMany(tenantId, { select: { id: true, name: true, duration: true, price: true } })
-      ]);
+      const doctors = await staffRepository.findStaff(tenantId, 'DOCTOR', { id: true, name: true });
+      const servicesRaw = await serviceRepository.findMany(tenantId, { select: { id: true, name: true, duration: true, price: true } });
 
       const services = (servicesRaw || []).map(s => ({
         ...s,

@@ -9,7 +9,6 @@ import {
   Stethoscope, 
   ClipboardList,
   Palette,
-  User,
   Search,
   Loader2
 } from "lucide-react";
@@ -35,6 +34,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { createAppointment } from "@/app/actions/appointments";
 import { searchPatients } from "@/app/actions/patients";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AppointmentSchema } from "@/lib/validations/schemas";
+import { z } from "zod";
+
+type AppointmentFormValues = z.infer<typeof AppointmentSchema>;
 
 interface NewAppointmentDialogProps {
   doctors: any[];
@@ -44,16 +49,37 @@ interface NewAppointmentDialogProps {
 export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    patientId: "",
-    doctorId: "",
-    serviceId: "",
-    date: new Date().toISOString().split('T')[0],
-    time: "09:00",
-    treatment: "",
-    notes: "",
-    color: "from-blue-500 to-indigo-600"
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors }
+  } = useForm<AppointmentFormValues>({
+    resolver: zodResolver(AppointmentSchema) as any,
+    defaultValues: {
+      patientId: "",
+      doctorId: "",
+      serviceId: "",
+      date: new Date(),
+      time: "09:00",
+      duration: 30,
+      treatment: "",
+      notes: "",
+      color: "from-blue-500 to-indigo-600",
+      roomId: "",
+      chairId: ""
+    }
   });
+
+  const watchedPatientId = watch("patientId");
+  const watchedColor = watch("color");
+  const watchedDoctorId = watch("doctorId");
+  const watchedServiceId = watch("serviceId");
+  const watchedDate = watch("date");
+  const watchedTime = watch("time");
 
   // Client-side Async Search State
   const [patientQuery, setPatientQuery] = useState("");
@@ -63,16 +89,7 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
   const [showDropdown, setShowDropdown] = useState(false);
 
   const resetForm = () => {
-    setFormData({
-      patientId: "",
-      doctorId: "",
-      serviceId: "",
-      date: new Date().toISOString().split('T')[0],
-      time: "09:00",
-      treatment: "",
-      notes: "",
-      color: "from-blue-500 to-indigo-600"
-    });
+    reset();
     setPatientQuery("");
     setPatientResults([]);
     setSelectedPatientName("");
@@ -99,28 +116,28 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
   };
 
   const handleSelectPatient = (id: string, name: string) => {
-    setFormData({ ...formData, patientId: id });
+    setValue("patientId", id, { shouldValidate: true });
     setSelectedPatientName(name);
     setShowDropdown(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.patientId || !formData.doctorId) {
-      toast.error("Please select a patient and a doctor");
-      return;
+  const handleServiceChange = (serviceId: string) => {
+    setValue("serviceId", serviceId, { shouldValidate: true });
+    const service = services.find(s => s.id === serviceId);
+    if (service) {
+      setValue("duration", service.duration || 30, { shouldValidate: true });
+      setValue("treatment", service.name, { shouldValidate: true });
     }
+  };
 
+  const onSubmit = async (data: AppointmentFormValues) => {
     setIsSubmitting(true);
-    
     try {
-      const selectedService = services.find(s => s.id === formData.serviceId);
-      
+      const selectedService = services.find(s => s.id === data.serviceId);
       const res = await createAppointment({
-        ...formData,
-        duration: selectedService?.duration || 30,
-        treatment: formData.treatment || selectedService?.name || "General Checkup"
+        ...data,
+        duration: selectedService?.duration || data.duration || 30,
+        treatment: data.treatment || selectedService?.name || "General Checkup"
       });
 
       if (res.success) {
@@ -144,6 +161,13 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
     { name: "Rose", value: "from-rose-500 to-pink-600" },
     { name: "Purple", value: "from-purple-500 to-violet-600" },
   ];
+
+  // Convert date to YYYY-MM-DD for standard input value
+  const getDateValue = () => {
+    if (!watchedDate) return "";
+    const d = new Date(watchedDate);
+    return isNaN(d.getTime()) ? "" : d.toISOString().split('T')[0];
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -169,7 +193,7 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <div className="p-6 md:p-8 space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Patient Selection (Async Combobox Search) */}
@@ -177,7 +201,7 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                 <Label className="text-xs md:text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-500" /> Patient
                 </Label>
-                {formData.patientId ? (
+                {watchedPatientId ? (
                   <div className="flex items-center justify-between h-10 md:h-12 px-4 border border-blue-200 bg-blue-50/30 rounded-xl md:rounded-2xl">
                     <div className="flex items-center gap-2 text-sm text-blue-900 font-medium">
                       <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs text-blue-700 font-bold">
@@ -190,12 +214,12 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                       variant="ghost" 
                       size="sm" 
                       onClick={() => {
-                        setFormData({ ...formData, patientId: "" });
+                        setValue("patientId", "");
                         setSelectedPatientName("");
                         setPatientQuery("");
                         setPatientResults([]);
                       }}
-                      className="h-7 px-2 text-xs text-blue-600 hover:text-rose-600 hover:bg-rose-50"
+                      className="h-7 px-2 text-xs text-blue-600 hover:text-rose-600 hover:bg-rose-50 border-0 bg-transparent"
                     >
                       Change
                     </Button>
@@ -228,7 +252,7 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                                 key={p.id}
                                 type="button"
                                 onClick={() => handleSelectPatient(p.id, p.name)}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition-colors flex flex-col cursor-pointer"
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition-colors flex flex-col cursor-pointer border-0 bg-transparent"
                               >
                                 <span className="font-semibold">{p.name}</span>
                                 <span className="text-[10px] text-gray-500">{p.phone ? p.phone : p.displayId}</span>
@@ -240,6 +264,7 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                     )}
                   </div>
                 )}
+                {errors.patientId && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.patientId.message}</p>}
               </div>
 
               {/* Doctor Selection */}
@@ -247,16 +272,17 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                 <Label className="text-xs md:text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                   <Stethoscope className="w-4 h-4 text-blue-500" /> Doctor
                 </Label>
-                <Select value={formData.doctorId} onValueChange={(val) => setFormData({ ...formData, doctorId: val })}>
+                <Select value={watchedDoctorId} onValueChange={(val) => setValue("doctorId", val, { shouldValidate: true })}>
                   <SelectTrigger className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50">
                     <SelectValue placeholder="Select doctor" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl md:rounded-2xl border-gray-100 shadow-xl p-1">
+                  <SelectContent className="rounded-xl md:rounded-2xl border-gray-100 shadow-xl p-1 bg-white">
                     {doctors.map(d => (
                       <SelectItem key={d.id} value={d.id} className="rounded-lg md:rounded-xl my-0.5">Dr. {d.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.doctorId && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.doctorId.message}</p>}
               </div>
 
               {/* Service Selection */}
@@ -264,16 +290,17 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                 <Label className="text-xs md:text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                   <ClipboardList className="w-4 h-4 text-blue-500" /> Service
                 </Label>
-                <Select value={formData.serviceId} onValueChange={(val) => setFormData({ ...formData, serviceId: val })}>
+                <Select value={watchedServiceId || undefined} onValueChange={handleServiceChange}>
                   <SelectTrigger className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50">
                     <SelectValue placeholder="Select service" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl md:rounded-2xl border-gray-100 shadow-xl p-1">
+                  <SelectContent className="rounded-xl md:rounded-2xl border-gray-100 shadow-xl p-1 bg-white">
                     {services.map(s => (
                       <SelectItem key={s.id} value={s.id} className="rounded-lg md:rounded-xl my-0.5">{s.name} (${s.price})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.serviceId && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.serviceId.message}</p>}
               </div>
 
               {/* Treatment Name */}
@@ -282,11 +309,11 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                   <Palette className="w-4 h-4 text-blue-500" /> Treatment
                 </Label>
                 <Input 
+                  {...register("treatment")}
                   placeholder="e.g. Tooth Extraction" 
-                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50"
-                  value={formData.treatment}
-                  onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
+                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50 text-gray-900"
                 />
+                {errors.treatment && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.treatment.message}</p>}
               </div>
 
               {/* Date */}
@@ -296,10 +323,11 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                 </Label>
                 <Input 
                   type="date" 
-                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  value={getDateValue()}
+                  onChange={(e) => setValue("date", e.target.value ? new Date(e.target.value) : new Date(), { shouldValidate: true })}
+                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50 text-gray-900"
                 />
+                {errors.date && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.date.message}</p>}
               </div>
 
               {/* Time */}
@@ -309,10 +337,10 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                 </Label>
                 <Input 
                   type="time" 
-                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50"
-                  value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  {...register("time")}
+                  className="h-10 md:h-12 border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50 text-gray-900"
                 />
+                {errors.time && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.time.message}</p>}
               </div>
             </div>
 
@@ -326,38 +354,39 @@ export function NewAppointmentDialog({ doctors, services }: NewAppointmentDialog
                   <button
                     key={c.value}
                     type="button"
-                    onClick={() => setFormData({ ...formData, color: c.value })}
-                    className={`w-8 h-8 rounded-lg bg-gradient-to-br ${c.value} transition-all ${formData.color === c.value ? 'ring-2 ring-offset-2 ring-blue-500 scale-110 shadow-lg' : 'opacity-60 hover:opacity-100'}`}
+                    onClick={() => setValue("color", c.value)}
+                    className={`w-8 h-8 rounded-lg bg-gradient-to-br ${c.value} transition-all cursor-pointer ${watchedColor === c.value ? 'ring-2 ring-offset-2 ring-blue-500 scale-110 shadow-lg' : 'opacity-60 hover:opacity-100'}`}
                   />
                 ))}
               </div>
+              {errors.color && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.color.message}</p>}
             </div>
 
             {/* Notes */}
             <div className="space-y-2">
               <Label className="text-xs md:text-sm font-bold text-gray-700 uppercase tracking-wider">Clinical Notes</Label>
               <Textarea 
+                {...register("notes")}
                 placeholder="Any special instructions or clinical notes..." 
-                className="min-h-[100px] border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50 resize-none"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="min-h-[100px] border-gray-200 focus:ring-blue-500/20 rounded-xl md:rounded-2xl bg-gray-50/50 resize-none text-gray-900"
               />
+              {errors.notes && <p className="text-xs text-red-500 mt-0.5 font-medium">{errors.notes.message}</p>}
             </div>
           </div>
 
-          <DialogFooter className="px-6 md:px-8 py-4 md:py-6 border-t border-gray-100 bg-gray-50 flex gap-3 sm:justify-end">
+          <DialogFooter className="px-6 md:px-8 py-4 md:py-6 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 sm:justify-end">
             <Button 
               type="button" 
               variant="outline" 
               onClick={() => setIsOpen(false)}
-              className="h-10 md:h-12 px-6 rounded-xl md:rounded-2xl font-semibold border-gray-200 hover:bg-white cursor-pointer"
+              className="w-full sm:w-auto h-10 md:h-12 px-6 rounded-xl md:rounded-2xl font-semibold border-gray-200 hover:bg-white cursor-pointer"
               disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
-              className="h-10 md:h-12 px-8 rounded-xl md:rounded-2xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 cursor-pointer"
+              className="w-full sm:w-auto h-10 md:h-12 px-8 rounded-xl md:rounded-2xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 cursor-pointer border-0"
               disabled={isSubmitting}
             >
               {isSubmitting ? "Creating..." : "Schedule Appointment"}

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
+import { startOfDay, endOfDay, subDays, subMonths, startOfMonth, startOfWeek, endOfWeek } from "date-fns";
 
 export class DashboardRepository {
   async getRecentPatients(tenantId: string) {
@@ -176,76 +176,59 @@ export class DashboardRepository {
 
   async getFinancialStats(tenantId: string) {
     const now = new Date();
-
-    // ── P1 FIX: Constrain to a rolling 12-month window. ─────────────────────
-    // Previously this was an unbounded findMany that loaded every invoice ever
-    // created for the tenant. The oldest record the service layer consumes is
-    // the previous calendar month (for the month-over-month growth KPI), so
-    // 12 months covers all callers with a 10× reduction in scan range for a
-    // clinic with multi-year history.
     const twelveMonthsAgo = startOfMonth(subMonths(now, 12));
 
-    const [invoices, expenses] = await Promise.all([
-      prisma.invoice.findMany({
-        where: {
-          tenantId,
-          createdAt: { gte: twelveMonthsAgo },
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: twelveMonthsAgo },
+      },
+      select: {
+        totalAmount: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        tenantId,
+        date: {
+          gte: startOfDay(now),
+          lte: endOfDay(now),
         },
-        select: {
-          totalAmount: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-      // Expenses are only used today for the daily cash-out KPI.
-      prisma.expense.findMany({
-        where: {
-          tenantId,
-          date: {
-            gte: startOfDay(now),
-            lte: endOfDay(now),
-          },
-        },
-        select: {
-          amount: true,
-        },
-      }),
-    ]);
+      },
+      select: {
+        amount: true,
+      },
+    });
 
     return { invoices, expenses };
   }
 
   async getActivityFeed(tenantId: string) {
-    // ── P3 FIX: Apply date boundaries before take:5. ────────────────────────
-    // Without a createdAt/updatedAt filter Postgres must sort the entire
-    // tenant partition before it can discard all rows beyond the first 5.
-    // Bounding both sub-queries to the trailing 7 days means the planner
-    // uses the (tenantId, createdAt) index range-scan — orders of magnitude
-    // cheaper on high-volume tenants. Activity older than 7 days is not
-    // meaningful for a "recent activity" feed.
     const sevenDaysAgo = subDays(new Date(), 7);
 
-    const [appointments, payments] = await Promise.all([
-      prisma.appointment.findMany({
-        where: {
-          tenantId,
-          createdAt: { gte: sevenDaysAgo },
-        },
-        include: { patient: true, doctor: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
-      prisma.invoice.findMany({
-        where: {
-          tenantId,
-          status: "PAID",
-          updatedAt: { gte: sevenDaysAgo },
-        },
-        include: { patient: true },
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-      }),
-    ]);
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: sevenDaysAgo },
+      },
+      include: { patient: true, doctor: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    const payments = await prisma.invoice.findMany({
+      where: {
+        tenantId,
+        status: "PAID",
+        updatedAt: { gte: sevenDaysAgo },
+      },
+      include: { patient: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+    });
 
     return { appointments, payments };
   }

@@ -9,10 +9,8 @@ import { NewAppointmentDialog } from "@/components/appointments/NewAppointmentDi
 import { AppointmentsView } from "@/components/appointments/AppointmentsView";
 
 export default async function AppointmentsPage() {
-  const [data, formData] = await Promise.all([
-    getAppointmentsData(),
-    getAppointmentFormData()
-  ]);
+  const data = await getAppointmentsData();
+  const formData = await getAppointmentFormData();
 
   const { list, stats: statsData } = data;
 

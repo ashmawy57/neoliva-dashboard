@@ -9,19 +9,29 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+import { usePermission } from "@/components/providers/permission-provider";
+import { PermissionCode } from "@/types/permissions";
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  permission?: PermissionCode;
+}
+
+const navItems: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Appointments", href: "/appointments", icon: Calendar },
-  { name: "Patients", href: "/patients", icon: Users },
-  { name: "Services", href: "/services", icon: Stethoscope },
-  { name: "Lab Orders", href: "/lab-orders", icon: Truck },
-  { name: "Billing", href: "/billing", icon: FileText },
-  { name: "Expenses", href: "/expenses", icon: Wallet },
-  { name: "Inventory", href: "/inventory", icon: Package },
-  { name: "Staff", href: "/staff", icon: UserCog },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Operations", href: "/dashboard/operations", icon: Activity },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Appointments", href: "/appointments", icon: Calendar, permission: PermissionCode.APPOINTMENT_VIEW },
+  { name: "Patients", href: "/patients", icon: Users, permission: PermissionCode.PATIENT_VIEW },
+  { name: "Services", href: "/services", icon: Stethoscope, permission: PermissionCode.SETTINGS_SERVICES_MANAGE },
+  { name: "Lab Orders", href: "/lab-orders", icon: Truck, permission: PermissionCode.CLINICAL_LAB_ORDER_MANAGE },
+  { name: "Billing", href: "/billing", icon: FileText, permission: PermissionCode.BILLING_VIEW },
+  { name: "Expenses", href: "/expenses", icon: Wallet, permission: PermissionCode.BILLING_VIEW },
+  { name: "Inventory", href: "/inventory", icon: Package, permission: PermissionCode.INVENTORY_VIEW },
+  { name: "Staff", href: "/staff", icon: UserCog, permission: PermissionCode.STAFF_MANAGE },
+  { name: "Reports", href: "/reports", icon: BarChart3, permission: PermissionCode.STAFF_REPORTS_VIEW },
+  { name: "Operations", href: "/dashboard/operations", icon: Activity, permission: PermissionCode.ADMIN_FULL_ACCESS },
+  { name: "Settings", href: "/settings", icon: Settings, permission: PermissionCode.SETTINGS_CLINIC_EDIT },
 ];
 
 import { signOut } from "@/app/actions/signout";
@@ -32,6 +42,9 @@ import { toast } from "sonner";
 export function MobileSidebar({ settings }: { settings?: { clinicName: string; logoUrl: string | null } }) {
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { hasPermission } = usePermission();
+
+  const filteredNavItems = navItems.filter(item => !item.permission || hasPermission(item.permission));
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -63,7 +76,7 @@ export function MobileSidebar({ settings }: { settings?: { clinicName: string; l
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link

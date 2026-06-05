@@ -44,12 +44,82 @@ export class InventoryRepository {
       } : {}),
     };
 
-    return await prisma.inventoryItem.findMany({
+    const items = await prisma.inventoryItem.findMany({
       where,
-      include: {
-        stockEntries: true,
-      },
       orderBy: { name: 'asc' },
+    });
+
+    if (items.length === 0) return [];
+
+    // Query aggregated stock entries for these items
+    const stockGroups = await prisma.stockEntry.groupBy({
+      by: ['itemId', 'type'],
+      where: {
+        tenantId,
+        itemId: { in: items.map(i => i.id) }
+      },
+      _sum: {
+        quantity: true
+      },
+      _max: {
+        createdAt: true
+      }
+    });
+
+    // Create a map for quick lookup
+    const stockMap: Record<string, { IN: number; OUT: number; lastCreated: Date }> = {};
+    for (const group of stockGroups) {
+      if (!stockMap[group.itemId]) {
+        stockMap[group.itemId] = { IN: 0, OUT: 0, lastCreated: new Date(0) };
+      }
+      const qty = Number(group._sum.quantity || 0);
+      const createdAt = group._max.createdAt || new Date(0);
+      
+      if (group.type === 'IN') {
+        stockMap[group.itemId].IN += qty;
+      } else if (group.type === 'OUT') {
+        stockMap[group.itemId].OUT += qty;
+      }
+      
+      if (createdAt > stockMap[group.itemId].lastCreated) {
+        stockMap[group.itemId].lastCreated = createdAt;
+      }
+    }
+
+    // Attach aggregated stockEntries to match the expected shape
+    return items.map(item => {
+      const stock = stockMap[item.id];
+      if (!stock) {
+        return {
+          ...item,
+          stockEntries: [] as any[]
+        };
+      }
+      return {
+        ...item,
+        stockEntries: [
+          { 
+            id: `mock-in-${item.id}`,
+            itemId: item.id,
+            type: 'IN' as const, 
+            quantity: stock.IN, 
+            reason: 'Aggregated Sum',
+            referenceId: null,
+            tenantId,
+            createdAt: stock.lastCreated,
+          },
+          { 
+            id: `mock-out-${item.id}`,
+            itemId: item.id,
+            type: 'OUT' as const, 
+            quantity: stock.OUT, 
+            reason: 'Aggregated Sum',
+            referenceId: null,
+            tenantId,
+            createdAt: stock.lastCreated,
+          }
+        ] as any[]
+      };
     });
   }
 

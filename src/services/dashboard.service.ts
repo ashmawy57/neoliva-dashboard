@@ -1,34 +1,21 @@
 import { DashboardRepository } from "@/repositories/dashboard.repository";
-import { subMonths, startOfMonth, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
+import { subMonths, startOfMonth, differenceInMinutes } from "date-fns";
 import { formatDoctorName } from "@/lib/utils";
 
 export class DashboardService {
   private dashboardRepo = new DashboardRepository();
 
   async getDashboardData(tenantId: string) {
-    const [
-      revenueTodayRaw,
-      revenueYesterdayRaw,
-      appointmentsToday,
-      financialStats,
-      revenueVsExpensesRaw,
-      weeklyAppointmentsRaw,
-      recentPatientsRaw,
-      doctorPerformanceRaw,
-      activityFeedRaw,
-      patientQueueRaw
-    ] = await Promise.all([
-      this.dashboardRepo.getDailyRevenue(tenantId),
-      this.dashboardRepo.getYesterdayRevenue(tenantId),
-      this.dashboardRepo.getTodayAppointments(tenantId),
-      this.dashboardRepo.getFinancialStats(tenantId),
-      this.dashboardRepo.getRevenueVsExpenses(tenantId),
-      this.dashboardRepo.getWeeklyAppointments(tenantId),
-      this.dashboardRepo.getRecentPatients(tenantId),
-      this.dashboardRepo.getDoctorPerformance(tenantId),
-      this.dashboardRepo.getActivityFeed(tenantId),
-      this.dashboardRepo.getPatientQueue(tenantId)
-    ]);
+    const revenueTodayRaw = await this.dashboardRepo.getDailyRevenue(tenantId);
+    const revenueYesterdayRaw = await this.dashboardRepo.getYesterdayRevenue(tenantId);
+    const appointmentsToday = await this.dashboardRepo.getTodayAppointments(tenantId);
+    const financialStats = await this.dashboardRepo.getFinancialStats(tenantId);
+    const revenueVsExpensesRaw = await this.dashboardRepo.getRevenueVsExpenses(tenantId);
+    const weeklyAppointmentsRaw = await this.dashboardRepo.getWeeklyAppointments(tenantId);
+    const recentPatientsRaw = await this.dashboardRepo.getRecentPatients(tenantId);
+    const doctorPerformanceRaw = await this.dashboardRepo.getDoctorPerformance(tenantId);
+    const activityFeedRaw = await this.dashboardRepo.getActivityFeed(tenantId);
+    const patientQueueRaw = await this.dashboardRepo.getPatientQueue(tenantId);
 
     const revenueToday = Number(revenueTodayRaw || 0);
     const revenueYesterday = Number(revenueYesterdayRaw || 0);

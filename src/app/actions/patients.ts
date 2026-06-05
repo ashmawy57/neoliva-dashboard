@@ -10,6 +10,7 @@ import { EventService } from "@/services/event.service";
 
 const patientService = new PatientService();
 import { wrapAction } from "@/lib/observability/wrap-action";
+import { PatientSchema, formatZodError } from "@/lib/validations/schemas";
 
 
 export async function getPatients() {
@@ -26,11 +27,9 @@ export const createPatient = wrapAction(
     
     const rawFormData = Object.fromEntries(formData.entries());
 
-    const name = rawFormData.name as string
-    const phone = rawFormData.phone1 as string
-
-    if (!name || !phone) {
-      throw new Error('Missing name or phone')
+    const validation = PatientSchema.safeParse(rawFormData);
+    if (!validation.success) {
+      throw new Error(formatZodError(validation.error));
     }
 
     const patientData = patientService.buildCreateInput(rawFormData);
@@ -65,6 +64,11 @@ export const updatePatient = wrapAction(
     await requireRecordAccess('patient', id);
     
     const rawFormData = Object.fromEntries(formData.entries());
+
+    const validation = PatientSchema.safeParse(rawFormData);
+    if (!validation.success) {
+      throw new Error(formatZodError(validation.error));
+    }
 
     const updates: any = {
       name: rawFormData.name as string,

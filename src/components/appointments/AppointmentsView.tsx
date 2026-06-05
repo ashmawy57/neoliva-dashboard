@@ -338,6 +338,9 @@ function CalendarView({ items }: { items: any[] }) {
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const goToToday = () => setCurrentDate(new Date());
 
+  const monthItems = items.filter((a: any) => isSameMonth(new Date(a.startTime), currentDate))
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
   return (
     <Card className="border-0 shadow-sm overflow-hidden py-0 px-0 animate-fade-in-up bg-white">
       <div className="flex bg-white justify-between items-center px-6 py-4 border-b border-gray-100">
@@ -350,39 +353,77 @@ function CalendarView({ items }: { items: any[] }) {
           <Button variant="outline" size="sm" onClick={nextMonth} className="h-8 w-8 p-0 rounded-lg text-gray-500 cursor-pointer">&gt;</Button>
         </div>
       </div>
-      <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/80">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-          <div key={d} className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider border-r last:border-r-0 border-gray-100">
-            {d}
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-col bg-gray-200/50 gap-[1px]">
-        <div className="grid grid-cols-7 gap-[1px]">
-          {days.map((day, i) => {
-            const dayApps = items.filter((a: any) => isSameDay(new Date(a.startTime), day));
-            const isCurrentMonth = isSameMonth(day, monthStart);
 
-            return (
-              <div key={i} className={`min-h-[140px] bg-white p-2 flex flex-col ${!isCurrentMonth ? 'bg-gray-50/50 opacity-50' : 'hover:bg-blue-50/10'}`}>
-                <span className={`text-sm font-semibold mb-2 w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(day, new Date()) ? 'bg-blue-600 text-white shadow-md' : 'text-gray-700'}`}>
-                  {format(day, "d")}
-                </span>
-                <div className="flex flex-col gap-1.5 overflow-y-auto mt-1 scrollbar-hide max-h-[100px] pb-2">
-                  {dayApps.map((app: any) => (
-                    <div key={app.id} className="text-[10px] p-2 rounded-lg border border-gray-100 flex items-start gap-1.5 cursor-pointer hover:shadow-md transition-all bg-white relative overflow-hidden group">
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${app.color} opacity-80`} />
-                      <div className="pl-2 leading-tight flex-1">
-                        <p className="font-bold text-gray-800 truncate mb-0.5">{app.time}</p>
-                        <p className="text-gray-600 font-medium truncate group-hover:text-blue-600 transition-colors">{app.patient}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+      {/* Desktop Calendar Grid */}
+      <div className="hidden md:block">
+        <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/80">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+            <div key={d} className="text-center py-3 text-xs font-bold text-gray-500 uppercase tracking-wider border-r last:border-r-0 border-gray-100">
+              {d}
+            </div>
+          ))}
         </div>
+        <div className="flex flex-col bg-gray-200/50 gap-[1px]">
+          <div className="grid grid-cols-7 gap-[1px]">
+            {days.map((day, i) => {
+              const dayApps = items.filter((a: any) => isSameDay(new Date(a.startTime), day));
+              const isCurrentMonth = isSameMonth(day, monthStart);
+
+              return (
+                <div key={i} className={`min-h-[140px] bg-white p-2 flex flex-col ${!isCurrentMonth ? 'bg-gray-50/50 opacity-50' : 'hover:bg-blue-50/10'}`}>
+                  <span className={`text-sm font-semibold mb-2 w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(day, new Date()) ? 'bg-blue-600 text-white shadow-md' : 'text-gray-700'}`}>
+                    {format(day, "d")}
+                  </span>
+                  <div className="flex flex-col gap-1.5 overflow-y-auto mt-1 scrollbar-hide max-h-[100px] pb-2">
+                    {dayApps.map((app: any) => (
+                      <div key={app.id} className="text-[10px] p-2 rounded-lg border border-gray-100 flex items-start gap-1.5 cursor-pointer hover:shadow-md transition-all bg-white relative overflow-hidden group">
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${app.color} opacity-80`} />
+                        <div className="pl-2 leading-tight flex-1">
+                          <p className="font-bold text-gray-800 truncate mb-0.5">{app.time}</p>
+                          <p className="text-gray-600 font-medium truncate group-hover:text-blue-600 transition-colors">{app.patient}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Calendar List View */}
+      <div className="block md:hidden">
+        {monthItems.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 text-sm">
+            No appointments scheduled for this month.
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {monthItems.map((app: any) => {
+              const appDate = new Date(app.startTime);
+              return (
+                <div key={app.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${app.color} flex flex-col items-center justify-center text-white flex-shrink-0`}>
+                      <span className="text-[9px] font-bold uppercase">{format(appDate, "MMM")}</span>
+                      <span className="text-sm font-extrabold -mt-1">{format(appDate, "d")}</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">{app.patient}</p>
+                      <p className="text-xs text-gray-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-gray-400" /> {app.time} · {app.doctor}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className={`${statusConfig[app.status]?.className || "bg-slate-50 text-slate-600"} border text-[10px] font-semibold rounded-full px-2`}>
+                    {app.status.toLowerCase()}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Card>
   );

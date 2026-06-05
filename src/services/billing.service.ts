@@ -6,6 +6,7 @@ import { NotificationService } from "./notification.service";
 import { TreasuryService } from "./treasury.service";
 
 import { getClinicSettings } from "./settings.service";
+import { prisma } from "@/lib/prisma";
 
 const billingRepository = new BillingRepository();
 const appointmentRepository = new AppointmentRepository();
@@ -202,36 +203,40 @@ export class BillingService {
       const taxRate = Number(settings.taxRate || 0);
       const totalAmount = subtotal + (subtotal * (taxRate / 100));
 
-      const result = await billingRepository.create(tenantId, {
-        patientId: data.patientId,
-        appointmentId: data.appointmentId,
-        displayId,
-        dueDate: data.dueDate,
-        totalAmount,
-        items: {
-          create: data.items.map(item => ({
-            ...item,
-            tenantId
-          }))
-        }
-      });
+      const { result, serialized } = await prisma.$transaction(async (tx) => {
+        const createResult = await billingRepository.create(tenantId, {
+          patientId: data.patientId,
+          appointmentId: data.appointmentId,
+          displayId,
+          dueDate: data.dueDate,
+          totalAmount,
+          items: {
+            create: data.items.map(item => ({
+              ...item,
+              tenantId
+            }))
+          }
+        }, tx);
 
-      const serialized = this.serializeInvoice(result, settings);
+        const ser = this.serializeInvoice(createResult, settings);
+
+        // Record in Treasury (Double-Entry) - MUST succeed inside transaction!
+        await treasuryService.recordInvoiceCreation(tenantId, {
+          id: createResult.id,
+          displayId: ser.displayId,
+          totalAmount: ser.totalAmount,
+          patientName: ser.patientName,
+        }, tx);
+
+        return { result: createResult, serialized: ser };
+      });
 
       // Trigger Notification
       await notificationService.notifyEvent(tenantId, 'INVOICE_UNPAID', {
           invoiceId: serialized.displayId,
           patientName: serialized.patientName,
           metadata: { invoiceId: result.id }
-      });
-
-      // Record in Treasury (Double-Entry)
-      await treasuryService.recordInvoiceCreation(tenantId, {
-        id: result.id,
-        displayId: serialized.displayId,
-        totalAmount: serialized.totalAmount,
-        patientName: serialized.patientName,
-      }).catch(err => console.error("[BillingService] Treasury record failed:", err));
+      }).catch(err => console.error("[BillingService] Notification event failed:", err));
 
       return serialized;
     } catch (error) {
@@ -251,14 +256,19 @@ export class BillingService {
   }) {
     try {
       this.validateTenant(tenantId);
-      const result = await billingRepository.recordPayment(tenantId, invoiceId, data);
-      
-      // Record in Treasury (Double-Entry)
-      await treasuryService.recordPayment(tenantId, {
-        amount: data.amount,
-        method: data.method,
-        invoiceId: invoiceId,
-      }).catch(err => console.error("[BillingService] Treasury payment record failed:", err));
+
+      const result = await prisma.$transaction(async (tx) => {
+        const paymentResult = await billingRepository.recordPayment(tenantId, invoiceId, data, tx);
+        
+        // Record in Treasury (Double-Entry) - MUST succeed inside transaction!
+        await treasuryService.recordPayment(tenantId, {
+          amount: data.amount,
+          method: data.method,
+          invoiceId: invoiceId,
+        }, tx);
+
+        return paymentResult;
+      });
 
       return JSON.parse(JSON.stringify(result));
     } catch (error) {

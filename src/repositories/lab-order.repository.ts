@@ -99,23 +99,44 @@ export class LabOrderRepository {
     const endOfWeek = new Date();
     endOfWeek.setDate(now.getDate() + 7);
 
-    const orders = await prisma.labOrder.findMany({
-      where: { tenantId },
-      select: {
-        status: true,
-        cost: true,
-        dueDate: true,
-        createdAt: true
-      }
-    });
+    const [activeCount, dueThisWeekCount, receivedCount, costSum] = await Promise.all([
+      prisma.labOrder.count({
+        where: {
+          tenantId,
+          status: { in: ['SENT', 'IN_PROGRESS'] }
+        }
+      }),
+      prisma.labOrder.count({
+        where: {
+          tenantId,
+          dueDate: {
+            gte: now,
+            lte: endOfWeek
+          }
+        }
+      }),
+      prisma.labOrder.count({
+        where: {
+          tenantId,
+          status: 'RECEIVED'
+        }
+      }),
+      prisma.labOrder.aggregate({
+        where: {
+          tenantId,
+          createdAt: { gte: startOfMonth }
+        },
+        _sum: {
+          cost: true
+        }
+      })
+    ]);
 
     return {
-      activeCases: orders.filter(o => ['SENT', 'IN_PROGRESS'].includes(o.status)).length,
-      dueThisWeek: orders.filter(o => o.dueDate && o.dueDate >= now && o.dueDate <= endOfWeek).length,
-      received: orders.filter(o => o.status === 'RECEIVED').length,
-      monthlyCost: orders
-        .filter(o => o.createdAt && o.createdAt >= startOfMonth)
-        .reduce((sum, o) => sum + Number(o.cost || 0), 0)
+      activeCases: activeCount,
+      dueThisWeek: dueThisWeekCount,
+      received: receivedCount,
+      monthlyCost: Number(costSum._sum.cost || 0)
     };
   }
 }

@@ -180,6 +180,107 @@ export class PatientService {
     }
   }
 
+  /**
+   * getPatientsPaginated — Scalable, server-side paginated patient list.
+   *
+   * Fetches only one page of patients from the database using Prisma's `take`
+   * and `skip`. Search is delegated to the database via `contains`. The total
+   * count is fetched in parallel so neither query blocks the other.
+   *
+   * Replaces `getPatientsList` for the list-view page; retains no large
+   * nested includes (appointments/invoices) since those are not needed in the
+   * table row.
+   */
+  async getPatientsPaginated(
+    tenantId: string,
+    { page = 1, limit = 15, search = '' }: { page?: number; limit?: number; search?: string }
+  ): Promise<{ patients: any[]; total: number; totalPages: number }> {
+    try {
+      if (!tenantId) return { patients: [], total: 0, totalPages: 0 };
+
+      const safePage  = Math.max(1, page);
+      const safeLimit = Math.min(Math.max(1, limit), 100); // cap at 100 per page
+      const skip      = (safePage - 1) * safeLimit;
+
+      // Build the shared where clause — search is pushed down to the DB
+      const where = search.trim()
+        ? {
+            OR: [
+              { name:      { contains: search, mode: 'insensitive' as const } },
+              { phone:     { contains: search, mode: 'insensitive' as const } },
+              { displayId: { contains: search, mode: 'insensitive' as const } },
+              { email:     { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {};
+
+      // Fetch the page and the total count in a single round-trip via Promise.all
+      const [data, total] = await Promise.all([
+        patientRepository.findMany(tenantId, {
+          skip,
+          take: safeLimit,
+          orderBy: { createdAt: 'desc' },
+          where,
+          select: {
+            id:             true,
+            displayId:      true,
+            name:           true,
+            email:          true,
+            phone:          true,
+            gender:         true,
+            status:         true,
+            createdAt:      true,
+            avatarInitials: true,
+            colorGradient:  true,
+            // Lean aggregate fields — no full arrays loaded into memory
+            _count: {
+              select: { appointments: true },
+            },
+          },
+        }),
+        patientRepository.count(tenantId, where),
+      ]);
+
+      const patients = (data || []).map((patient: any) => {
+        try {
+          const name = this.normalizeString(patient.name, 'Unknown Patient');
+          return {
+            id:              patient.id,
+            displayId:       patient.displayId || 'P-0000',
+            name,
+            email:           this.normalizeString(patient.email, '—'),
+            phone:           this.normalizeString(patient.phone, '—'),
+            gender:          patient.gender,
+            status:          patient.status || 'Active',
+            visits:          patient._count?.appointments ?? 0,
+            avatar:          patient.avatarInitials || this.getInitials(name),
+            color:           patient.colorGradient  || 'from-blue-500 to-indigo-600',
+            registeredSince: patient.createdAt
+              ? new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+              : '—',
+            // lastVisit / nextAppt are not available without loading relations;
+            // kept as static strings to preserve the table's column contract.
+            lastVisit: '—',
+            nextAppt:  '—',
+            outstanding: 0,
+          };
+        } catch (innerError) {
+          console.error(`[PatientService.getPatientsPaginated] Mapping error for patient ${patient?.id}:`, innerError);
+          return { id: patient?.id || 'unknown', name: 'Error Loading' };
+        }
+      });
+
+      return JSON.parse(JSON.stringify({
+        patients,
+        total,
+        totalPages: Math.ceil(total / safeLimit),
+      }));
+    } catch (error) {
+      console.error('[PatientService.getPatientsPaginated] Error:', error);
+      return { patients: [], total: 0, totalPages: 0 };
+    }
+  }
+
   async getPatientsList(tenantId: string) {
     try {
       if (!tenantId) return [];

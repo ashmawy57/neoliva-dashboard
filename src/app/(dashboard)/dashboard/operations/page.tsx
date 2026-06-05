@@ -20,6 +20,8 @@ import { TrendBadge }                 from '@/components/analytics/TrendBadge';
 import { resolveTenantContext as getTenantContext } from '@/lib/auth/resolve-tenant-context';
 import { prisma }                     from '@/lib/prisma';
 import type { TimeRangeComparison }   from '@/services/analytics.service';
+import { requirePermission }          from '@/lib/rbac';
+import { PermissionCode }             from '@/types/permissions';
 
 // ─── Quick Stat ───────────────────────────────────────────────────────────────
 
@@ -225,6 +227,8 @@ async function SegmentationSection() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function OperationsPage() {
+  await requirePermission(PermissionCode.ADMIN_FULL_ACCESS);
+
   return (
     <div className="space-y-8 p-6 max-w-7xl mx-auto">
       {/* Header */}

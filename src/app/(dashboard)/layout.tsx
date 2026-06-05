@@ -74,7 +74,7 @@ export default async function DashboardLayout({
 
   return (
     <PermissionProvider initialPermissions={Array.from(permissions)}>
-      <div className="flex h-screen overflow-hidden bg-slate-50">
+      <div className="flex h-screen overflow-hidden bg-background">
         <Sidebar user={user} settings={sidebarSettings} />
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBanner user={user} settings={sidebarSettings} />

@@ -60,8 +60,8 @@ export class TreasuryRepository {
       debit: number | Prisma.Decimal;
       credit: number | Prisma.Decimal;
     }[];
-  }) {
-    const client = this.getClient();
+  }, tx?: Prisma.TransactionClient) {
+    const client = this.getClient(tx);
 
     // Validate that all accounts belong to the current tenant
     const accountIds = data.lines.map(line => line.accountId);

@@ -51,7 +51,7 @@ export class TreasuryService {
       debit: number;
       credit: number;
     }[];
-  }) {
+  }, tx?: Prisma.TransactionClient) {
     // 1. Validate balance
     const totalDebit = data.lines.reduce((sum, l) => sum + l.debit, 0);
     const totalCredit = data.lines.reduce((sum, l) => sum + l.credit, 0);
@@ -68,7 +68,7 @@ export class TreasuryService {
     // 2. Resolve accounts
     const accountMappings = await Promise.all(
       data.lines.map(async (line) => {
-        const account = await treasuryRepository.findAccountByName(tenantId, line.accountName);
+        const account = await treasuryRepository.findAccountByName(tenantId, line.accountName, tx);
         if (!account) throw new Error(`Account not found: ${line.accountName}`);
         return {
           accountId: account.id,
@@ -82,7 +82,7 @@ export class TreasuryService {
     return treasuryRepository.createJournalEntry(tenantId, {
       ...data,
       lines: accountMappings,
-    });
+    }, tx);
   }
 
   /**
@@ -90,7 +90,7 @@ export class TreasuryService {
    * DR: Accounts Receivable
    * CR: Revenue
    */
-  async recordInvoiceCreation(tenantId: string, invoice: { id: string; displayId?: string; totalAmount: number; patientName: string }) {
+  async recordInvoiceCreation(tenantId: string, invoice: { id: string; displayId?: string; totalAmount: number; patientName: string }, tx?: Prisma.TransactionClient) {
     return this.createJournalEntry(tenantId, {
       reference: invoice.id,
       description: `Invoice ${invoice.displayId || invoice.id} for ${invoice.patientName}`,
@@ -98,7 +98,7 @@ export class TreasuryService {
         { accountName: TreasuryService.SYSTEM_ACCOUNTS.RECEIVABLE, debit: invoice.totalAmount, credit: 0 },
         { accountName: TreasuryService.SYSTEM_ACCOUNTS.REVENUE, debit: 0, credit: invoice.totalAmount },
       ],
-    });
+    }, tx);
   }
 
   /**
@@ -106,7 +106,7 @@ export class TreasuryService {
    * DR: Cash/Bank
    * CR: Accounts Receivable
    */
-  async recordPayment(tenantId: string, payment: { amount: number; method: PaymentMethod; invoiceId?: string; displayId?: string }) {
+  async recordPayment(tenantId: string, payment: { amount: number; method: PaymentMethod; invoiceId?: string; displayId?: string }, tx?: Prisma.TransactionClient) {
     const assetAccount = payment.method === 'CASH' 
       ? TreasuryService.SYSTEM_ACCOUNTS.CASH 
       : TreasuryService.SYSTEM_ACCOUNTS.BANK;
@@ -118,7 +118,7 @@ export class TreasuryService {
         { accountName: assetAccount, debit: payment.amount, credit: 0 },
         { accountName: TreasuryService.SYSTEM_ACCOUNTS.RECEIVABLE, debit: 0, credit: payment.amount },
       ],
-    });
+    }, tx);
   }
 
   /**

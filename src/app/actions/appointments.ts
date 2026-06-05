@@ -9,6 +9,7 @@ import { PermissionCode } from "@/types/permissions";
 import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
+import { AppointmentSchema, formatZodError } from "@/lib/validations/schemas";
 const appointmentService = new AppointmentService();
 
 export async function getAppointmentsData() {
@@ -38,6 +39,12 @@ export const createAppointment = wrapAction(
   async (data: any) => {
     const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.APPOINTMENT_CREATE);
+    
+    const validation = AppointmentSchema.safeParse(data);
+    if (!validation.success) {
+      throw new Error(formatZodError(validation.error));
+    }
+    
     const created = await appointmentService.createAppointment(tenantId, data);
 
     await EventService.trackEvent({

@@ -11,6 +11,7 @@ import { requireRecordAccess, canAccessPatient } from "@/lib/abac";
 import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
+import { InvoiceSchema, PaymentSchema, formatZodError } from "@/lib/validations/schemas";
 const billingService = new BillingService();
 const billingRepository = new BillingRepository();
 
@@ -65,6 +66,11 @@ export const createInvoice = wrapAction(
     const { tenantId } = await resolveTenantContext();
     await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
     
+    const validation = InvoiceSchema.safeParse(data);
+    if (!validation.success) {
+      throw new Error(formatZodError(validation.error));
+    }
+    
     if (!(await canAccessPatient(data.patientId))) {
       throw new Error("ABAC Denial: You do not have access to this patient.");
     }
@@ -103,6 +109,11 @@ export const recordPayment = wrapAction(
     await requirePermission(PermissionCode.BILLING_PAYMENT_RECORD);
     await requireRecordAccess('invoice', invoiceId);
     
+    const validation = PaymentSchema.safeParse(data);
+    if (!validation.success) {
+      throw new Error(formatZodError(validation.error));
+    }
+    
     const invoice = await billingRepository.findUnique(tenantId, invoiceId);
 
     if (!invoice) throw new Error("Invoice not found or unauthorized access.");
@@ -133,7 +144,7 @@ export const deleteInvoice = wrapAction(
   'INVOICE_DELETE',
   async (patientId: string, invoiceId: string) => {
     const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_INVOICE_CREATE);
+    await requirePermission(PermissionCode.ADMIN_FULL_ACCESS);
     await requireRecordAccess('invoice', invoiceId);
     await billingService.deleteInvoice(tenantId, invoiceId);
 

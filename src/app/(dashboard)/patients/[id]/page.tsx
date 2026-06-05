@@ -5,6 +5,7 @@ import { PatientProfileContent } from "@/components/patients/PatientProfileConte
 import { PatientService } from "@/services/patient.service";
 import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
 import { prisma } from "@/lib/prisma";
+import { requireRecordAccess } from "@/lib/abac";
 
 const patientService = new PatientService();
 
@@ -15,6 +16,9 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
   // Resolve context
   const context = await resolveTenantContext();
   const { tenantId: currentTenantId, user } = context;
+
+  // Enforce ABAC record level access
+  await requireRecordAccess('patient', patientId);
 
   // 1. Service Layer Result
   const patient = await patientService.getPatientProfile(currentTenantId, patientId);
