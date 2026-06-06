@@ -15,9 +15,28 @@ const globalForPrisma = globalThis as unknown as {
 export const rlsStorage = new AsyncLocalStorage<{ inTx: boolean; tenantId: string }>();
 
 const createPrismaClient = () => {
+  // ── Connection Pool Configuration ────────────────────────────────────────
+  // `DB_POOL_MAX` controls the maximum number of simultaneous DB connections.
+  //
+  // • Fallback is 15 to allow local load testing without hitting artificial
+  //   bottlenecks. Under `max:2`, a concurrency of 3+ requests will queue,
+  //   causing "Unable to start a transaction" errors at load-test scale.
+  //
+  // • For Serverless Production (Vercel): ensure DATABASE_URL points to the
+  //   Supabase Connection Pooler (port 6543, not 5432) and append
+  //   `?pgbouncer=true` to the connection string. PgBouncer manages the
+  //   actual Postgres connections, so a lower DB_POOL_MAX (e.g. 5-10) is
+  //   appropriate there to avoid exhausting the pooler's slot limit.
+  //
+  // Recommended values:
+  //   Local dev / load testing : DB_POOL_MAX=15  (or unset — uses fallback)
+  //   Vercel Serverless        : DB_POOL_MAX=5   (short-lived instances)
+  //   Dedicated server         : DB_POOL_MAX=20  (adjust to PG max_connections)
+  const poolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 15;
+
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 2,
+    max:              poolMax,
     idleTimeoutMillis: 30000,
   });
 
