@@ -147,14 +147,18 @@ export class TreasuryRepository {
    */
   async findPayments(tenantId: string, filters?: { invoiceId?: string; patientId?: string }) {
     const client = this.getClient();
+    
+    // Construct where clause
+    const whereClause: any = { tenantId };
+    if (filters?.invoiceId) whereClause.invoiceId = filters.invoiceId;
+    if (filters?.patientId) whereClause.invoice = { patientId: filters.patientId };
+
     return client.payment.findMany({
-      where: {
-        tenantId,
-        ...filters,
-      },
+      where: whereClause,
       include: {
-        invoice: true,
-        patient: true,
+        invoice: {
+          include: { patient: true }
+        }
       },
       orderBy: {
         paidAt: "desc",

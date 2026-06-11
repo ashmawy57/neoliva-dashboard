@@ -1,11 +1,14 @@
 'use server'
 
+import { withPermission } from "@/lib/rbac/guard";
+
+
 import { revalidatePath } from 'next/cache'
 import { ServiceService } from "@/services/service.service";
 import { ServiceCategory } from "@/generated/client";
-import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
-import { requirePermission } from "@/lib/rbac";
-import { PermissionCode } from "@/types/permissions";
+
+
+
 
 import { wrapAction } from "@/lib/observability/wrap-action";
 
@@ -16,13 +19,14 @@ const serviceService = new ServiceService();
  */
 export async function getServices() {
   try {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.DASHBOARD_VIEW);
-    const data = await serviceService.getServices(tenantId);
-    return data;
+    return await withPermission('settings', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const data = await serviceService.getServices(tenantId);
+          return data;
+    });
   } catch (error) {
     console.error('[Actions] Error fetching services:', error);
-    return [];
+        return [];
   }
 }
 
@@ -39,12 +43,13 @@ export const createServiceAction = wrapAction(
     description?: string;
     popular?: boolean;
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
-    const result = await serviceService.createService(tenantId, data);
-    revalidatePath('/services');
-    revalidatePath('/appointments'); 
-    return result;
+    return withPermission('settings', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await serviceService.createService(tenantId, data);
+          revalidatePath('/services');
+          revalidatePath('/appointments'); 
+          return result;
+    });
   },
   { module: 'settings', entityType: 'SERVICE' }
 );
@@ -62,11 +67,12 @@ export const updateServiceAction = wrapAction(
     description: string;
     popular: boolean;
   }>) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
-    const result = await serviceService.updateService(tenantId, id, data);
-    revalidatePath('/services');
-    return result;
+    return withPermission('settings', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await serviceService.updateService(tenantId, id, data);
+          revalidatePath('/services');
+          return result;
+    });
   },
   { module: 'settings', entityType: 'SERVICE' }
 );
@@ -77,11 +83,12 @@ export const updateServiceAction = wrapAction(
 export const deleteServiceAction = wrapAction(
   'SERVICE_DELETE',
   async (id: string) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.SETTINGS_SERVICES_MANAGE);
-    const result = await serviceService.deleteService(tenantId, id);
-    revalidatePath('/services');
-    return result;
+    return withPermission('settings', 'delete', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await serviceService.deleteService(tenantId, id);
+          revalidatePath('/services');
+          return result;
+    });
   },
   { module: 'settings', entityType: 'SERVICE' }
 );

@@ -1,10 +1,13 @@
 'use server'
 
+import { withPermission } from "@/lib/rbac/guard";
+
+
 import { revalidatePath } from 'next/cache'
 import { StaffService } from "@/services/staff.service";
-import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
-import { requirePermission } from "@/lib/rbac";
-import { PermissionCode } from "@/types/permissions";
+
+
+
 import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
@@ -18,71 +21,72 @@ import { createStaffInvitation } from "./auth";
  */
 export async function getStaff() {
   try {
-    await requirePermission(PermissionCode.STAFF_VIEW);
-    const { tenantId } = await resolveTenantContext();
-    const data = await staffService.getStaffList(tenantId);
-
-    const getInitials = (name: string) => {
-      const parts = name?.split(' ') || [];
-      if (parts.length >= 2) {
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-      }
-      return (name?.[0] || 'S').toUpperCase();
-    }
-
-    const colors = [
-      'from-blue-500 to-indigo-600',
-      'from-violet-500 to-purple-600',
-      'from-pink-500 to-rose-600',
-      'from-emerald-500 to-teal-600',
-      'from-amber-500 to-orange-600'
-    ];
-
-    return data.map((member, index) => {
-      const colorIndex = index % colors.length;
+    return await withPermission('staff', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const data = await staffService.getStaffList(tenantId);
       
-      const formatRole = (roleStr: string) => {
-        if (!roleStr) return 'Receptionist';
-        return roleStr.charAt(0).toUpperCase() + roleStr.slice(1).toLowerCase();
-      };
-
-      return {
-        id: member.id,
-        name: member.name || 'Unknown',
-        role: formatRole(member.role),
-        email: member.email || '—',
-        avatar: getInitials(member.name),
-        color: colors[colorIndex],
-        status: member.status,
-        isPending: member.isPending
-      }
-    })
+          const getInitials = (name: string) => {
+            const parts = name?.split(' ') || [];
+            if (parts.length >= 2) {
+              return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+            }
+            return (name?.[0] || 'S').toUpperCase();
+          }
+      
+          const colors = [
+            'from-blue-500 to-indigo-600',
+            'from-violet-500 to-purple-600',
+            'from-pink-500 to-rose-600',
+            'from-emerald-500 to-teal-600',
+            'from-amber-500 to-orange-600'
+          ];
+      
+          return data.map((member, index) => {
+            const colorIndex = index % colors.length;
+            
+            const formatRole = (roleStr: string) => {
+              if (!roleStr) return 'Receptionist';
+              return roleStr.charAt(0).toUpperCase() + roleStr.slice(1).toLowerCase();
+            };
+      
+            return {
+              id: member.id,
+              name: member.name || 'Unknown',
+              role: formatRole(member.role),
+              email: member.email || '—',
+              avatar: getInitials(member.name),
+              color: colors[colorIndex],
+              status: member.status,
+              isPending: member.isPending
+            }
+          })
+    });
   } catch (error) {
     console.error('Error fetching staff:', error);
-    return [];
+        return [];
   }
 }
 
 export const createStaff = wrapAction(
   'STAFF_CREATE',
   async (formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) => {
-    await requirePermission(PermissionCode.STAFF_MANAGE);
-    const { tenantId } = await resolveTenantContext();
-    
-    // We call the auth action which handles the token, hashing and secure DB creation
-    const result = await createStaffInvitation({
-      email: formData.email,
-      fullName: formData.name,
-      role: formData.role as any,
-      jobTitle: formData.title
-    }, tenantId);
-
-    if (!result.success) {
-      throw new Error(result.error || "Failed to create invitation");
-    }
-
-    revalidatePath('/staff');
-    return { id: result.invitationId, ...formData };
+    return withPermission('staff', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      // We call the auth action which handles the token, hashing and secure DB creation
+          const result = await createStaffInvitation({
+            email: formData.email,
+            fullName: formData.name,
+            role: formData.role as any,
+            jobTitle: formData.title
+          }, tenantId);
+      
+          if (!result.success) {
+            throw new Error(result.error || "Failed to create invitation");
+          }
+      
+          revalidatePath('/staff');
+          return { id: result.invitationId, ...formData };
+    });
   },
   { module: 'staff', entityType: 'STAFF' }
 );
@@ -93,22 +97,23 @@ export const createStaff = wrapAction(
 export const updateStaff = wrapAction(
   'STAFF_UPDATE',
   async (id: string, updates: Partial<{ name: string; role: string; title: string; email: string; phone: string; status: string }>) => {
-    await requirePermission(PermissionCode.STAFF_MANAGE);
-    const { tenantId } = await resolveTenantContext();
-    const result = await staffService.updateStaffMember(tenantId, id, updates);
-
-    if (updates.role) {
-      await EventService.trackEvent({
-        tenantId,
-        eventType: 'STAFF_ROLE_CHANGED',
-        entityType: 'STAFF',
-        entityId: id,
-        metadata: { newRole: updates.role }
-      });
-    }
-
-    revalidatePath('/staff');
-    return result;
+    return withPermission('staff', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await staffService.updateStaffMember(tenantId, id, updates);
+      
+          if (updates.role) {
+            await EventService.trackEvent({
+              tenantId,
+              eventType: 'STAFF_ROLE_CHANGED',
+              entityType: 'STAFF',
+              entityId: id,
+              metadata: { newRole: updates.role }
+            });
+          }
+      
+          revalidatePath('/staff');
+          return result;
+    });
   },
   { module: 'staff', entityType: 'STAFF' }
 );
@@ -119,19 +124,20 @@ export const updateStaff = wrapAction(
 export const deleteStaff = wrapAction(
   'STAFF_DELETE',
   async (id: string) => {
-    await requirePermission(PermissionCode.STAFF_MANAGE);
-    const { tenantId } = await resolveTenantContext();
-    await staffService.deleteStaffMember(tenantId, id);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'STAFF_DELETED',
-      entityType: 'STAFF',
-      entityId: id
+    return withPermission('staff', 'delete', async (session) => {
+      const tenantId = session.tenantId;
+      await staffService.deleteStaffMember(tenantId, id);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'STAFF_DELETED',
+            entityType: 'STAFF',
+            entityId: id
+          });
+      
+          revalidatePath('/staff');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/staff');
-    return { success: true };
   },
   { module: 'staff', entityType: 'STAFF' }
 );

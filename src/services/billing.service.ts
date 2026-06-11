@@ -212,7 +212,10 @@ export class BillingService {
           totalAmount,
           items: {
             create: data.items.map(item => ({
-              ...item,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.price,
+              serviceId: item.serviceId || null,
               tenantId
             }))
           }
@@ -303,7 +306,7 @@ export class BillingService {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         items: (inv.items || []).map((item: any) => ({
           ...item,
-          price: Number(item.price || 0)
+          price: Number(item.unitPrice || item.price || 0)
         })),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         payments: (inv.payments || []).map((p: any) => ({

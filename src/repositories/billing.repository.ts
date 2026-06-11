@@ -133,7 +133,7 @@ export class BillingRepository {
     if (data.items && typeof data.items === 'object' && 'create' in data.items) {
       const items = (data.items as any).create;
       if (Array.isArray(items)) {
-        totalAmount = items.reduce((sum: number, item: any) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+        totalAmount = items.reduce((sum: number, item: any) => sum + (Number(item.unitPrice || item.price || 0) * Number(item.quantity || 1)), 0);
       }
     }
 
@@ -206,7 +206,6 @@ export class BillingRepository {
       const payment = await client.payment.create({
         data: {
           invoiceId,
-          patientId: invoice.patientId,
           amount: data.amount,
           method: data.method,
           notes: data.notes,

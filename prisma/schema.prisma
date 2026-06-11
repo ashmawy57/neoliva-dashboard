@@ -48,7 +48,9 @@ model Tenant {
   businessEvents          BusinessEvent[]
   
   staffInvitations        StaffInvitation[]
-  memberships             TenantMembership[]
+  tenantMemberships       TenantMembership[]
+  memberships             ClinicMembership[]
+  invitations             Invitation[]
   rooms                   Room[]
 
   @@index([createdAt])
@@ -147,6 +149,7 @@ model Staff {
   appointments    Appointment[]
   prescriptions   Prescription[]
   tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships     ClinicMembership[]
 
   @@index([tenantId, id])
   @@index([tenantId, createdAt])
@@ -222,7 +225,6 @@ model Patient {
   patientMedications      PatientMedication[]
   patientSurgeries        PatientSurgery[]
   tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  payments                Payment[]
   periodontalMeasurements PeriodontalMeasurement[]
   prescriptions           Prescription[]
   toothConditions         ToothCondition[]
@@ -360,6 +362,7 @@ model Service {
   inventoryUsages    ServiceInventoryUsage[]
   tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   treatmentPlanItems TreatmentPlanItem[]
+  invoiceItems       InvoiceItem[]
 
   @@index([tenantId, id])
   @@index([tenantId, createdAt])
@@ -392,36 +395,78 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId   String  @map("invoice_id") @db.Uuid
-  tenantId    String  @map("tenant_id") @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  serviceId   String?  @map("service_id") @db.Uuid
   description String
-  price       Decimal @db.Decimal
-  quantity    Int     @default(1)
-  serviceId   String? @map("service_id") @db.Uuid
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @map("price") @db.Decimal(10, 2)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, invoiceId])
   @@map("invoice_items")
 }
 
 model Payment {
-  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId String?       @map("invoice_id") @db.Uuid
-  patientId String?       @map("patient_id") @db.Uuid
-  amount    Decimal       @db.Decimal
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  amount    Decimal  @db.Decimal(10, 2)
+  method    String
+  reference String?
   notes     String?
-  tenantId  String        @map("tenant_id") @db.Uuid
-  paidAt    DateTime      @default(now()) @map("paid_at") @db.Timestamptz(6)
-  method    PaymentMethod
-  invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  patient   Patient?      @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paidAt    DateTime @default(now()) @map("paid_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, invoiceId])
-  @@index([tenantId, patientId])
+  @@index([tenantId, paidAt])
   @@map("payments")
+}
+
+model ClinicMembership {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  staffId   String?  @map("staff_id") @db.Uuid
+  role      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  staff  Staff? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([tenantId, isActive])
+  @@map("clinic_memberships")
+}
+
+model Invitation {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  email      String
+  role       String
+  token      String    @unique @default(dbgenerated("encode(gen_random_bytes(32), 'hex')"))
+  invitedBy  String?   @map("invited_by") @db.Uuid
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([tenantId, email])
+  @@index([expiresAt])
+  @@map("invitations")
 }
 
 model Expense {

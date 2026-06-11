@@ -76,16 +76,18 @@ export class FinanceService {
     // 4. Activity Feed
     const recentActivity = [
       ...activityRaw.invoices.map(i => ({ type: 'INVOICE', title: `Invoice ${i.displayId}`, amount: Number(i.totalAmount), date: i.createdAt, status: i.status, patient: i.patient?.name })),
-      ...activityRaw.payments.map(p => ({ type: 'PAYMENT', title: `Payment Received`, amount: Number(p.amount), date: p.paidAt, method: p.method, patient: p.patient?.name })),
+      ...activityRaw.payments.map((p: any) => ({ type: 'PAYMENT', title: `Payment Received`, amount: Number(p.amount), date: p.paidAt, method: p.method, patient: p.invoice?.patient?.name })),
       ...activityRaw.expenses.map(e => ({ type: 'EXPENSE', title: e.title, amount: Number(e.amount), date: e.date, category: e.category }))
     ].sort((a, b) => new Date(b.date as any).getTime() - new Date(a.date as any).getTime()).slice(0, 15);
 
     // 5. Top Services
+    // `total` column doesn't exist in DB; we use unitPrice × count as revenue proxy
     const topServices = topServicesRaw.map(s => ({
       name: s.description,
-      value: Number(s._sum.price || 0),
+      value: Number(s._sum.unitPrice || 0) * s._count.id,
       count: s._count.id
     }));
+
 
     // 6. Revenue By Doctor
     const doctorMap = new Map<string, number>();

@@ -13,54 +13,54 @@ import {
 
 interface KPIProps {
   data: {
-    revenueToday: { value: number; change: number };
-    monthlyGrowth: number;
-    profitMargin: number;
-    collectionRate: number;
+    todayAppointments: number;
+    totalPatients: number;
+    monthlyRevenue: number;
+    pendingInvoices: number;
   };
 }
 
 export function DashboardKPIs({ data }: KPIProps) {
   const kpis = [
     {
-      title: "Revenue Today",
-      value: `$${data.revenueToday.value.toLocaleString()}`,
-      sub: `${data.revenueToday.change >= 0 ? '+' : ''}${data.revenueToday.change.toFixed(1)}% vs yesterday`,
+      title: "Today's Appointments",
+      value: data.todayAppointments.toString(),
+      sub: "Appointments scheduled for today",
       icon: TrendingUp,
       gradient: "from-blue-600 to-indigo-600",
       shadow: "shadow-blue-200",
-      trend: data.revenueToday.change >= 0 ? "up" : "down",
-      percentage: data.revenueToday.change
+      trend: "none",
+      percentage: 0
     },
     {
-      title: "Monthly Growth",
-      value: `${data.monthlyGrowth.toFixed(1)}%`,
-      sub: "Revenue growth MoM",
+      title: "Total Patients",
+      value: data.totalPatients.toLocaleString(),
+      sub: "Active registered patients",
       icon: Target,
       gradient: "from-indigo-600 to-purple-600",
       shadow: "shadow-indigo-200",
-      trend: data.monthlyGrowth >= 0 ? "up" : "down",
-      percentage: data.monthlyGrowth
+      trend: "none",
+      percentage: 0
     },
     {
-      title: "Profit Margin",
-      value: `${data.profitMargin.toFixed(1)}%`,
-      sub: "Net profit after expenses",
+      title: "Monthly Revenue",
+      value: `$${data.monthlyRevenue.toLocaleString()}`,
+      sub: "Revenue collected this month",
       icon: PieChart,
       gradient: "from-emerald-500 to-teal-500",
       shadow: "shadow-emerald-200",
-      trend: data.profitMargin >= 20 ? "up" : "none",
-      percentage: data.profitMargin
+      trend: "none",
+      percentage: 0
     },
     {
-      title: "Collection Rate",
-      value: `${data.collectionRate.toFixed(1)}%`,
-      sub: "Paid vs invoiced amount",
+      title: "Pending Invoices",
+      value: data.pendingInvoices.toString(),
+      sub: "Unpaid patient invoices",
       icon: Wallet,
       gradient: "from-amber-500 to-orange-500",
       shadow: "shadow-amber-200",
-      trend: data.collectionRate >= 90 ? "up" : "down",
-      percentage: data.collectionRate
+      trend: "none",
+      percentage: 0
     }
   ];
 

@@ -267,12 +267,18 @@ export class PatientRepository {
         dueDate: data.dueDate,
         status: data.status || 'PENDING',
         items: {
-          create: data.items.map((item: any) => ({
-            description: item.description || item.name || "Service",
-            price: item.price || item.amount || 0,
-            quantity: item.quantity || 1,
-            tenantId
-          }))
+          create: data.items.map((item: any) => {
+            const unitPrice = item.unitPrice || item.price || item.amount || 0;
+            const quantity = item.quantity || 1;
+            return {
+              description: item.description || item.name || "Service",
+              unitPrice,
+              quantity,
+              total: unitPrice * quantity,
+              serviceId: item.serviceId || null,
+              tenantId
+            };
+          })
         }
       },
       select: {

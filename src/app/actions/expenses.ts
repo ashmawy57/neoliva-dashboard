@@ -1,10 +1,13 @@
 'use server'
 
+import { withPermission } from "@/lib/rbac/guard";
+
+
 import { revalidatePath } from 'next/cache'
 import { ExpenseService } from "@/services/expense.service";
-import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
-import { requirePermission } from "@/lib/rbac";
-import { PermissionCode } from "@/types/permissions";
+
+
+
 import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
@@ -16,12 +19,13 @@ const expenseService = new ExpenseService();
  */
 export async function getExpenses(filters?: { search?: string, category?: string, status?: string }) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_VIEW);
-    return await expenseService.getExpenses(tenantId, filters);
+    return await withPermission('expenses', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      return await expenseService.getExpenses(tenantId, filters);
+    });
   } catch (error) {
     console.error('Error fetching expenses:', error);
-    return [];
+        return [];
   }
 }
 
@@ -30,12 +34,13 @@ export async function getExpenses(filters?: { search?: string, category?: string
  */
 export async function getExpenseStats() {
   try {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_VIEW);
-    return await expenseService.getExpenseStats(tenantId);
+    return await withPermission('expenses', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      return await expenseService.getExpenseStats(tenantId);
+    });
   } catch (error) {
     console.error('Error fetching expense stats:', error);
-    return null;
+        return null;
   }
 }
 
@@ -53,20 +58,21 @@ export const createExpense = wrapAction(
     notes?: string; 
     status?: string 
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
-    const result = await expenseService.createExpense(tenantId, data);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'EXPENSE_CREATED',
-      entityType: 'EXPENSE',
-      entityId: result.id,
-      metadata: { title: data.title, amount: data.amount, category: data.category }
+    return withPermission('expenses', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await expenseService.createExpense(tenantId, data);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'EXPENSE_CREATED',
+            entityType: 'EXPENSE',
+            entityId: result.id,
+            metadata: { title: data.title, amount: data.amount, category: data.category }
+          });
+      
+          revalidatePath('/expenses');
+          return result;
     });
-
-    revalidatePath('/expenses');
-    return result;
   },
   { module: 'billing', entityType: 'EXPENSE' }
 );
@@ -85,20 +91,21 @@ export const updateExpense = wrapAction(
     status: string; 
     notes: string 
   }>) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
-    const result = await expenseService.updateExpense(tenantId, id, updates);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'EXPENSE_UPDATED',
-      entityType: 'EXPENSE',
-      entityId: id,
-      metadata: { ...updates }
+    return withPermission('expenses', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await expenseService.updateExpense(tenantId, id, updates);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'EXPENSE_UPDATED',
+            entityType: 'EXPENSE',
+            entityId: id,
+            metadata: { ...updates }
+          });
+      
+          revalidatePath('/expenses');
+          return result;
     });
-
-    revalidatePath('/expenses');
-    return result;
   },
   { module: 'billing', entityType: 'EXPENSE' }
 );
@@ -109,19 +116,20 @@ export const updateExpense = wrapAction(
 export const deleteExpense = wrapAction(
   'EXPENSE_DELETE',
   async (id: string) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.BILLING_EXPENSE_MANAGE);
-    await expenseService.deleteExpense(tenantId, id);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'EXPENSE_DELETED',
-      entityType: 'EXPENSE',
-      entityId: id
+    return withPermission('expenses', 'delete', async (session) => {
+      const tenantId = session.tenantId;
+      await expenseService.deleteExpense(tenantId, id);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'EXPENSE_DELETED',
+            entityType: 'EXPENSE',
+            entityId: id
+          });
+      
+          revalidatePath('/expenses');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/expenses');
-    return { success: true };
   },
   { module: 'billing', entityType: 'EXPENSE' }
 );

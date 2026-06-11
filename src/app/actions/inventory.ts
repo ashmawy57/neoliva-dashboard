@@ -1,10 +1,13 @@
 'use server'
 
+import { withPermission } from "@/lib/rbac/guard";
+
+
 import { revalidatePath } from 'next/cache';
 import { InventoryService } from "@/services/inventory.service";
-import { resolveTenantContextOrRedirect as resolveTenantContext } from "@/lib/auth/resolve-tenant-context";
-import { requirePermission } from "@/lib/rbac";
-import { PermissionCode } from "@/types/permissions";
+
+
+
 import { EventService } from "@/services/event.service";
 
 import { wrapAction } from "@/lib/observability/wrap-action";
@@ -23,20 +26,21 @@ export const createItemAction = wrapAction(
     minimumStock: number;
     initialStock?: number;
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_MANAGE);
-    const result = await inventoryService.createItemService(tenantId, data);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'INVENTORY_ITEM_CREATED',
-      entityType: 'INVENTORY',
-      entityId: result.id,
-      metadata: { name: data.name, category: data.category }
+    return withPermission('inventory', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await inventoryService.createItemService(tenantId, data);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'INVENTORY_ITEM_CREATED',
+            entityType: 'INVENTORY',
+            entityId: result.id,
+            metadata: { name: data.name, category: data.category }
+          });
+      
+          revalidatePath('/inventory');
+          return result;
     });
-
-    revalidatePath('/inventory');
-    return result;
   },
   { module: 'inventory', entityType: 'INVENTORY' }
 );
@@ -46,14 +50,15 @@ export const createItemAction = wrapAction(
  */
 export async function getInventoryAction(filters?: { search?: string; category?: string }) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_VIEW);
-    const items = await inventoryService.getItemsService(tenantId, filters);
-    const stats = await inventoryService.getInventoryStatsService(tenantId);
-    return { success: true, data: { items, stats } };
+    return await withPermission('inventory', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const items = await inventoryService.getItemsService(tenantId, filters);
+          const stats = await inventoryService.getInventoryStatsService(tenantId);
+          return { success: true, error: undefined, data: { items, stats } };
+    });
   } catch (error: any) {
     console.error('[getInventoryAction]', error);
-    return { success: false, error: error.message };
+        return { success: false, data: undefined, error: error.message };
   }
 }
 
@@ -67,20 +72,21 @@ export const addStockAction = wrapAction(
     quantity: number;
     reason: string;
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_MANAGE);
-    await inventoryService.addStockService(tenantId, data);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'INVENTORY_STOCK_ADDED',
-      entityType: 'INVENTORY',
-      entityId: data.itemId,
-      metadata: { quantity: data.quantity, reason: data.reason }
+    return withPermission('inventory', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      await inventoryService.addStockService(tenantId, data);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'INVENTORY_STOCK_ADDED',
+            entityType: 'INVENTORY',
+            entityId: data.itemId,
+            metadata: { quantity: data.quantity, reason: data.reason }
+          });
+      
+          revalidatePath('/inventory');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/inventory');
-    return { success: true };
   },
   { module: 'inventory', entityType: 'INVENTORY', entityIdPath: 'itemId' }
 );
@@ -95,20 +101,21 @@ export const deductStockAction = wrapAction(
     quantity: number;
     reason: string;
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_MANAGE);
-    await inventoryService.deductStockService(tenantId, data);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'INVENTORY_STOCK_DEDUCTED',
-      entityType: 'INVENTORY',
-      entityId: data.itemId,
-      metadata: { quantity: data.quantity, reason: data.reason }
+    return withPermission('inventory', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      await inventoryService.deductStockService(tenantId, data);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'INVENTORY_STOCK_DEDUCTED',
+            entityType: 'INVENTORY',
+            entityId: data.itemId,
+            metadata: { quantity: data.quantity, reason: data.reason }
+          });
+      
+          revalidatePath('/inventory');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/inventory');
-    return { success: true };
   },
   { module: 'inventory', entityType: 'INVENTORY', entityIdPath: 'itemId' }
 );
@@ -118,13 +125,14 @@ export const deductStockAction = wrapAction(
  */
 export async function getItemHistoryAction(itemId: string) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_VIEW);
-    const history = await inventoryService.getItemHistoryService(tenantId, itemId);
-    return { success: true, data: history };
+    return await withPermission('inventory', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const history = await inventoryService.getItemHistoryService(tenantId, itemId);
+          return { success: true, error: undefined, data: history };
+    });
   } catch (error: any) {
     console.error('[getItemHistoryAction]', error);
-    return { success: false, error: error.message };
+        return { success: false, data: undefined, error: error.message };
   }
 }
 
@@ -139,20 +147,21 @@ export const updateItemAction = wrapAction(
     unit?: string;
     minimumStock?: number;
   }) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_MANAGE);
-    await inventoryService.updateItemService(tenantId, id, data);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'INVENTORY_ITEM_UPDATED',
-      entityType: 'INVENTORY',
-      entityId: id,
-      metadata: { ...data }
+    return withPermission('inventory', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      await inventoryService.updateItemService(tenantId, id, data);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'INVENTORY_ITEM_UPDATED',
+            entityType: 'INVENTORY',
+            entityId: id,
+            metadata: { ...data }
+          });
+      
+          revalidatePath('/inventory');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/inventory');
-    return { success: true };
   },
   { module: 'inventory', entityType: 'INVENTORY' }
 );
@@ -163,19 +172,20 @@ export const updateItemAction = wrapAction(
 export const deleteItemAction = wrapAction(
   'INVENTORY_ITEM_DELETE',
   async (id: string) => {
-    const { tenantId } = await resolveTenantContext();
-    await requirePermission(PermissionCode.INVENTORY_MANAGE);
-    await inventoryService.deleteItemService(tenantId, id);
-
-    await EventService.trackEvent({
-      tenantId,
-      eventType: 'INVENTORY_ITEM_DELETED',
-      entityType: 'INVENTORY',
-      entityId: id
+    return withPermission('inventory', 'delete', async (session) => {
+      const tenantId = session.tenantId;
+      await inventoryService.deleteItemService(tenantId, id);
+      
+          await EventService.trackEvent({
+            tenantId,
+            eventType: 'INVENTORY_ITEM_DELETED',
+            entityType: 'INVENTORY',
+            entityId: id
+          });
+      
+          revalidatePath('/inventory');
+          return { success: true, error: undefined };
     });
-
-    revalidatePath('/inventory');
-    return { success: true };
   },
   { module: 'inventory', entityType: 'INVENTORY' }
 );

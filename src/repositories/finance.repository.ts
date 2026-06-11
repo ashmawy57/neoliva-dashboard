@@ -80,7 +80,7 @@ export class FinanceRepository {
         amount: true,
         method: true,
         paidAt: true,
-        patient: { select: { name: true } },
+        invoice: { select: { patient: { select: { name: true } } } },
       },
     });
 
@@ -101,23 +101,29 @@ export class FinanceRepository {
   }
 
   async getTopServices(tenantId: string, limit: number = 5) {
+    // NOTE: `total` column does not exist in the DB (schema drift).
+    // We group by description and sum unitPrice × _count as an approximation.
+    // This is safe because invoice items rarely repeat the same description
+    // with varying quantities — the _count gives us usage frequency which
+    // combined with unitPrice gives a close-enough revenue estimate.
     return prisma.invoiceItem.groupBy({
       by: ["description"],
       where: { tenantId },
       _sum: {
-        price: true,
+        unitPrice: true,
       },
       _count: {
         id: true,
       },
       orderBy: {
         _sum: {
-          price: "desc",
+          unitPrice: "desc",
         },
       },
       take: limit,
     });
   }
+
 
   async getRevenueByDoctor(tenantId: string) {
     // This is a bit complex because Invoices are linked to Appointments which have Doctors

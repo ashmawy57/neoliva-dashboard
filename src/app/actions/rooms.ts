@@ -1,7 +1,10 @@
-'use server';
+'use server'
+
+import { withPermission } from "@/lib/rbac/guard";
+
 import { RoomService, RoomSchema, RoomAssignmentSchema } from '@/services/room.service';
 import { StaffService } from '@/services/staff.service';
-import { resolveTenantContext } from '@/lib/auth/resolve-tenant-context';
+
 import { revalidatePath } from 'next/cache';
 
 const staffService = new StaffService();
@@ -12,22 +15,23 @@ const staffService = new StaffService();
  */
 export async function createRoomAction(data: any) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    
-    // Parse data with RoomSchema (slug is now optional)
-    const result = RoomSchema.safeParse(data);
-    if (!result.success) {
-      const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      return { success: false, error: `Invalid input: ${errorMsg}` };
-    }
-
-    await RoomService.createRoom(tenantId, result.data);
-    
-    revalidatePath('/dashboard/settings/rooms');
-    return { success: true };
+    return await withPermission('clinical', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      // Parse data with RoomSchema (slug is now optional)
+          const result = RoomSchema.safeParse(data);
+          if (!result.success) {
+            const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            return { success: false, data: undefined, error: `Invalid input: ${errorMsg}` };
+          }
+      
+          await RoomService.createRoom(tenantId, result.data);
+          
+          revalidatePath('/dashboard/settings/rooms');
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[createRoomAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to create room' };
+        return { success: false, data: undefined, error: error.message || 'Failed to create room' };
   }
 }
 
@@ -36,21 +40,22 @@ export async function createRoomAction(data: any) {
  */
 export async function updateRoomAction(roomId: string, data: any) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    
-    const result = RoomSchema.partial().safeParse(data);
-    if (!result.success) {
-      const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-      return { success: false, error: `Invalid input: ${errorMsg}` };
-    }
-    
-    await RoomService.updateRoom(tenantId, roomId, result.data);
-    
-    revalidatePath('/dashboard/settings/rooms');
-    return { success: true };
+    return await withPermission('clinical', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      const result = RoomSchema.partial().safeParse(data);
+          if (!result.success) {
+            const errorMsg = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+            return { success: false, data: undefined, error: `Invalid input: ${errorMsg}` };
+          }
+          
+          await RoomService.updateRoom(tenantId, roomId, result.data);
+          
+          revalidatePath('/dashboard/settings/rooms');
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[updateRoomAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to update room' };
+        return { success: false, data: undefined, error: error.message || 'Failed to update room' };
   }
 }
 
@@ -59,16 +64,18 @@ export async function updateRoomAction(roomId: string, data: any) {
  */
 export async function assignRoomStaffAction(data: any) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    const validated = RoomAssignmentSchema.parse(data);
-    
-    await RoomService.assignStaffToRoom(tenantId, validated);
-    
-    revalidatePath(`/dashboard/settings/rooms/${validated.roomId}`);
-    return { success: true };
+    return await withPermission('clinical', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      const validated = RoomAssignmentSchema.parse(data);
+          
+          await RoomService.assignStaffToRoom(tenantId, validated);
+          
+          revalidatePath(`/dashboard/settings/rooms/${validated.roomId}`);
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[assignRoomStaffAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to assign staff' };
+        return { success: false, data: undefined, error: error.message || 'Failed to assign staff' };
   }
 }
 
@@ -77,15 +84,16 @@ export async function assignRoomStaffAction(data: any) {
  */
 export async function removeRoomStaffAction(roomId: string, userId: string) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    
-    await RoomService.removeStaffFromRoom(tenantId, roomId, userId);
-    
-    revalidatePath(`/dashboard/settings/rooms/${roomId}`);
-    return { success: true };
+    return await withPermission('clinical', 'delete', async (session) => {
+      const tenantId = session.tenantId;
+      await RoomService.removeStaffFromRoom(tenantId, roomId, userId);
+          
+          revalidatePath(`/dashboard/settings/rooms/${roomId}`);
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[removeRoomStaffAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to remove staff' };
+        return { success: false, data: undefined, error: error.message || 'Failed to remove staff' };
   }
 }
 
@@ -94,15 +102,16 @@ export async function removeRoomStaffAction(roomId: string, userId: string) {
  */
 export async function updateRoomStatusAction(roomId: string, status: any) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    
-    await RoomService.changeRoomStatus(tenantId, roomId, status);
-    
-    revalidatePath('/dashboard/rooms');
-    return { success: true };
+    return await withPermission('clinical', 'update', async (session) => {
+      const tenantId = session.tenantId;
+      await RoomService.changeRoomStatus(tenantId, roomId, status);
+          
+          revalidatePath('/dashboard/rooms');
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[updateRoomStatusAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to update status' };
+        return { success: false, data: undefined, error: error.message || 'Failed to update status' };
   }
 }
 
@@ -111,15 +120,16 @@ export async function updateRoomStatusAction(roomId: string, status: any) {
  */
 export async function addChairAction(roomId: string, name: string, code?: string) {
   try {
-    const { tenantId } = await resolveTenantContext();
-    
-    await RoomService.addChairToRoom(tenantId, roomId, name, code);
-    
-    revalidatePath(`/dashboard/settings/rooms/${roomId}`);
-    return { success: true };
+    return await withPermission('clinical', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      await RoomService.addChairToRoom(tenantId, roomId, name, code);
+          
+          revalidatePath(`/dashboard/settings/rooms/${roomId}`);
+          return { success: true, error: undefined };
+    });
   } catch (error: any) {
     console.error('[addChairAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to add chair' };
+        return { success: false, data: undefined, error: error.message || 'Failed to add chair' };
   }
 }
 
@@ -133,11 +143,13 @@ export async function addChairAction(roomId: string, name: string, code?: string
  */
 export async function getStaffOptionsAction() {
   try {
-    const { tenantId } = await resolveTenantContext();
-    const data = await staffService.getStaffOptions(tenantId);
-    return { success: true, data };
+    return await withPermission('clinical', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const data = await staffService.getStaffOptions(tenantId);
+          return { success: true, error: undefined, data };
+    });
   } catch (error: any) {
     console.error('[getStaffOptionsAction] Failed:', error);
-    return { success: false, error: error.message || 'Failed to fetch staff' };
+        return { success: false, data: undefined, error: error.message || 'Failed to fetch staff' };
   }
 }

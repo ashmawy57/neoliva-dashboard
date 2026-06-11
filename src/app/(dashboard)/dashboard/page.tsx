@@ -1,88 +1,39 @@
-import { getDashboardData } from "./query";
+import { getDashboardStats } from "@/app/actions/dashboard";
 import { DashboardKPIs } from "@/components/dashboard/DashboardKPIs";
-import { AdvancedCharts } from "@/components/dashboard/DynamicCharts";
-import { InsightsEngine } from "@/components/dashboard/InsightsEngine";
 import { OperationalPanel } from "@/components/dashboard/OperationalPanel";
-import { DoctorPerformance } from "@/components/dashboard/DoctorPerformance";
-import { FinancialFlow } from "@/components/dashboard/FinancialFlow";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { LayoutDashboard, Sparkles } from "lucide-react";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-
-// --- Granular Server Components ---
-
-async function KPIsSection() {
-  const data = await getDashboardData();
-  return <DashboardKPIs data={data.kpis} />;
-}
-
-async function ChartsSection() {
-  const data = await getDashboardData();
-  return <AdvancedCharts data={data.charts} />;
-}
-
-async function FinancialSection() {
-  const data = await getDashboardData();
-  return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <FinancialFlow data={data.financialFlow} />
-      <ActivityFeed activities={data.financialFlow.activityFeed} />
-    </div>
-  );
-}
-
-async function InsightsSection() {
-  const data = await getDashboardData();
-  return <InsightsEngine insights={data.insights} />;
-}
-
-async function OperationalSection() {
-  const data = await getDashboardData();
-  return <OperationalPanel queue={data.operational.patientQueue} />;
-}
-
-async function DoctorPerformanceSection() {
-  const data = await getDashboardData();
-  return <DoctorPerformance doctors={data.doctorPerformance} />;
-}
-
-// --- Skeleton Fallbacks ---
-
-function KPISkeleton() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      {[1, 2, 3, 4].map(i => (
-        <Skeleton key={i} className="h-28 rounded-2xl w-full" />
-      ))}
-    </div>
-  );
-}
-
-function ChartsSkeleton() {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Skeleton className="h-[380px] rounded-2xl w-full" />
-      <Skeleton className="h-[380px] rounded-2xl w-full" />
-    </div>
-  );
-}
-
-function FinancialSkeleton() {
-  return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <Skeleton className="h-[360px] rounded-2xl w-full" />
-      <Skeleton className="h-[360px] rounded-2xl w-full" />
-    </div>
-  );
-}
-
-function SidebarCardSkeleton({ height = "h-[300px]" }: { height?: string }) {
-  return <Skeleton className={`${height} rounded-2xl w-full`} />;
-}
+import { differenceInMinutes } from "date-fns";
 
 export default async function DashboardPage() {
+  const stats = await getDashboardStats();
+
+  const queue = stats.upcomingAppointments.map((a: any) => {
+    const timeComp = a.time instanceof Date ? a.time : new Date(a.time);
+    const scheduledDateTime = new Date(a.date);
+    scheduledDateTime.setHours(timeComp.getHours(), timeComp.getMinutes(), 0, 0);
+
+    const waitTime = differenceInMinutes(new Date(), scheduledDateTime);
+    
+    return {
+      id: a.id,
+      patientName: a.patient?.name || "Unknown",
+      doctorName: a.doctor?.name || "Unassigned",
+      time: scheduledDateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      waitTime: waitTime > 0 ? waitTime : 0,
+      status: a.status || "SCHEDULED"
+    }
+  });
+
+  const activities = stats.recentPatients.map((p: any) => ({
+    id: p.id,
+    type: 'patient' as const,
+    title: 'New Patient',
+    description: `${p.name} joined the clinic.`,
+    time: p.createdAt || new Date()
+  }));
+
   return (
     <div className="space-y-6 animate-fade-in-up pb-10">
       {/* Page header */}
@@ -104,36 +55,18 @@ export default async function DashboardPage() {
         <QuickActions />
       </div>
 
-      {/* Smart KPI Section */}
-      <Suspense fallback={<KPISkeleton />}>
-        <KPIsSection />
-      </Suspense>
+      <DashboardKPIs data={stats} />
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Main Analytics Column */}
         <div className="lg:col-span-8 space-y-6">
-          <Suspense fallback={<ChartsSkeleton />}>
-            <ChartsSection />
-          </Suspense>
-          
-          <Suspense fallback={<FinancialSkeleton />}>
-            <FinancialSection />
-          </Suspense>
+          <div className="grid gap-6 md:grid-cols-2">
+            <ActivityFeed activities={activities} />
+            <OperationalPanel queue={queue} />
+          </div>
         </div>
 
-        {/* Intelligence Sidebar */}
         <div className="lg:col-span-4 space-y-6">
-          <Suspense fallback={<SidebarCardSkeleton height="h-[220px]" />}>
-            <InsightsSection />
-          </Suspense>
-          
-          <Suspense fallback={<SidebarCardSkeleton height="h-[350px]" />}>
-            <OperationalSection />
-          </Suspense>
-
-          <Suspense fallback={<SidebarCardSkeleton height="h-[300px]" />}>
-            <DoctorPerformanceSection />
-          </Suspense>
+          {/* Mock components removed to strictly show real data */}
         </div>
       </div>
     </div>

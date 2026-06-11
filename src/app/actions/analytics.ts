@@ -1,8 +1,11 @@
-'use server';
+'use server'
 
-import { resolveTenantContext as getTenantContext } from '@/lib/auth/resolve-tenant-context';
-import { requirePermission } from '@/lib/rbac';
-import { PermissionCode } from '@/types/permissions';
+import { withPermission } from "@/lib/rbac/guard";
+
+
+
+
+
 import {
   getDoctorPerformance,
   getAppointmentEfficiency,
@@ -22,9 +25,9 @@ import {
 } from '@/services/analytics.service';
 
 async function getAuthorizedTenantId(): Promise<string> {
-  await requirePermission(PermissionCode.ADMIN_FULL_ACCESS);
-  const { tenantId } = await getTenantContext();
-  return tenantId;
+  return withPermission('reports', 'read', async (session) => {
+    return session.tenantId;
+  });
 }
 
 // ─── Existing actions (unchanged API) ─────────────────────────────────────────
