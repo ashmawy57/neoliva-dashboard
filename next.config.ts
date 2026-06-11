@@ -26,9 +26,6 @@ export default withSentryConfig(nextConfig, {
   // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-side errors will fail.
   tunnelRoute: "/monitoring",
 
-  // Automatically tree-shake Sentry logger statements to reduce bundle size
-  disableLogger: true,
-
-  // Enables automatic instrumentation of Vercel Cron Monitors. (Requires Next.js 15.0.0 or higher and Sentry v8.34.0 or higher)
-  automaticVercelMonitors: true,
+  // Fix for Vercel ENOENT middleware.js.nft.json trace error
+  autoInstrumentMiddleware: false,
 });
