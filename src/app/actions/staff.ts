@@ -16,15 +16,13 @@ const staffService = new StaffService();
 
 import { createStaffInvitation } from "./auth";
 
-function getCachedStaffList(tenantId: string) {
-  return unstable_cache(
-    async () => {
-      return await staffService.getStaffList(tenantId);
-    },
-    ['staff', tenantId],
-    { revalidate: 300, tags: ['staff-v2'] }
-  )();
-}
+const getCachedStaffList = unstable_cache(
+  async (tenantId: string) => {
+    return await staffService.getStaffList(tenantId);
+  },
+  ['staff-vFINAL'],
+  { revalidate: 300, tags: ['staff'] }
+);
 
 /**
  * Server Action: Fetches all staff members.
@@ -95,7 +93,7 @@ export const createStaff = wrapAction(
           }
       
           revalidatePath('/staff');
-          revalidateTag('staff-v2', 'default');
+          revalidateTag('staff', 'default');
           return { id: result.invitationId, ...formData };
     });
   },
@@ -123,7 +121,7 @@ export const updateStaff = wrapAction(
           }
       
           revalidatePath('/staff');
-          revalidateTag('staff-v2', 'default');
+          revalidateTag('staff', 'default');
           return result;
     });
   },
@@ -148,7 +146,7 @@ export const deleteStaff = wrapAction(
           });
       
           revalidatePath('/staff');
-          revalidateTag('staff-v2', 'default');
+          revalidateTag('staff', 'default');
           return { success: true, error: undefined };
     });
   },

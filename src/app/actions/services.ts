@@ -14,15 +14,13 @@ import { wrapAction } from "@/lib/observability/wrap-action";
 
 const serviceService = new ServiceService();
 
-function getCachedServices(tenantId: string) {
-  return unstable_cache(
-    async () => {
-      return await serviceService.getServices(tenantId);
-    },
-    ['services', tenantId],
-    { revalidate: 300, tags: ['services-v2'] }
-  )();
-}
+const getCachedServices = unstable_cache(
+  async (tenantId: string) => {
+    return await serviceService.getServices(tenantId);
+  },
+  ['services-vFINAL'],
+  { revalidate: 300, tags: ['services'] }
+);
 
 /**
  * Server Action: Fetches all dental services.
@@ -58,7 +56,7 @@ export const createServiceAction = wrapAction(
       const result = await serviceService.createService(tenantId, data);
           revalidatePath('/services');
           revalidatePath('/appointments'); 
-          revalidateTag('services-v2', 'default');
+          revalidateTag('services', 'default');
           return result;
     });
   },
@@ -82,7 +80,7 @@ export const updateServiceAction = wrapAction(
       const tenantId = session.tenantId!;
       const result = await serviceService.updateService(tenantId, id, data);
           revalidatePath('/services');
-          revalidateTag('services-v2', 'default');
+          revalidateTag('services', 'default');
           return result;
     });
   },
@@ -99,7 +97,7 @@ export const deleteServiceAction = wrapAction(
       const tenantId = session.tenantId!;
       const result = await serviceService.deleteService(tenantId, id);
           revalidatePath('/services');
-          revalidateTag('services-v2', 'default');
+          revalidateTag('services', 'default');
           return result;
     });
   },
