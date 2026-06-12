@@ -8,6 +8,8 @@ import { differenceInMinutes } from "date-fns";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+export const dynamic = 'force-dynamic';
+
 async function DashboardContent() {
   const stats = await getDashboardStats();
 
