@@ -20,7 +20,7 @@ const getCachedStaffList = unstable_cache(
   async (tenantId: string) => {
     return await staffService.getStaffList(tenantId);
   },
-  ['staff-vFINAL'],
+  ['staff'],
   { revalidate: 300, tags: ['staff'] }
 );
 

@@ -3,6 +3,7 @@ export type Role =
   | 'MANAGER'
   | 'ADMIN'
   | 'DOCTOR'
+  | 'ASSISTANT'
   | 'RECEPTIONIST'
   | 'ACCOUNTANT'
   | 'NURSE'
@@ -70,7 +71,20 @@ export const PERMISSIONS: PermissionMatrix = {
     lab_orders:   ['create', 'read', 'update'],
     expenses:     [],
     staff:        ['read'],
-    reports:      [],
+    reports:      ['read'],
+    settings:     [],
+  },
+
+  ASSISTANT: {
+    patients:     ['read', 'update'],
+    appointments: ['create', 'read', 'update'],
+    billing:      ['read'],
+    clinical:     ['read', 'update'],
+    inventory:    ['read'],
+    lab_orders:   ['read'],
+    expenses:     [],
+    staff:        ['read'],
+    reports:      ['read'],
     settings:     [],
   },
   RECEPTIONIST: {
