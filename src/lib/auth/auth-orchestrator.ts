@@ -31,6 +31,7 @@ import { rawPrisma } from '@/lib/prisma';
 import { TenantContextError, AuthRoutingError } from '@/lib/auth/auth-errors';
 import { normalizeRole } from '@/lib/auth/roles';
 import { validateMembership } from '@/lib/auth/resolve-tenant-context';
+import { cookies } from 'next/headers';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -290,9 +291,20 @@ export async function resolvePostAuthRedirect(
     defaultPath: requestedNext,
   });
 
+  // Set active tenant cookie so getUserSession() can resolve the tenant
+  const cookieStore = await cookies();
+  cookieStore.set('active_tenant_id', membership.tenantId, {
+    httpOnly: true,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+  });
+
   console.log(
     `[AuthOrchestrator][resolvePostAuthRedirect] Access granted: ` +
-      `user=${membership.user.email}, role=${normalizedRole}, destination=${routing.destination}`
+      `user=${membership.user.email}, role=${normalizedRole}, destination=${routing.destination}, ` +
+      `active_tenant_id=${membership.tenantId}`
   );
 
   return {

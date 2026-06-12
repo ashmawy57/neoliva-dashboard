@@ -203,6 +203,16 @@ export async function staffLogin(formData: FormData) {
 
   revalidatePath('/', 'layout');
 
+  // Set active tenant cookie so getUserSession() can resolve the tenant
+  cookieStore.set('active_tenant_id', primaryMembership.tenantId, {
+    httpOnly: true,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+  });
+  console.log(`[AUTH_TRACE][COOKIE_SET_SUCCESS] Name: active_tenant_id, Value: ${primaryMembership.tenantId}`);
+
   // Smart Redirect System based on Membership Role
   let redirectTarget = '/dashboard';
   switch (primaryMembership.role) {
