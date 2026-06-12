@@ -22,7 +22,7 @@ function getCachedStaffList(tenantId: string) {
       return await staffService.getStaffList(tenantId);
     },
     ['staff', tenantId],
-    { revalidate: 300, tags: ['staff'] }
+    { revalidate: 300, tags: ['staff-v2'] }
   )();
 }
 
@@ -95,7 +95,7 @@ export const createStaff = wrapAction(
           }
       
           revalidatePath('/staff');
-          revalidateTag('staff', 'default');
+          revalidateTag('staff-v2', 'default');
           return { id: result.invitationId, ...formData };
     });
   },
@@ -123,7 +123,7 @@ export const updateStaff = wrapAction(
           }
       
           revalidatePath('/staff');
-          revalidateTag('staff', 'default');
+          revalidateTag('staff-v2', 'default');
           return result;
     });
   },
@@ -148,7 +148,7 @@ export const deleteStaff = wrapAction(
           });
       
           revalidatePath('/staff');
-          revalidateTag('staff', 'default');
+          revalidateTag('staff-v2', 'default');
           return { success: true, error: undefined };
     });
   },

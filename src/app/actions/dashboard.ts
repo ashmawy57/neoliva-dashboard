@@ -71,7 +71,7 @@ function getCachedStats(tenantId: string) {
       }
     },
     ['dashboard-stats', tenantId],
-    { revalidate: 300, tags: ['dashboard-stats'] }
+    { revalidate: 300, tags: ['dashboard-stats-v2'] }
   )();
 }
 

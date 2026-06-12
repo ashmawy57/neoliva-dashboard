@@ -20,7 +20,7 @@ function getCachedServices(tenantId: string) {
       return await serviceService.getServices(tenantId);
     },
     ['services', tenantId],
-    { revalidate: 300, tags: ['services'] }
+    { revalidate: 300, tags: ['services-v2'] }
   )();
 }
 
@@ -58,7 +58,7 @@ export const createServiceAction = wrapAction(
       const result = await serviceService.createService(tenantId, data);
           revalidatePath('/services');
           revalidatePath('/appointments'); 
-          revalidateTag('services', 'default');
+          revalidateTag('services-v2', 'default');
           return result;
     });
   },
@@ -82,7 +82,7 @@ export const updateServiceAction = wrapAction(
       const tenantId = session.tenantId!;
       const result = await serviceService.updateService(tenantId, id, data);
           revalidatePath('/services');
-          revalidateTag('services', 'default');
+          revalidateTag('services-v2', 'default');
           return result;
     });
   },
@@ -99,7 +99,7 @@ export const deleteServiceAction = wrapAction(
       const tenantId = session.tenantId!;
       const result = await serviceService.deleteService(tenantId, id);
           revalidatePath('/services');
-          revalidateTag('services', 'default');
+          revalidateTag('services-v2', 'default');
           return result;
     });
   },
