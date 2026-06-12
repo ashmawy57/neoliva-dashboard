@@ -18,7 +18,7 @@ const getCachedServices = unstable_cache(
   async (tenantId: string) => {
     return await serviceService.getServices(tenantId);
   },
-  ['services'],
+  ['services-v3'],
   { revalidate: 300, tags: ['services'] }
 );
 

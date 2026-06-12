@@ -69,7 +69,7 @@ const getCachedStats = unstable_cache(
       upcomingAppointments,
     }
   },
-  ['dashboard-stats'],
+  ['dashboard-stats-v3'],
   { revalidate: 300, tags: ['dashboard-stats'] }
 );
 
