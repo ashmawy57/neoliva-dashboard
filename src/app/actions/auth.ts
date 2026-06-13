@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { UserRepository } from "@/repositories/user.repository";
 import { StaffRepository } from "@/repositories/staff.repository";
 import { TenantRepository } from "@/repositories/tenant.repository";
@@ -414,18 +415,28 @@ export async function createStaffInvitation(data: { email: string; fullName: str
     metadata: { email, role }
   });
 
-  // Send invitation email
+  // Send invitation via Supabase Admin (which sends the email automatically)
+  const supabaseAdmin = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   const inviteUrl = `${siteUrl}/staff/accept-invitation?token=${rawToken}`;
   
-  const tenant = await tenantRepository.findUnique(tenantId);
-  
-  await EmailService.sendStaffInvitation({
-    email,
-    fullName,
-    clinicName: tenant?.name || "Your Clinic",
-    inviteUrl
+  const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: inviteUrl,
+    data: {
+      tenantId: tenantId,
+      role: role,
+      staffId: invitation.id
+    }
   });
+
+  if (inviteError) {
+    console.error('[createStaffInvitation] Supabase invite error:', inviteError);
+    return { success: false, error: inviteError.message };
+  }
 
   revalidatePath('/dashboard/staff');
   return { success: true, invitationId: invitation.id };
