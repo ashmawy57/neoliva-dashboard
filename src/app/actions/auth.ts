@@ -419,27 +419,48 @@ export async function createStaffInvitation(data: { email: string; fullName: str
     metadata: { email, role }
   });
 
-  // Send invitation via Supabase Admin (which sends the email automatically)
+  // Send invitation securely via Supabase Admin (generate link)
+  // This bypasses Supabase's strict 500 error SMTP limits but still sets up PKCE/Auth properly.
   const supabaseAdmin = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const inviteUrl = `${siteUrl}/staff/accept-invitation?token=${rawToken}`;
+  const inviteUrl = `${siteUrl}/staff/accept-invitation`;
   
-  const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: inviteUrl,
-    data: {
-      tenantId: tenantId,
-      role: role,
-      staffId: invitation.id
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'invite',
+    email: email,
+    options: {
+      redirectTo: inviteUrl,
+      data: {
+        tenantId: tenantId,
+        role: role,
+        staffId: invitation.id
+      }
     }
   });
 
-  if (inviteError) {
-    console.error('[createStaffInvitation] Supabase invite error:', inviteError);
-    return { success: false, error: inviteError.message };
+  if (linkError) {
+    console.error('[createStaffInvitation] Supabase generateLink error:', linkError);
+    return { success: false, error: linkError.message };
+  }
+
+  // Get tenant name for the email
+  const tenant = await tenantRepository.findById(tenantId);
+
+  // Send the actual email via Resend
+  const emailResult = await EmailService.sendStaffInvitation({
+    email,
+    fullName,
+    clinicName: tenant?.name || 'Neoliva',
+    inviteUrl: linkData.properties.action_link,
+  });
+
+  if (!emailResult.success) {
+    console.error('[createStaffInvitation] Resend email failed:', emailResult.error);
+    return { success: false, error: "Failed to deliver the email. Please check your email service configuration." };
   }
 
   revalidatePath('/dashboard/staff');
