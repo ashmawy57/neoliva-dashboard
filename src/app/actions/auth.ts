@@ -448,7 +448,7 @@ export async function createStaffInvitation(data: { email: string; fullName: str
   }
 
   // Get tenant name for the email
-  const tenant = await tenantRepository.findById(tenantId);
+  const tenant = await tenantRepository.findUnique(tenantId);
 
   // Send the actual email via Resend
   const emailResult = await EmailService.sendStaffInvitation({
