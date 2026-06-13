@@ -166,14 +166,6 @@ export class StaffRepository {
         }
       });
 
-      await tx.staffInvitation.update({
-        where: { id: invite.id },
-        data: {
-          status: 'ACCEPTED',
-          acceptedAt: new Date()
-        }
-      });
-
       await tx.staff.create({
         data: {
           name: invite.fullName,
@@ -182,6 +174,14 @@ export class StaffRepository {
           tenantId: invite.tenantId,
           membershipId: membership.id,
           status: 'Online'
+        }
+      });
+
+      await tx.staffInvitation.update({
+        where: { id: invite.id },
+        data: {
+          status: 'ACCEPTED',
+          acceptedAt: new Date()
         }
       });
 
