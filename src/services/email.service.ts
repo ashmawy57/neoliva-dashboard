@@ -1,6 +1,12 @@
-import { Resend } from 'resend';
+import * as Brevo from '@getbrevo/brevo';
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const apiKey = process.env.BREVO_API_KEY;
+let apiInstance: Brevo.TransactionalEmailsApi | null = null;
+
+if (apiKey) {
+  apiInstance = new Brevo.TransactionalEmailsApi();
+  apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
+}
 
 export class EmailService {
   static async sendStaffInvitation({
@@ -14,18 +20,18 @@ export class EmailService {
     clinicName: string;
     inviteUrl: string;
   }) {
-    if (!resend) {
-      console.warn('[EmailService.sendStaffInvitation] RESEND_API_KEY not configured. Skipping email send.');
-      return { success: false, error: new Error('Email service not configured (missing RESEND_API_KEY)') };
+    if (!apiInstance) {
+      console.warn('[EmailService.sendStaffInvitation] BREVO_API_KEY not configured. Skipping email send.');
+      return { success: false, error: new Error('Email service not configured (missing BREVO_API_KEY)') };
     }
 
     try {
-      const { data, error } = await resend.emails.send({
-        from: 'Neoliva <onboarding@resend.dev>', // In production, use a verified domain
-        to: [email],
+      const { response, body } = await apiInstance.sendTransacEmail({
+        sender: { name: 'Neoliva', email: 'ashmawyalaa@gmail.com' }, // Default sender email
+        to: [{ email: email, name: fullName }],
         subject: `Invitation to join ${clinicName} on Neoliva`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; rounded: 10px;">
+        htmlContent: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
             <h2 style="color: #333;">Welcome to Neoliva, ${fullName}!</h2>
             <p style="color: #666; font-size: 16px;">
               You have been invited to join the staff at <strong>${clinicName}</strong>.
@@ -50,12 +56,7 @@ export class EmailService {
         `,
       });
 
-      if (error) {
-        console.error('[EmailService.sendStaffInvitation] Error:', error);
-        return { success: false, error };
-      }
-
-      return { success: true, data };
+      return { success: true, data: body };
     } catch (error) {
       console.error('[EmailService.sendStaffInvitation] Exception:', error);
       return { success: false, error };
