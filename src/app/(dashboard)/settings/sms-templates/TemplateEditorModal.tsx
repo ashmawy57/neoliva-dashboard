@@ -44,7 +44,11 @@ const templateSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-type TemplateFormValues = z.infer<typeof templateSchema>;
+type TemplateFormValues = {
+  name: string;
+  message: string;
+  isActive: boolean;
+};
 
 export function TemplateEditorModal({ 
   open, 
@@ -60,7 +64,7 @@ export function TemplateEditorModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<TemplateFormValues>({
-    resolver: zodResolver(templateSchema),
+    resolver: zodResolver(templateSchema) as any,
     defaultValues: {
       name: template?.name || '',
       message: template?.message || '',

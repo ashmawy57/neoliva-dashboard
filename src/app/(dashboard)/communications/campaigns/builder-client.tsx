@@ -72,7 +72,7 @@ export function CampaignBuilder() {
       if (value === "" || value === undefined) {
         delete newFilters[key];
       } else {
-        newFilters[key] = value as any;
+        (newFilters as any)[key] = value;
       }
       return newFilters;
     });

@@ -39,6 +39,7 @@ export class SmsTemplateService {
     try {
       if (!tenantId) throw new Error("Missing tenantId");
       return await smsTemplateRepository.create(tenantId, {
+        tenantId,
         name: data.name,
         category: data.category,
         message: data.message,
@@ -83,6 +84,7 @@ export class SmsTemplateService {
       if (!existing) throw new Error("Template not found");
 
       return await smsTemplateRepository.create(tenantId, {
+        tenantId,
         name: `${existing.name} (Copy)`,
         category: existing.category,
         message: existing.message,

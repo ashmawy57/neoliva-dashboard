@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Edit2, Copy, Trash2, Plus } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { updateSmsTemplate, deleteSmsTemplate, duplicateSmsTemplate } from '@/app/actions/smsTemplates';
 import { TemplateEditorModal } from './TemplateEditorModal';
