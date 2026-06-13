@@ -4,7 +4,8 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trash2, RotateCw, CheckSquare, Square, Loader2 } from "lucide-react";
-import { updatePeriodontalMeasurement, clearPeriodontalMeasurements } from "@/app/actions/patients";
+import { updatePeriodontalMeasurement, createPeriodontalSession, deletePeriodontalSession } from "@/app/actions/patients";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   DentalGrid, 
   ToothCell, 
@@ -30,12 +31,15 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
   // Prevents useEffect from overwriting local state while a save is in-flight
   const isUpdatingRef = useRef(false);
 
-  // Helper: parse measurements array → mapping object (Prisma returns camelCase)
+  const sessions = patient?.periodontalSessions ?? [];
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessions[0]?.id ?? null);
+  
+  // Helper: parse measurements array -> mapping object (Prisma returns camelCase)
   const parseMeasurements = (measurements: any[]) => {
     const mapping: any = {};
     const dates: Record<string, string> = {};
     measurements.forEach((m: any) => {
-      const tooth = m.toothNumber;       // camelCase from Prisma
+      const tooth = m.toothNumber;
       const param = m.parameterName;
       if (!mapping[tooth]) mapping[tooth] = {};
       mapping[tooth][param] = {
@@ -51,20 +55,28 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
     return { mapping, dates };
   };
 
-  // Sync state when patient prop changes
+  // Sync state when patient prop changes or selected session changes
   useEffect(() => {
     if (!patient) return;
     if (isUpdatingRef.current) {
-      isUpdatingRef.current = false; // consume the guard — skip this stale render
+      isUpdatingRef.current = false;
       return;
     }
-    const { mapping, dates } = parseMeasurements(patient.periodontalMeasurements ?? []);
+    
+    // Auto-select latest session if none selected and sessions exist
+    if (!selectedSessionId && sessions.length > 0) {
+      setSelectedSessionId(sessions[0].id);
+    }
+    
+    const currentSession = sessions.find((s: any) => s.id === selectedSessionId) || sessions[0];
+    const { mapping, dates } = parseMeasurements(currentSession?.measurements ?? []);
     setData(mapping);
     setMeasurementDates(dates);
-  }, [patient]);
+  }, [patient, selectedSessionId, sessions]);
   
   const [data, setData] = useState<Record<number, Record<string, { buccal: number[], lingual: number[], single?: number }>>>(() => {
-    const { mapping } = parseMeasurements(patient?.periodontalMeasurements ?? []);
+    const currentSession = sessions[0];
+    const { mapping } = parseMeasurements(currentSession?.measurements ?? []);
     return mapping;
   });
 
@@ -93,11 +105,11 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
 
   const saveMeasurement = (tooth: number, param: string) => {
     const measurement = data[tooth]?.[param];
-    if (!measurement) return;
+    if (!measurement || !selectedSessionId) return;
 
     isUpdatingRef.current = true;
     startTransition(async () => {
-      await updatePeriodontalMeasurement(patient.id, {
+      await updatePeriodontalMeasurement(patient.id, selectedSessionId, {
         toothNumber: tooth,
         parameterName: param,
         buccalValues: measurement.buccal,
@@ -308,26 +320,60 @@ export function Periodontogram({ patient, onRefresh }: { patient: any; onRefresh
       </div>
 
       <div className="p-3 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="text-sm font-semibold text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
-            {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <Select value={selectedSessionId || ''} onValueChange={setSelectedSessionId} disabled={isPending || sessions.length === 0}>
+              <SelectTrigger className="w-[240px] font-semibold bg-gray-100 border-gray-200">
+                <SelectValue placeholder="No Sessions Found" />
+              </SelectTrigger>
+              <SelectContent>
+                {sessions.map((session: any) => (
+                  <SelectItem key={session.id} value={session.id}>
+                    {new Date(session.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedSessionId && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if(confirm('Are you sure you want to delete this session?')) {
+                    isUpdatingRef.current = true;
+                    startTransition(async () => {
+                      await deletePeriodontalSession(patient.id, selectedSessionId);
+                      setSelectedSessionId(sessions.find((s: any) => s.id !== selectedSessionId)?.id ?? null);
+                      isUpdatingRef.current = false;
+                      onRefresh?.();
+                    });
+                  }
+                }}
+                disabled={isPending}
+                className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 px-3"
+                title="Delete Session"
+              >
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </Button>
+            )}
           </div>
+          
           <Button
             onClick={() => {
               isUpdatingRef.current = true;
               startTransition(async () => {
-                await clearPeriodontalMeasurements(patient.id);
-                setData({});
-                setMeasurementDates({});
+                const res = await createPeriodontalSession(patient.id);
+                if(res.success && res.data) {
+                  setSelectedSessionId(res.data.id);
+                }
                 isUpdatingRef.current = false;
                 onRefresh?.();
               });
             }}
             disabled={isPending}
-            className="bg-[#f44336] hover:bg-[#e53935] text-white p-2 rounded-full h-9 w-9"
-            title="Clear all measurements"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 shadow-sm"
           >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "+ New Session"}
           </Button>
         </div>
 

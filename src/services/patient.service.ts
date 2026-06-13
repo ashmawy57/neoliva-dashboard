@@ -127,7 +127,7 @@ export class PatientService {
       patientFamilyHistory: [],
       oralTissueFindings: [],
       toothConditions: [],
-      periodontalMeasurements: [],
+      periodontalSessions: [],
       prescriptions: [],
       oralConditions: [],
     };
@@ -400,6 +400,7 @@ export class PatientService {
         tenantId: true,
         appointments: true,
         invoices: {
+          where: { tenantId },
           select: {
             id: true,
             displayId: true,
@@ -410,7 +411,8 @@ export class PatientService {
             dueDate: true,
             createdAt: true,
             items: true,
-            payments: true
+            payments: true,
+            tenantId: true
           }
         },
         visitRecords: true,
@@ -422,7 +424,14 @@ export class PatientService {
         patientFamilyHistory: true,
         oralTissueFindings: true,
         toothConditions: true,
-        periodontalMeasurements: true,
+        periodontalSessions: {
+          include: {
+            measurements: true
+          },
+          orderBy: {
+            date: 'desc'
+          }
+        },
         prescriptions: {
           select: {
             id: true,
@@ -453,7 +462,7 @@ export class PatientService {
         patientFamilyHistory: data.patientFamilyHistory ?? [],
         oralTissueFindings: data.oralTissueFindings ?? [],
         toothConditions: data.toothConditions ?? [],
-        periodontalMeasurements: data.periodontalMeasurements ?? [],
+        periodontalSessions: data.periodontalSessions ?? [],
         prescriptions: data.prescriptions ?? [],
         oralConditions: data.oralConditions ?? [],
         appointments: data.appointments ?? [],
@@ -532,8 +541,8 @@ export class PatientService {
 
       const invoices = data.invoices || []
       const totalOutstanding = invoices.reduce((sum: number, inv: any) => {
-        const totalPaid = Number(inv.paidAmount || 0);
-        return sum + (Number(inv.totalAmount) - totalPaid)
+        const actualPaidAmount = (inv.payments || []).reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+        return sum + Math.max(0, Number(inv.totalAmount) - actualPaidAmount);
       }, 0)
 
       const getInitials = (name: string) => {
@@ -619,19 +628,33 @@ export class PatientService {
         familyHistory: (data.patientFamilyHistory || []).map((fh: any) => ({ ...fh })),
         oralTissueFindings: (data.oralTissueFindings || []).map((ot: any) => ({ ...ot })),
         toothConditions: (data.toothConditions || []).map((tc: any) => ({ ...tc })),
-        periodontalMeasurements: (data.periodontalMeasurements || []).map((pm: any) => ({ ...pm })),
+        periodontalSessions: (data.periodontalSessions || []).map((ps: any) => ({
+          ...ps,
+          measurements: (ps.measurements || []).map((pm: any) => ({ ...pm }))
+        })),
         oralConditions: (data.oralConditions || []).map((oc: any) => ({ ...oc })),
         visitHistory,
         invoiceHistory: (invoices || []).map((i: any) => {
-          const paidAmount = Number(i.paidAmount || 0)
           const totalAmount = Number(i.totalAmount || 0)
+          const actualPaidAmount = (i.payments || []).reduce((acc: number, p: any) => acc + Number(p.amount), 0)
+          const remainingAmount = Math.max(0, totalAmount - actualPaidAmount)
+          
+          let derivedStatus = i.status
+          if (remainingAmount <= 0) {
+            derivedStatus = 'PAID'
+          } else if (actualPaidAmount > 0) {
+            derivedStatus = 'PARTIAL'
+          } else if (remainingAmount > 0 && i.status === 'PAID') {
+            derivedStatus = 'PENDING'
+          }
+
           return {
             id: i.id,
             displayId: i.displayId || `INV-${i.id.slice(0, 8).toUpperCase()}`,
             totalAmount: totalAmount,
-            paidAmount: paidAmount,
-            remainingAmount: totalAmount - paidAmount,
-            status: i.status,
+            paidAmount: actualPaidAmount,
+            remainingAmount: remainingAmount,
+            status: derivedStatus,
             dueDate: i.dueDate ? new Date(i.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
             createdAt: i.createdAt,
             items: (i.items || []).map((item: any) => ({
@@ -720,14 +743,111 @@ export class PatientService {
     }
   }
 
-  async updatePeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
+  async getPeriodontalSessions(tenantId: string, patientId: string) {
+    try {
+      if (!tenantId || !patientId) return [];
+      const result = await patientRepository.getPeriodontalSessionsByPatient(tenantId, patientId);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.getPeriodontalSessions] Error:", error);
+      return [];
+    }
+  }
+
+  async createPeriodontalSession(tenantId: string, patientId: string, examinerId?: string) {
     try {
       if (!tenantId || !patientId) return null;
-      const result = await patientRepository.createPeriodontalMeasurement(tenantId, patientId, data);
+      const result = await patientRepository.createPeriodontalSession(tenantId, patientId, examinerId);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.createPeriodontalSession] Error:", error);
+      return null;
+    }
+  }
+
+  async updatePeriodontalSession(tenantId: string, sessionId: string, data: any) {
+    try {
+      if (!tenantId || !sessionId) return null;
+      const result = await patientRepository.updatePeriodontalSession(tenantId, sessionId, data);
+      return JSON.parse(JSON.stringify(result));
+    } catch (error) {
+      console.error("[PatientService.updatePeriodontalSession] Error:", error);
+      return null;
+    }
+  }
+
+  async deletePeriodontalSession(tenantId: string, sessionId: string) {
+    try {
+      if (!tenantId || !sessionId) return false;
+      await patientRepository.deletePeriodontalSession(tenantId, sessionId);
+      return true;
+    } catch (error) {
+      console.error("[PatientService.deletePeriodontalSession] Error:", error);
+      return false;
+    }
+  }
+
+  async updatePeriodontalMeasurement(tenantId: string, patientId: string, sessionId: string, data: any) {
+    try {
+      if (!tenantId || !patientId || !sessionId) return null;
+      const result = await patientRepository.createPeriodontalMeasurement(tenantId, patientId, sessionId, data);
+      
+      // Calculate session metrics in the background (or we could await it)
+      this.calculateSessionMetrics(tenantId, sessionId).catch(console.error);
+      
       return JSON.parse(JSON.stringify(result));
     } catch (error) {
       console.error("[PatientService.updatePeriodontalMeasurement] Error:", error);
       return null;
+    }
+  }
+
+  async calculateSessionMetrics(tenantId: string, sessionId: string) {
+    try {
+      const session = await patientRepository.getPeriodontalSessionById(tenantId, sessionId);
+      if (!session) return;
+      
+      const measurements = session.measurements || [];
+      if (measurements.length === 0) return;
+      
+      // Calculate Average Pocket Depth
+      let pdSum = 0;
+      let pdCount = 0;
+      
+      // Calculate BOP Percentage
+      let bopTotalSites = 0;
+      let bopPositiveSites = 0;
+      
+      for (const m of measurements) {
+        if (m.parameterName === 'PD') {
+          const values = [...(m.buccalValues || []), ...(m.lingualValues || [])];
+          for (const v of values) {
+            if (typeof v === 'number') {
+              pdSum += v;
+              pdCount++;
+            }
+          }
+        } else if (m.parameterName === 'BOP') {
+          const values = [...(m.buccalValues || []), ...(m.lingualValues || [])];
+          for (const v of values) {
+            bopTotalSites++;
+            // BOP might be saved as boolean (0/1) or true/false
+            if (v === true || v === 1) {
+              bopPositiveSites++;
+            }
+          }
+        }
+      }
+      
+      const averagePocketDepth = pdCount > 0 ? pdSum / pdCount : null;
+      const bopPercentage = bopTotalSites > 0 ? (bopPositiveSites / bopTotalSites) * 100 : null;
+      
+      await patientRepository.updatePeriodontalSession(tenantId, sessionId, {
+        averagePocketDepth,
+        bopPercentage
+      });
+    } catch (error) {
+      console.error("[PatientService.calculateSessionMetrics] Error:", error);
     }
   }
 

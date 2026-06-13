@@ -1,0 +1,240 @@
+import { prisma } from '@/lib/prisma';
+import { smsService } from './smsService';
+import { EventService } from './event.service';
+
+export interface CampaignFilters {
+  lastVisitMonths?: number;
+  procedures?: string[];
+  minAge?: number;
+  maxAge?: number;
+  gender?: string;
+  hasBalance?: boolean;
+}
+
+export class SmsCampaignService {
+  /**
+   * Translates filter criteria into Prisma "where" clause for Patient.
+   */
+  private buildAudienceQuery(tenantId: string, filters: CampaignFilters) {
+    const whereClause: any = {
+      tenantId,
+      phone: { not: null }, // Must have a phone number
+    };
+
+    // Age filter
+    if (filters.minAge || filters.maxAge) {
+      const now = new Date();
+      whereClause.dob = {};
+      if (filters.minAge) {
+        const maxDob = new Date();
+        maxDob.setFullYear(now.getFullYear() - filters.minAge);
+        whereClause.dob.lte = maxDob;
+      }
+      if (filters.maxAge) {
+        const minDob = new Date();
+        minDob.setFullYear(now.getFullYear() - filters.maxAge - 1);
+        whereClause.dob.gt = minDob;
+      }
+    }
+
+    // Gender filter
+    if (filters.gender) {
+      whereClause.gender = { equals: filters.gender, mode: 'insensitive' };
+    }
+
+    // Outstanding balance filter
+    if (filters.hasBalance) {
+      whereClause.invoices = {
+        some: {
+          status: { not: 'PAID' }
+          // Actually, we could check if totalAmount - paidAmount > 0,
+          // but relying on status being not 'PAID' is simpler and aligns with the system's InvoiceStatus.
+        }
+      };
+    }
+
+    // Procedure type filter
+    if (filters.procedures && filters.procedures.length > 0) {
+      whereClause.appointments = {
+        some: {
+          service: {
+            name: { in: filters.procedures }
+          }
+        }
+      };
+    }
+
+    // Last visit > N months ago
+    if (filters.lastVisitMonths) {
+      const cutoffDate = new Date();
+      cutoffDate.setMonth(cutoffDate.getMonth() - filters.lastVisitMonths);
+      
+      // Patient MUST have at least one appointment, and all of them must be BEFORE cutoffDate
+      // Or simply: last appointment was before cutoffDate.
+      // We can use: no appointments AFTER cutoffDate, but MUST have some appointments.
+      if (!whereClause.appointments) {
+         whereClause.appointments = {};
+      }
+      whereClause.appointments.none = {
+        date: { gte: cutoffDate }
+      };
+      whereClause.appointments.some = {
+        date: { lt: cutoffDate }
+      };
+    }
+
+    return whereClause;
+  }
+
+  /**
+   * Return the count of matching patients.
+   */
+  async previewAudience(tenantId: string, filters: CampaignFilters): Promise<number> {
+    const where = this.buildAudienceQuery(tenantId, filters);
+    const count = await prisma.patient.count({ where });
+    return count;
+  }
+
+  /**
+   * Check daily rate limits: max 1000 SMS per tenant per day.
+   */
+  async checkDailyLimit(tenantId: string, needed: number): Promise<boolean> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const campaignsToday = await prisma.smsCampaign.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: today },
+        status: { in: ['COMPLETED', 'PROCESSING'] }
+      }
+    });
+
+    const sentToday = campaignsToday.reduce((acc, c) => acc + c.sentCount, 0);
+    return (sentToday + needed) <= 1000;
+  }
+
+  /**
+   * Create a DRAFT campaign.
+   */
+  async createCampaign(tenantId: string, data: { name: string; message: string; filters: CampaignFilters }) {
+    return prisma.smsCampaign.create({
+      data: {
+        tenantId,
+        name: data.name,
+        message: data.message,
+        filters: data.filters as any,
+        status: 'DRAFT'
+      }
+    });
+  }
+
+  /**
+   * Process a campaign: fetches patients, replaces variables, sends batches.
+   */
+  async processCampaign(tenantId: string, campaignId: string) {
+    const campaign = await prisma.smsCampaign.findUnique({
+      where: { id: campaignId, tenantId }
+    });
+
+    if (!campaign || campaign.status !== 'DRAFT') {
+      throw new Error("Invalid campaign or not in DRAFT status");
+    }
+
+    // Mark as processing
+    await prisma.smsCampaign.update({
+      where: { id: campaignId },
+      data: { status: 'PROCESSING' }
+    });
+
+    try {
+      const filters = campaign.filters as CampaignFilters;
+      const where = this.buildAudienceQuery(tenantId, filters);
+      
+      const patients = await prisma.patient.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          appointments: {
+            orderBy: { date: 'desc' },
+            take: 1,
+            select: { date: true }
+          }
+        }
+      });
+
+      // Enforce rate limit per campaign explicitly as safety catch
+      if (patients.length > 1000) {
+        throw new Error("Campaign audience exceeds 1000 patients limit.");
+      }
+
+      const canSend = await this.checkDailyLimit(tenantId, patients.length);
+      if (!canSend) {
+        throw new Error("Daily SMS limit (1000) exceeded.");
+      }
+
+      let sentCount = 0;
+      let failedCount = 0;
+      const clinicName = "Neoliva Dental"; // In a real app, fetch from Tenant or ClinicSettings
+
+      // Process in batches of 50
+      const batchSize = 50;
+      for (let i = 0; i < patients.length; i += batchSize) {
+        const batch = patients.slice(i, i + batchSize);
+        
+        const payloads = batch.map(p => {
+          let body = campaign.message.replace(/{{patient_name}}/g, p.name);
+          body = body.replace(/{{clinic_name}}/g, clinicName);
+          
+          const lastAppt = p.appointments[0]?.date;
+          body = body.replace(/{{appointment_date}}/g, lastAppt ? lastAppt.toLocaleDateString() : 'recent visit');
+
+          return { to: p.phone as string, body };
+        });
+
+        // Use the abstract smsService
+        const result = await smsService.sendBulkSms(tenantId, payloads);
+        sentCount += result.sent;
+        failedCount += result.failed;
+      }
+
+      await prisma.smsCampaign.update({
+        where: { id: campaignId },
+        data: {
+          status: 'COMPLETED',
+          sentCount,
+          failedCount
+        }
+      });
+
+      await EventService.trackEvent({
+        tenantId,
+        eventType: 'CAMPAIGN_COMPLETED',
+        entityId: campaignId,
+        entityType: 'CAMPAIGN',
+        metadata: { sentCount, failedCount }
+      });
+
+    } catch (error: any) {
+      await prisma.smsCampaign.update({
+        where: { id: campaignId },
+        data: {
+          status: 'DRAFT', // Revert to DRAFT so it can be fixed/retried
+          failedCount: 0
+        }
+      });
+      throw error;
+    }
+  }
+
+  async getCampaigns(tenantId: string) {
+    return prisma.smsCampaign.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+}
+
+export const smsCampaignService = new SmsCampaignService();

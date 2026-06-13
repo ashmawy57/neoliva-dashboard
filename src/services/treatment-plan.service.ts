@@ -52,7 +52,10 @@ export class TreatmentPlanService {
           notes: true,
           createdAt: true,
           updatedAt: true,
-          items: true
+          invoices: { select: { id: true, displayId: true } },
+          items: {
+            include: { doctor: { select: { id: true, name: true } } }
+          }
         },
         orderBy: { createdAt: 'desc' }
       });
@@ -78,6 +81,7 @@ export class TreatmentPlanService {
             tenant: { connect: { id: tenantId } },
             serviceName: this.normalizeString(ph.name, "Phase " + (i + 1)),
             service: ph.serviceId ? { connect: { id: ph.serviceId } } : undefined,
+            doctor: ph.doctorId ? { connect: { id: ph.doctorId } } : undefined,
             toothList: ph.toothList?.join(',') || null,
             step: i + 1,
             status: ph.status || 'PLANNED',
@@ -111,10 +115,20 @@ export class TreatmentPlanService {
   async deleteTreatmentPlan(tenantId: string, planId: string) {
     try {
       this.validateTenant(tenantId);
+      
+      // Check if there are any generated invoices linked to this plan
+      const linkedInvoice = await this.repository.findMany(tenantId, {
+        where: { id: planId },
+        select: { invoices: { select: { id: true } } }
+      });
+      if (linkedInvoice?.[0]?.invoices?.length > 0) {
+        throw new Error("Cannot delete a treatment plan that has a linked invoice.");
+      }
+
       return await this.repository.delete(tenantId, planId);
-    } catch (error) {
+    } catch (error: any) {
       console.error("[TreatmentPlanService.deleteTreatmentPlan] Error:", error);
-      return false;
+      throw error;
     }
   }
 
@@ -125,6 +139,7 @@ export class TreatmentPlanService {
         plan: { connect: { id: planId } },
         serviceName: this.normalizeString(phaseData.name, "New Phase"),
         service: phaseData.serviceId ? { connect: { id: phaseData.serviceId } } : undefined,
+        doctor: phaseData.doctorId ? { connect: { id: phaseData.doctorId } } : undefined,
         toothList: phaseData.toothList?.join(',') || null,
         step: step,
         status: phaseData.status || 'PLANNED',

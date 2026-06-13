@@ -22,7 +22,7 @@ export class BillingService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getSafeInvoiceFallback(id?: string, settings?: any) {
-    return {
+    const fallback = {
       id: id || "unknown",
       displayId: "INV-0000",
       patientName: "Unknown Patient",
@@ -41,6 +41,7 @@ export class BillingService {
         email: "contact@neoliva.com"
       }
     };
+    return JSON.parse(JSON.stringify(fallback));
   }
 
   private validateTenant(tenantId: string) {
@@ -107,13 +108,62 @@ export class BillingService {
   }
 
   /**
+   * Generates an invoice from a treatment plan's data
+   */
+  async generateInvoiceFromPlan(tenantId: string, planId: string) {
+    try {
+      this.validateTenant(tenantId);
+      const settings = await getClinicSettings(tenantId);
+      if (!planId) return this.getSafeInvoiceFallback(undefined, settings);
+
+      // Check if invoice already exists for this plan
+      const existing = await prisma.invoice.findFirst({
+        where: { tenantId, planId }
+      });
+      if (existing) {
+        return this.serializeInvoice(existing, settings);
+      }
+
+      // Get plan details
+      const plan = await prisma.treatmentPlan.findUnique({
+        where: { id: planId, tenantId },
+        include: { items: { include: { service: true } } }
+      });
+      
+      if (!plan) {
+        console.warn(`[BillingService] Plan ${planId} not found for invoice generation`);
+        return this.getSafeInvoiceFallback(undefined, settings);
+      }
+
+      // Prepare items
+      const items = plan.items.map(item => ({
+        description: item.serviceName,
+        quantity: 1,
+        price: Number(item.price),
+        serviceId: item.serviceId || undefined
+      }));
+
+      // Create the invoice
+      return await this.createInvoice(tenantId, {
+        patientId: plan.patientId,
+        planId: plan.id,
+        items
+      });
+    } catch (error) {
+      console.error("[BillingService] Failed to generate invoice from plan:", error);
+      return this.getSafeInvoiceFallback();
+    }
+  }
+
+  /**
    * Get formatted invoices for the list view
    */
   async getInvoicesList(tenantId: string) {
     try {
       this.validateTenant(tenantId);
       const invoices = await billingRepository.findMany(tenantId);
-      const settings = await getClinicSettings(tenantId);
+      const rawSettings = await getClinicSettings(tenantId);
+      const settings = rawSettings ? { ...rawSettings, taxRate: Number(rawSettings.taxRate || 0) } : null;
       const now = new Date();
 
       return (invoices || []).map(inv => {
@@ -183,6 +233,7 @@ export class BillingService {
   async createInvoice(tenantId: string, data: {
     patientId: string;
     appointmentId?: string;
+    planId?: string;
     dueDate?: Date;
     items: {
       description: string;
@@ -207,6 +258,7 @@ export class BillingService {
         const createResult = await billingRepository.create(tenantId, {
           patientId: data.patientId,
           appointmentId: data.appointmentId,
+          planId: data.planId,
           displayId,
           dueDate: data.dueDate,
           totalAmount,

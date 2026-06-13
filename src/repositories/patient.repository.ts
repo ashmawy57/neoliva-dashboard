@@ -118,8 +118,50 @@ export class PatientRepository {
     });
   }
 
-  async createPeriodontalMeasurement(tenantId: string, patientId: string, data: any) {
-    // Validate that the patient belongs to the tenant
+  async getPeriodontalSessionsByPatient(tenantId: string, patientId: string) {
+    return prisma.periodontalSession.findMany({
+      where: { tenantId, patientId },
+      orderBy: { date: 'desc' },
+      include: {
+        measurements: true
+      }
+    });
+  }
+
+  async getPeriodontalSessionById(tenantId: string, sessionId: string) {
+    return prisma.periodontalSession.findFirst({
+      where: { tenantId, id: sessionId },
+      include: {
+        measurements: true
+      }
+    });
+  }
+
+  async createPeriodontalSession(tenantId: string, patientId: string, examinerId?: string) {
+    return prisma.periodontalSession.create({
+      data: {
+        tenantId,
+        patientId,
+        examinerId: examinerId || null,
+        date: new Date()
+      }
+    });
+  }
+
+  async updatePeriodontalSession(tenantId: string, sessionId: string, data: any) {
+    return prisma.periodontalSession.update({
+      where: { id: sessionId, tenantId },
+      data
+    });
+  }
+
+  async deletePeriodontalSession(tenantId: string, sessionId: string) {
+    return prisma.periodontalSession.delete({
+      where: { id: sessionId, tenantId }
+    });
+  }
+
+  async createPeriodontalMeasurement(tenantId: string, patientId: string, sessionId: string, data: any) {
     const patientExists = await prisma.patient.findFirst({
       where: { id: patientId, tenantId },
       select: { id: true }
@@ -129,11 +171,10 @@ export class PatientRepository {
       throw new Error("Patient not found or unauthorized access.");
     }
 
-    // Upsert to avoid duplicate rows for the same tooth + parameter combination
     return prisma.periodontalMeasurement.upsert({
       where: {
-        patientId_toothNumber_parameterName: {
-          patientId,
+        sessionId_toothNumber_parameterName: {
+          sessionId,
           toothNumber: data.toothNumber,
           parameterName: data.parameterName,
         }
@@ -148,7 +189,14 @@ export class PatientRepository {
         ...data,
         patientId,
         tenantId,
+        sessionId
       }
+    });
+  }
+
+  async deletePeriodontalMeasurement(tenantId: string, measurementId: string) {
+    return prisma.periodontalMeasurement.delete({
+      where: { id: measurementId, tenantId }
     });
   }
 

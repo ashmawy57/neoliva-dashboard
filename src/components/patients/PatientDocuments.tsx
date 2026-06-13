@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,10 +48,12 @@ const CATEGORIES = [
 
 export function PatientDocuments({ 
   patientId, 
+  tenantId,
   initialData = [], 
   onRefresh
 }: { 
   patientId: string, 
+  tenantId: string,
   initialData?: any[],
   onRefresh?: () => void
 }) {
@@ -61,13 +63,33 @@ export function PatientDocuments({
   const [newDoc, setNewDoc] = useState({ name: "", category: "document" });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [docsWithUrls, setDocsWithUrls] = useState<any[]>(initialData);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supabase = createClient();
 
+  // Handle Signed URLs for internal storage paths
+  useEffect(() => {
+    async function loadSignedUrls() {
+      const updatedDocs = await Promise.all(
+        initialData.map(async (doc) => {
+          if (doc.fileUrl && !doc.fileUrl.startsWith("http")) {
+            const { data } = await supabase.storage
+              .from("patient-documents")
+              .createSignedUrl(doc.fileUrl, 3600);
+            return { ...doc, displayUrl: data?.signedUrl || doc.fileUrl };
+          }
+          return { ...doc, displayUrl: doc.fileUrl };
+        })
+      );
+      setDocsWithUrls(updatedDocs);
+    }
+    loadSignedUrls();
+  }, [initialData, supabase]);
+
   const filteredDocs = activeFilter 
-    ? initialData.filter(d => (d.category || 'other') === activeFilter)
-    : initialData;
+    ? docsWithUrls.filter(d => (d.category || 'other') === activeFilter)
+    : docsWithUrls;
 
   const handleUpload = async () => {
     if (!newDoc.name || !selectedFile || !patientId) {
@@ -79,8 +101,23 @@ export function PatientDocuments({
     const toastId = toast.loading("Uploading file...");
     
     try {
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${patientId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/dicom'];
+      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
+      const isAllowedExt = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'dcm', 'dicom'].includes(fileExt || '');
+
+      if (!ALLOWED_TYPES.includes(selectedFile.type) && !isAllowedExt) {
+        toast.error("Unsupported file type. Please upload a PDF, JPG, PNG, WEBP, or DICOM file.", { id: toastId });
+        setIsUploading(false);
+        return;
+      }
+
+      if (selectedFile.size > 50 * 1024 * 1024) {
+        toast.error("File exceeds the 50MB limit", { id: toastId });
+        setIsUploading(false);
+        return;
+      }
+
+      const fileName = `${tenantId}/${patientId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('patient-documents')
@@ -93,15 +130,11 @@ export function PatientDocuments({
         throw uploadError;
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('patient-documents')
-        .getPublicUrl(fileName);
-
       const result = await uploadDocument(patientId, {
         name: newDoc.name,
         type: selectedFile.type,
         category: newDoc.category,
-        fileUrl: publicUrlData.publicUrl
+        fileUrl: fileName // Store the internal path
       });
 
       if (result?.success) {
@@ -320,7 +353,7 @@ export function PatientDocuments({
                 <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden flex items-center justify-center">
                   {isImage ? (
                     <img 
-                      src={doc.fileUrl} 
+                      src={doc.displayUrl} 
                       alt={doc.name} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
@@ -340,7 +373,7 @@ export function PatientDocuments({
                     <Button 
                       size="sm" 
                       className="bg-white text-gray-900 hover:bg-gray-100 rounded-xl font-bold shadow-lg"
-                      onClick={() => window.open(doc.fileUrl, "_blank")}
+                      onClick={() => window.open(doc.displayUrl, "_blank")}
                     >
                       <Eye className="w-4 h-4 mr-2" /> Open
                     </Button>
@@ -363,7 +396,7 @@ export function PatientDocuments({
                       </Button>
                     </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-xl p-1 border-gray-100">
-                        <DropdownMenuItem onClick={() => window.open(doc.fileUrl, "_blank")} className="rounded-lg gap-2 cursor-pointer py-2">
+                        <DropdownMenuItem onClick={() => window.open(doc.displayUrl, "_blank")} className="rounded-lg gap-2 cursor-pointer py-2">
                           <Download className="w-4 h-4 text-blue-500" />
                           <span className="text-xs font-bold">Download</span>
                         </DropdownMenuItem>

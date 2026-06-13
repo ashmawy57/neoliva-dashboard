@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Clock, PlayCircle, Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, DollarSign, AlertCircle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { getTreatmentPlans, createTreatmentPlan, deleteTreatmentPlan, updatePlanStatus, addTreatmentPhase, updatePhaseStatus, deleteTreatmentPhase } from "@/app/actions/treatment-plans";
+import { getTreatmentPlans, createTreatmentPlan, deleteTreatmentPlan, updatePlanStatus, addTreatmentPhase, updatePhaseStatus, deleteTreatmentPhase, getDoctors } from "@/app/actions/treatment-plans";
+import { generateInvoiceFromPlan } from "@/app/actions/billing";
 import { ToothSelector } from "@/components/shared/ToothSelector";
 import { ServiceCombobox } from "@/components/shared/ServiceCombobox";
 import { CurrencyInput } from "@/components/shared/CurrencyInput";
@@ -25,6 +26,8 @@ interface Phase {
   price: number; // Changed to number for internal logic
   notes: string;
   serviceId?: string;
+  doctorId?: string | null;
+  doctorName?: string | null;
   toothList?: string[];
 }
 
@@ -36,6 +39,7 @@ interface Plan {
   cost: number; // Changed to number
   created: string;
   notes: string;
+  invoices?: { id: string, displayId: string }[];
   phases: Phase[];
 }
 
@@ -105,6 +109,7 @@ export function TreatmentPlans({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [doctors, setDoctors] = useState<{ id: string, name: string }[]>([]);
 
   async function loadPlans() {
     setLoading(true);
@@ -114,6 +119,8 @@ export function TreatmentPlans({
       if (data.length > 0 && !expandedPlan) {
         setExpandedPlan(data[0].id);
       }
+      const docs = await getDoctors();
+      setDoctors(docs);
     } catch (err) {
       console.error("Failed to load plans", err);
     } finally {
@@ -141,6 +148,7 @@ export function TreatmentPlans({
     price: number;
     notes: string;
     serviceId?: string;
+    doctorId?: string;
     toothList?: string[];
   }[]>([]);
   const [inlinePhase, setInlinePhase] = useState({ 
@@ -149,6 +157,7 @@ export function TreatmentPlans({
     price: 0,
     notes: "",
     serviceId: undefined as string | undefined,
+    doctorId: undefined as string | undefined,
     toothList: [] as string[]
   });
   const [newPhase, setNewPhase] = useState({ 
@@ -157,6 +166,7 @@ export function TreatmentPlans({
     price: 0, 
     notes: "",
     serviceId: undefined as string | undefined,
+    doctorId: undefined as string | undefined,
     toothList: [] as string[]
   });
 
@@ -168,7 +178,7 @@ export function TreatmentPlans({
   const addInlinePhase = () => {
     if (!inlinePhase.name.trim()) return;
     setNewPlanPhases(prev => [...prev, { ...inlinePhase }]);
-    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] });
+    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, doctorId: undefined, toothList: [] });
   };
 
   const removeInlinePhase = (idx: number) => {
@@ -188,6 +198,7 @@ export function TreatmentPlans({
         price: p.price.toString(),
         status: "Planned",
         serviceId: p.serviceId,
+        doctorId: p.doctorId,
         toothList: p.toothList,
         notes: p.notes
       }))
@@ -203,7 +214,7 @@ export function TreatmentPlans({
     setNewPlanDialog(false);
     setNewPlan({ title: "", notes: "" });
     setNewPlanPhases([]);
-    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] });
+    setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, doctorId: undefined, toothList: [] });
   };
 
   const handleDeletePlan = async (id: string) => {
@@ -237,6 +248,7 @@ export function TreatmentPlans({
       price: 0, 
       notes: "",
       serviceId: undefined,
+      doctorId: undefined,
       toothList: []
     });
     setAddPhaseDialog(null);
@@ -286,6 +298,20 @@ export function TreatmentPlans({
       onRefresh?.();
     }
     setEditPlanDialog(null);
+  };
+
+  const handleGenerateInvoice = async (planId: string) => {
+    try {
+      const res = await generateInvoiceFromPlan(planId);
+      if (res) {
+        await loadPlans();
+        onRefresh?.();
+        alert("Invoice generated successfully");
+      }
+    } catch (err) {
+      console.error("Failed to generate invoice", err);
+      alert("Failed to generate invoice. Please try again.");
+    }
   };
 
   if (loading) {
@@ -364,7 +390,7 @@ export function TreatmentPlans({
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-[10px] font-semibold text-gray-400 uppercase">Est. Cost</p>
-                      <p className="text-lg font-bold text-emerald-600">${plan.cost.toLocaleString()}</p>
+                      <p className="text-lg font-bold text-emerald-600">${Number(plan.cost).toLocaleString()}</p>
                     </div>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                   </div>
@@ -403,7 +429,7 @@ export function TreatmentPlans({
                         </div>
                         <div className="flex items-end justify-between">
                           <p className="text-2xl font-black text-emerald-900 leading-none">{calcPlanStats(plan.phases).financial}%</p>
-                          <p className="text-[10px] text-emerald-600 font-medium">Balance: ${calcPlanStats(plan.phases).remainingBalance.toLocaleString()}</p>
+                          <p className="text-[10px] text-emerald-600 font-medium">Balance: ${Number(calcPlanStats(plan.phases).remainingBalance).toLocaleString()}</p>
                         </div>
                         <div className="w-full h-1.5 bg-emerald-100 rounded-full mt-3 overflow-hidden">
                           <div 
@@ -438,6 +464,9 @@ export function TreatmentPlans({
                                   </p>
                                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                                     <p className="text-xs text-gray-400">{phase.date}</p>
+                                    {phase.doctorName && (
+                                      <p className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md font-medium">Dr. {phase.doctorName}</p>
+                                    )}
                                     {phase.toothList && phase.toothList.length > 0 && (
                                       <div className="flex gap-1 items-center">
                                         <span className="text-[9px] text-gray-300 font-bold ml-1">•</span>
@@ -484,6 +513,15 @@ export function TreatmentPlans({
 
                     {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-gray-100">
+                      <Button
+                        size="sm"
+                        onClick={() => handleGenerateInvoice(plan.id)}
+                        disabled={plan.invoices && plan.invoices.length > 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-8 text-xs font-semibold shadow-sm"
+                      >
+                        <DollarSign className="w-3.5 h-3.5 mr-1.5" /> 
+                        {plan.invoices && plan.invoices.length > 0 ? 'Invoice Generated' : 'Generate Invoice'}
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => setAddPhaseDialog(plan.id)}
@@ -561,7 +599,7 @@ export function TreatmentPlans({
                 <div className="flex items-center gap-3">
                   {newPlanPhases.length > 0 && (
                     <Badge variant="outline" className="text-[9px] text-emerald-600 bg-emerald-50 border-emerald-200">
-                      Est. ${newPlanTotalCost.toLocaleString()}
+                      Est. ${Number(newPlanTotalCost).toLocaleString()}
                     </Badge>
                   )}
                   <Badge variant="outline" className="text-[9px]">{newPlanPhases.length} phases</Badge>
@@ -638,7 +676,17 @@ export function TreatmentPlans({
                   </Popover>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
+                  <select
+                    value={inlinePhase.doctorId || ""}
+                    onChange={(e) => setInlinePhase(p => ({ ...p, doctorId: e.target.value || undefined }))}
+                    className="h-9 px-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+                  >
+                    <option value="">Provider (Optional)</option>
+                    {doctors.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     value={inlinePhase.date}
@@ -665,7 +713,7 @@ export function TreatmentPlans({
 
             {/* Create Button */}
             <div className="flex gap-2 pt-2 border-t border-gray-100">
-              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, toothList: [] }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
+              <Button variant="outline" onClick={() => { setNewPlanDialog(false); setNewPlanPhases([]); setInlinePhase({ name: "", date: "", price: 0, notes: "", serviceId: undefined, doctorId: undefined, toothList: [] }); }} className="flex-1 rounded-xl h-11">Cancel</Button>
               <Button onClick={handleAddPlan} disabled={!newPlan.title.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 font-semibold shadow-md shadow-blue-500/20">
                 <Save className="w-4 h-4 mr-2" /> Create Plan
                 {newPlanPhases.length > 0 && (
@@ -732,7 +780,20 @@ export function TreatmentPlans({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Provider</label>
+                <select
+                  value={newPhase.doctorId || ""}
+                  onChange={(e) => setNewPhase(p => ({ ...p, doctorId: e.target.value || undefined }))}
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
+                >
+                  <option value="">None</option>
+                  {doctors.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Date</label>
                 <input type="text" value={newPhase.date} onChange={(e) => setNewPhase(p => ({ ...p, date: e.target.value }))} placeholder="Apr 15, 2024" className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />

@@ -1,4 +1,5 @@
 'use server'
+import { prisma } from '@/lib/prisma';
 
 import { withPermission } from "@/lib/rbac/guard";
 
@@ -27,6 +28,7 @@ export async function getTreatmentPlans(patientId: string) {
           const data = await treatmentPlanService.getTreatmentPlans(tenantId, patientId);
       
           return data.map((plan) => {
+
             const phases = (plan.items || [])
               .sort((a, b) => (a.step || 0) - (b.step || 0))
               .map((item) => ({
@@ -34,6 +36,8 @@ export async function getTreatmentPlans(patientId: string) {
                 step: item.step || 1,
                 name: item.serviceName,
                 serviceId: item.serviceId,
+                doctorId: item.doctorId,
+                doctorName: item.doctor?.name || null,
                 toothList: item.toothList ? item.toothList.split(',') : [],
                 status: item.status || 'Planned',
                 date: item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'TBD',
@@ -51,6 +55,7 @@ export async function getTreatmentPlans(patientId: string) {
               cost: totalCost,
               created: plan.createdAt ? new Date(plan.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—',
               notes: plan.notes || '',
+              invoices: plan.invoices || [],
               phases
             }
           });
@@ -228,3 +233,27 @@ export const deleteTreatmentPhase = wrapAction(
 );
 
 
+
+
+
+
+
+
+/**
+ * Server Action: Fetches all doctors for the UI dropdown.
+ */
+export async function getDoctors() {
+  try {
+    return await withPermission('clinical', 'read', async (session) => {
+      const tenantId = session.tenantId;
+      const doctors = await prisma.staff.findMany({
+        where: { tenantId, role: 'DOCTOR' },
+        select: { id: true, name: true }
+      });
+      return doctors;
+    });
+  } catch (error) {
+    console.error('Error fetching doctors:', error);
+    return [];
+  }
+}

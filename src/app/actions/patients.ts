@@ -400,13 +400,63 @@ export async function deleteToothPhoto(patientId: string, documentId: string, fi
 }
 
 
-export async function updatePeriodontalMeasurement(patientId: string, measurement: any) {
+export async function createPeriodontalSession(patientId: string, examinerId?: string) {
+  return withPermission('patients', 'create', async (session) => {
+    const tenantId = session.tenantId;
+    await requireRecordAccess('patient', patientId);
+      
+      try {
+        const result = await patientService.createPeriodontalSession(tenantId, patientId, examinerId);
+    
+        await EventService.trackEvent({
+          tenantId,
+          eventType: 'PATIENT_CHART_UPDATED',
+          entityType: 'PATIENT',
+          entityId: patientId,
+          metadata: { type: 'PeriodontalSession', action: 'CREATED' }
+        });
+    
+        revalidatePath(`/patients/${patientId}`);
+        return { success: true, error: undefined, data: result };
+      } catch (error: any) {
+        console.error('Error creating periodontal session:', error);
+        return { success: false, data: undefined, error: error.message };
+      }
+  });
+}
+
+export async function deletePeriodontalSession(patientId: string, sessionId: string) {
+  return withPermission('patients', 'delete', async (session) => {
+    const tenantId = session.tenantId;
+    await requireRecordAccess('patient', patientId);
+      
+      try {
+        await patientService.deletePeriodontalSession(tenantId, sessionId);
+    
+        await EventService.trackEvent({
+          tenantId,
+          eventType: 'PATIENT_CHART_UPDATED',
+          entityType: 'PATIENT',
+          entityId: patientId,
+          metadata: { type: 'PeriodontalSession', action: 'DELETED', sessionId }
+        });
+    
+        revalidatePath(`/patients/${patientId}`);
+        return { success: true, error: undefined };
+      } catch (error: any) {
+        console.error('Error deleting periodontal session:', error);
+        return { success: false, data: undefined, error: error.message };
+      }
+  });
+}
+
+export async function updatePeriodontalMeasurement(patientId: string, sessionId: string, measurement: any) {
   return withPermission('patients', 'update', async (session) => {
     const tenantId = session.tenantId;
     await requireRecordAccess('patient', patientId);
       
       try {
-        await patientService.updatePeriodontalMeasurement(tenantId, patientId, {
+        await patientService.updatePeriodontalMeasurement(tenantId, patientId, sessionId, {
           toothNumber: measurement.toothNumber,
           parameterName: measurement.parameterName,
           buccalValues: measurement.buccalValues,
@@ -427,31 +477,6 @@ export async function updatePeriodontalMeasurement(patientId: string, measuremen
         return { success: true, error: undefined };
       } catch (error: any) {
         console.error('Error updating periodontal measurement:', error);
-        return { success: false, data: undefined, error: error.message };
-      }
-  });
-}
-
-export async function clearPeriodontalMeasurements(patientId: string) {
-  return withPermission('patients', 'read', async (session) => {
-    const tenantId = session.tenantId;
-    await requireRecordAccess('patient', patientId);
-      
-      try {
-        await patientService.clearPeriodontalMeasurements(tenantId, patientId);
-        
-        await EventService.trackEvent({
-          tenantId,
-          eventType: 'PATIENT_CHART_UPDATED',
-          entityType: 'PATIENT',
-          entityId: patientId,
-          metadata: { type: 'Periodontal', action: 'CLEARED' }
-        });
-    
-        revalidatePath(`/patients/${patientId}`);
-        return { success: true, error: undefined };
-      } catch (error: any) {
-        console.error('Error clearing periodontal measurements:', error);
         return { success: false, data: undefined, error: error.message };
       }
   });

@@ -18,7 +18,9 @@ export type BusinessEntityType =
   | 'NOTIFICATION'
   | 'PRESCRIPTION'
   | 'ROOM'
-  | 'SYSTEM';
+  | 'SYSTEM'
+  | 'SMS'
+  | 'CAMPAIGN';
 
 export type BusinessEventType =
   | 'PATIENT_CREATED'
@@ -83,7 +85,10 @@ export type BusinessEventType =
   | 'ROOM_OVERBOOKED'
   | 'DOCTOR_ROOM_CONFLICT'
   | 'SYSTEM_ALERT'
-  | 'SECURITY_DENIED';
+  | 'SECURITY_DENIED'
+  | 'SMS_SENT'
+  | 'SMS_FAILED'
+  | 'CAMPAIGN_COMPLETED';
 
 interface TrackEventOptions {
   tenantId: string;

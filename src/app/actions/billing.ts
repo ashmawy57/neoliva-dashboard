@@ -226,3 +226,30 @@ export async function getInvoice(id: string) {
       }
   });
 }
+
+export const generateInvoiceFromPlan = wrapAction(
+  'INVOICE_GENERATE',
+  async (planId: string) => {
+    return withPermission('billing', 'create', async (session) => {
+      const tenantId = session.tenantId;
+      const result = await billingService.generateInvoiceFromPlan(tenantId, planId);
+      await EventService.trackEvent({
+        tenantId,
+        eventType: 'INVOICE_CREATED',
+        entityType: 'INVOICE',
+        entityId: result.id,
+        metadata: { planId, patientId: result.patientId, amount: result.totalAmount }
+      });
+      if (result && result.patientId) {
+        revalidatePath(`/patients/${result.patientId}`);
+        revalidatePath('/dashboard');
+        revalidatePath('/billing');
+        revalidatePath('/billing/invoices');
+      }
+      return result;
+    });
+  },
+  { module: 'billing', entityType: 'INVOICE' }
+);
+
+

@@ -195,7 +195,7 @@ export function PatientProfileContent({ patient: initialPatient }: { patient: an
             </TabsContent>
 
             <TabsContent value="documents" className="mt-6">
-              <PatientDocuments patientId={patient.id} initialData={patient.patient_documents} onRefresh={refreshData} />
+              <PatientDocuments patientId={patient.id} tenantId={patient.tenantId} initialData={patient.patient_documents} onRefresh={refreshData} />
             </TabsContent>
 
             <TabsContent value="billing" className="mt-6">

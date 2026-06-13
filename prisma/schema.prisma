@@ -31,6 +31,7 @@ model Tenant {
   patients                Patient[]
   payments                Payment[]
   periodontalMeasurements PeriodontalMeasurement[]
+  periodontalSessions     PeriodontalSession[]
   prescriptionItems       PrescriptionItem[]
   prescriptions           Prescription[]
   services                Service[]
@@ -46,6 +47,8 @@ model Tenant {
   ledgerAccounts          LedgerAccount[]
   journalEntries          JournalEntry[]
   businessEvents          BusinessEvent[]
+  smsCampaigns            SmsCampaign[]
+  smsTemplates            SmsTemplate[]
   
   staffInvitations        StaffInvitation[]
   tenantMemberships       TenantMembership[]
@@ -148,6 +151,8 @@ model Staff {
 
   appointments    Appointment[]
   prescriptions   Prescription[]
+  treatmentPlanItems TreatmentPlanItem[]
+  periodontalSessions PeriodontalSession[]
   tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships     ClinicMembership[]
 
@@ -226,6 +231,7 @@ model Patient {
   patientSurgeries        PatientSurgery[]
   tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   periodontalMeasurements PeriodontalMeasurement[]
+  periodontalSessions     PeriodontalSession[]
   prescriptions           Prescription[]
   toothConditions         ToothCondition[]
   treatmentPlans          TreatmentPlan[]
@@ -380,12 +386,14 @@ model Invoice {
   dueDate       DateTime?     @map("due_date") @db.Date
   status        InvoiceStatus @default(PENDING)
   appointmentId String?       @unique @map("appointment_id") @db.Uuid
+  planId        String?       @map("plan_id") @db.Uuid
   paidAmount    Decimal       @default(0) @map("paid_amount") @db.Decimal
   totalAmount   Decimal       @map("total_amount") @db.Decimal
   items         InvoiceItem[]
   appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
   patient       Patient       @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  plan          TreatmentPlan? @relation(fields: [planId], references: [id], onDelete: Restrict)
   payments      Payment[]
 
   @@index([tenantId, id])
@@ -564,6 +572,7 @@ model TreatmentPlan {
   updatedAt DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
   tenantId  String              @map("tenant_id") @db.Uuid
   items     TreatmentPlanItem[]
+  invoices  Invoice[]
   patient   Patient             @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -587,9 +596,11 @@ model TreatmentPlanItem {
   scheduledDate DateTime?     @map("scheduled_date") @db.Date
   notes         String?
   tenantId      String        @map("tenant_id") @db.Uuid
-  plan          TreatmentPlan @relation(fields: [planId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctorId      String?       @map("doctor_id") @db.Uuid
+  plan          TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   service       Service?      @relation(fields: [serviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctor        Staff?        @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tenantId, id])
   @@index([tenantId, createdAt])
@@ -779,14 +790,44 @@ model PeriodontalMeasurement {
   measurementDate DateTime? @default(now()) @map("measurement_date") @db.Date
   createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   tenantId        String    @map("tenant_id") @db.Uuid
+  sessionId       String?   @map("session_id") @db.Uuid
+
   patient         Patient?  @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  session         PeriodontalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@unique([patientId, toothNumber, parameterName], name: "patientId_toothNumber_parameterName")
+  @@unique([sessionId, toothNumber, parameterName], name: "sessionId_toothNumber_parameterName")
   @@index([tenantId, id])
   @@index([tenantId, patientId])
   @@index([tenantId, createdAt])
   @@map("periodontal_measurements")
+}
+
+model PeriodontalSession {
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId          String                   @map("patient_id") @db.Uuid
+  tenantId           String                   @map("tenant_id") @db.Uuid
+  examinerId         String?                  @map("examiner_id") @db.Uuid
+  date               DateTime                 @default(now()) @db.Date
+  notes              String?
+
+  averagePocketDepth Float?                   @map("average_pocket_depth")
+  bopPercentage      Float?                   @map("bop_percentage")
+  psrScores          Int[]                    @map("psr_scores")
+  classification     String?
+
+  measurements       PeriodontalMeasurement[]
+
+  patient            Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  examiner           Staff?                   @relation(fields: [examinerId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime?                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, patientId])
+  @@index([tenantId, date])
+  @@map("periodontal_sessions")
 }
 
 model PatientDocument {
@@ -1189,5 +1230,43 @@ model SystemJob {
   updatedAt DateTime @updatedAt
 
   @@map("system_jobs")
+}
+
+model SmsCampaign {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  name        String
+  message     String
+  filters     Json      @default("{}")
+  sentCount   Int       @default(0) @map("sent_count")
+  failedCount Int       @default(0) @map("failed_count")
+  status      String    @default("DRAFT") // DRAFT, PROCESSING, COMPLETED
+  scheduledAt DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("sms_campaigns")
+}
+
+model SmsTemplate {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  name        String
+  category    String    // e.g. "REMINDERS", "OCCASIONS", "CAMPAIGNS"
+  message     String
+  variables   Json      @default("[]") // List of used variables
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([category])
+  @@map("sms_templates")
 }
 

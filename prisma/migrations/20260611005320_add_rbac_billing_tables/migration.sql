@@ -1,3 +1,6 @@
+-- Enable pgcrypto for gen_random_bytes
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- CreateTable
 CREATE TABLE "clinic_memberships" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
