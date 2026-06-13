@@ -147,10 +147,24 @@ export class StaffService {
   /**
    * Transactionally deletes a staff member's profile and membership.
    */
-  async deleteStaffMember(tenantId: string, membershipId: string): Promise<void> {
+  async deleteStaffMember(tenantId: string, id: string): Promise<void> {
     try {
       this.validateTenant(tenantId);
-      await this.repository.deleteStaffMember(tenantId, membershipId);
+
+      // Check if this ID is actually a pending invitation
+      const { prisma } = await import("@/lib/prisma");
+      const invitation = await prisma.staffInvitation.findUnique({
+        where: { id }
+      });
+
+      if (invitation && invitation.tenantId === tenantId) {
+        // Delete the invitation instead
+        await this.repository.deleteInvitation(tenantId, id);
+        return;
+      }
+
+      // Otherwise, it's an active staff membership
+      await this.repository.deleteStaffMember(tenantId, id);
     } catch (error) {
       console.error("[StaffService.deleteStaffMember] Error:", error);
       throw error;

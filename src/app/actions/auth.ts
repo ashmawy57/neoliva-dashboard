@@ -379,7 +379,10 @@ export async function createStaffInvitation(data: { email: string; fullName: str
   const supabase = await createClient();
   const { data: { user: invitedByUser } } = await supabase.auth.getUser();
 
-  if (!invitedByUser) throw new Error("Unauthorized");
+  if (!invitedByUser) {
+    console.log('[STAFF_FAIL] Failed at: invitedByUser not found in auth.getUser()');
+    throw new Error("Unauthorized");
+  }
 
   // Generate secure token
   const rawToken = crypto.randomBytes(32).toString('hex');
@@ -393,22 +396,28 @@ export async function createStaffInvitation(data: { email: string; fullName: str
   const existingInvite = await staffRepository.findPendingInvitationByTenant(tenantId, email);
 
   if (existingInvite) {
+    console.log('[STAFF_FAIL] Failed at: existing pending invitation found for this email');
     return { success: false, error: "A pending invitation already exists for this email." };
   }
 
   const dbInvitedBy = await userRepository.findBySupabaseId(invitedByUser.id);
-  if (!dbInvitedBy) throw new Error("Inviting user record not found");
+  if (!dbInvitedBy) {
+    console.log('[STAFF_FAIL] Failed at: dbInvitedBy (inviting user) not found in DB');
+    throw new Error("Inviting user record not found");
+  }
 
-  // Create invitation record
   const invitation = await staffRepository.createInvitation(tenantId, {
     email,
     fullName,
-    role,
+    role: role.toUpperCase() as any,
     jobTitle,
     tokenHash,
     invitedById: dbInvitedBy.id,
     expiresAt,
   });
+
+  console.log('[INVITE] Starting invitation for:', email);
+  console.log('[INVITE] Staff saved, sending email...');
 
   // Log Audit
   await AuditService.logAudit({
@@ -419,50 +428,127 @@ export async function createStaffInvitation(data: { email: string; fullName: str
     metadata: { email, role }
   });
 
-  // Send invitation securely via Supabase Admin (generate link)
-  // This bypasses Supabase's strict 500 error SMTP limits but still sets up PKCE/Auth properly.
   const supabaseAdmin = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const inviteUrl = `${siteUrl}/staff/accept-invitation`;
+  const inviteUrlBase = `${siteUrl}/staff/accept-invitation`;
   
-  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'invite',
-    email: email,
-    options: {
-      redirectTo: inviteUrl,
-      data: {
-        tenantId: tenantId,
-        role: role,
-        staffId: invitation.id
+  try {
+    let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite',
+      email: email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/staff/accept-invitation`,
+        data: {
+          tenantId: tenantId,
+          role: role,
+          staffId: invitation.id
+        }
       }
+    });
+
+    // Fallback if user already exists in Supabase
+    if (linkError && linkError.status === 422 && linkError.message.includes('already been registered')) {
+      console.log('[INVITE] User already exists, generating magiclink instead...');
+      const magicResponse = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/staff/accept-invitation`,
+          data: {
+            tenantId: tenantId,
+            role: role,
+            staffId: invitation.id
+          }
+        }
+      });
+      linkData = magicResponse.data;
+      linkError = magicResponse.error;
     }
-  });
 
-  if (linkError) {
-    console.error('[createStaffInvitation] Supabase generateLink error:', linkError);
-    return { success: false, error: linkError.message };
-  }
+    if (linkError) {
+      console.log('[INVITE] ERROR generating link:', linkError);
+      
+      // Rollback database creation to prevent ghost record
+      const { prisma } = await import("@/lib/prisma");
+      await prisma.staffInvitation.delete({ where: { id: invitation.id } });
 
-  // Get tenant name for the email
-  const tenant = await tenantRepository.findUnique(tenantId);
+      return { success: false, error: linkError.message };
+    }
 
-  // Send the actual email via Resend
-  const emailResult = await EmailService.sendStaffInvitation({
-    email,
-    fullName,
-    clinicName: tenant?.name || 'Neoliva',
-    inviteUrl: linkData.properties.action_link,
-  });
+    const inviteUrl = linkData?.properties?.action_link;
+    const tenant = await tenantRepository.findUnique(tenantId);
 
-  if (!emailResult.success) {
-    console.error('[createStaffInvitation] Resend email failed:', emailResult.error);
-    return { success: false, error: "Failed to deliver the email. Please check your email service configuration." };
+    const emailResult = await EmailService.sendStaffInvitation({
+      email,
+      fullName,
+      clinicName: tenant?.name || 'Neoliva',
+      inviteUrl: inviteUrl || '',
+    });
+
+    if (emailResult.success) {
+      console.log('[INVITE] Email sent successfully');
+    } else {
+      console.log('[INVITE] ERROR:', emailResult.error);
+    }
+  } catch (error) {
+    console.log('[INVITE] ERROR:', error);
   }
 
   revalidatePath('/dashboard/staff');
   return { success: true, invitationId: invitation.id };
+}
+
+export async function activateStaffAccount(userId: string, tenantId?: string) {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user || user.id !== userId) {
+    return { success: false, error: 'Not authenticated or invalid user.' };
+  }
+
+  const staffId = user.user_metadata?.staffId;
+  const { prisma } = await import('@/lib/prisma');
+  
+  let invitation;
+  if (staffId) {
+     invitation = await prisma.staffInvitation.findUnique({
+       where: { id: staffId }
+     });
+  } else if (tenantId) {
+     invitation = await prisma.staffInvitation.findFirst({
+       where: { email: user.email, tenantId, status: 'PENDING' }
+     });
+  } else {
+     invitation = await prisma.staffInvitation.findFirst({
+       where: { email: user.email, status: 'PENDING' }
+     });
+  }
+
+  if (!invitation || invitation.status !== 'PENDING') {
+    return { success: false, error: 'Invitation not found or already accepted.' };
+  }
+
+  try {
+    await staffRepository.acceptInvitation(user.id, invitation);
+    
+    // Set active_tenant_id cookie
+    const cookieStore = await cookies();
+    cookieStore.set('active_tenant_id', invitation.tenantId, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    revalidatePath('/', 'layout');
+    return { success: true };
+  } catch (err: any) {
+    console.error("[AUTH][INVITE_ACTIVATE] Error:", err);
+    return { success: false, error: err.message || 'Failed to activate account.' };
+  }
 }

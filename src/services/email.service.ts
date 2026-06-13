@@ -1,6 +1,8 @@
 import { BrevoClient } from '@getbrevo/brevo';
 
 const apiKey = process.env.BREVO_API_KEY;
+console.log('BREVO KEY EXISTS:', !!apiKey);
+
 let brevo: BrevoClient | null = null;
 
 if (apiKey) {
@@ -21,12 +23,15 @@ export class EmailService {
     clinicName: string;
     inviteUrl: string;
   }) {
+    console.log('[EMAIL_SERVICE] sendStaffInvitation called for:', email);
+    console.log('[EmailService] Start sending staff invitation to:', email);
     if (!brevo) {
-      console.warn('[EmailService.sendStaffInvitation] BREVO_API_KEY not configured. Skipping email send.');
+      console.warn('[EmailService] BREVO_API_KEY not configured. Skipping email send.');
       return { success: false, error: new Error('Email service not configured (missing BREVO_API_KEY)') };
     }
 
     try {
+      console.log('[EmailService] Before calling Brevo API...');
       const result = await brevo.transactionalEmails.sendTransacEmail({
         sender: { name: 'Neoliva', email: 'ashmawyalaa@gmail.com' }, // Default sender email
         to: [{ email: email, name: fullName }],
@@ -57,10 +62,13 @@ export class EmailService {
         `,
       });
 
+      console.log('[EmailService] After Brevo API call. Result:', JSON.stringify(result, null, 2));
       return { success: true, data: result };
-    } catch (error) {
-      console.error('[EmailService.sendStaffInvitation] Exception:', error);
+    } catch (error: any) {
+      console.error('[EmailService] Exception caught:', error);
+      console.error('[EmailService] Exception details:', error?.rawResponse || error?.message || error);
       return { success: false, error };
     }
   }
 }
+

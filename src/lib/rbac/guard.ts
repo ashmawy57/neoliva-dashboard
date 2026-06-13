@@ -22,9 +22,19 @@ export async function withPermission<T>(
     throw new UnauthorizedError('Not authenticated');
   }
 
-  if (!can(session.role, resource, action)) {
+  // Normalize role to uppercase to match PERMISSIONS keys
+  let normalizedRole = session.role ? session.role.toUpperCase() as Role : session.role;
+  if (normalizedRole === 'SUPER_ADMIN' as any) {
+    normalizedRole = 'OWNER';
+  }
+
+  console.log('[RBAC_GUARD] role:', session.role, 'normalized:', normalizedRole, 'resource:', resource, 'action:', action);
+  const isAllowed = can(normalizedRole, resource, action);
+  console.log('[RBAC_GUARD] can result:', isAllowed);
+
+  if (!isAllowed) {
     throw new UnauthorizedError(
-      `Role '${session.role}' is not allowed to '${action}' on '${resource}'`
+      `Role '${session.role}' (normalized: ${normalizedRole}) is not allowed to '${action}' on '${resource}'`
     );
   }
 

@@ -78,15 +78,18 @@ export async function getStaff() {
 export const createStaff = wrapAction(
   'STAFF_CREATE',
   async (formData: { name: string; role: string; title: string; email: string; phone: string; invite: boolean }) => {
+    console.log('[STAFF_ACTION] createStaff called with:', formData);
     return withPermission('staff', 'create', async (session) => {
       const tenantId = session.tenantId!;
       // We call the auth action which handles the token, hashing and secure DB creation
+          console.log('[STAFF_ACTION] About to call createStaffInvitation');
           const result = await createStaffInvitation({
             email: formData.email,
             fullName: formData.name,
             role: formData.role as any,
             jobTitle: formData.title
           }, tenantId);
+          console.log('[STAFF_ACTION] createStaffInvitation result:', result);
       
           if (!result.success) {
             throw new Error(result.error || "Failed to create invitation");

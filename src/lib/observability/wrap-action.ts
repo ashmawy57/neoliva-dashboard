@@ -22,12 +22,14 @@ export function wrapAction<T, Args extends any[]>(
   metadata: { module: string; entityType?: string; entityIdPath?: string }
 ) {
   return async (...args: Args): Promise<ActionResponse<T>> => {
+    console.log('[WRAP_ACTION] Starting:', name);
     const requestId = randomUUID();
     
     return await withTrace({ requestId, module: metadata.module, action: name }, async () => {
       const startTime = Date.now();
       
       try {
+        console.log('[WRAP_ACTION] About to execute function:', name);
         logger.info(`Action Started: ${name}`, { args: sanitizeArgs(args) });
         
         const result = await fn(...args);

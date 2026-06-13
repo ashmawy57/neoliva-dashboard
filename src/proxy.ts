@@ -32,11 +32,12 @@ export async function proxy(request: NextRequest) {
   const publicRoutes = [
     '/',
     '/login',
-    '/staff-signin',
+    '/staff/sign-in',
     '/register',
     '/auth/callback',
     '/unauthorized',
     '/admin/login',
+    '/staff/accept-invitation',
   ];
 
   const isPublicRoute = publicRoutes.some(route => 
@@ -221,7 +222,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // --- 8. Redirect Authenticated Users from Login ---
-  if (user && (pathname === '/login' || pathname === '/staff-signin')) {
+  if (user && (pathname === '/login' || pathname === '/staff/sign-in')) {
     console.log(`[PROXY_TRACE][ALREADY_AUTH_REDIRECT] ${pathname} -> /dashboard`);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }

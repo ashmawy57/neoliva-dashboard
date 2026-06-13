@@ -73,6 +73,13 @@ export class StaffRepository {
     });
   }
 
+  async deleteInvitation(tenantId: string, id: string): Promise<void> {
+    await prisma.staffInvitation.deleteMany({
+      where: { id, tenantId }
+    });
+  }
+
+
   /**
    * Update staff profile using membership ID.
    */
