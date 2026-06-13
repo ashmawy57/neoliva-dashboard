@@ -1,7 +1,7 @@
 import 'server-only';
 import { getUserSession } from './session';
 import { can } from './permissions';
-import type { Resource, Action } from './permissions';
+import type { Resource, Action, Role } from './permissions';
 import type { UserSession } from './session';
 
 export class UnauthorizedError extends Error {
